@@ -859,6 +859,26 @@ AC_SUBST(with_systemd)
 AC_MSG_RESULT([$with_systemd])
 
 #
+# CUDA
+# ------------------------------------------------------------------------------
+AC_MSG_CHECKING([CUDA support])
+PGAC_ARG_OPTARG(enable, cuda,
+                [PATH], [enable CUDA Support (optionally set cuda PATH)],
+                [cuda_path=/usr/local/cuda],
+                [cuda_path=$enableval])
+AC_MSG_RESULT([$enable_cuda, $cuda_path])
+AC_SUBST(enable_cuda)
+AC_SUBST(cuda_path)
+
+if test x"$enable_cuda" != x"no" ; then
+  AC_CHECK_PROG(NVCC_CHECK,nvcc,yes,no,$cuda_path/bin)
+  if test x"$NVCC_CHECK" != x"yes" ; then
+    AC_MSG_ERROR(CUDA was not found!)
+  fi
+fi
+
+
+#
 # Readline
 #
 PGAC_ARG_BOOL(with, readline, yes,

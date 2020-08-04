@@ -61,6 +61,10 @@ typedef struct pushdown_safety_info
 /* These parameters are set by GUC */
 bool		enable_geqo = false;	/* just in case GUC doesn't set it */
 int			geqo_threshold;
+#ifdef ENABLE_GPUQO
+bool		enable_gpuqo = false;	/* just in case GUC doesn't set it */
+int			gpuqo_threshold;
+#endif
 int			min_parallel_table_scan_size;
 int			min_parallel_index_scan_size;
 
@@ -2806,6 +2810,10 @@ make_rel_from_joinlist(PlannerInfo *root, List *joinlist)
 
 		if (join_search_hook)
 			return (*join_search_hook) (root, levels_needed, initial_rels);
+#ifdef ENABLE_GPUQO
+		else if (enable_gpuqo && levels_needed >= gpuqo_threshold)
+			return gpuqo(root, levels_needed, initial_rels);
+#endif
 		else if (enable_geqo && levels_needed >= geqo_threshold)
 			return geqo(root, levels_needed, initial_rels);
 		else

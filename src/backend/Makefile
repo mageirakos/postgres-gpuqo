@@ -51,6 +51,13 @@ ifeq ($(with_systemd),yes)
 LIBS += -lsystemd
 endif
 
+# CUDA
+ifeq ($(enable_cuda),yes)
+LIBS += -lcudart -lcudadevrt
+LDFLAGS += -L "$(cuda_path)/lib64"
+override CFLAGS += -DENABLE_GPUQO
+endif
+
 ##########################################################################
 
 all: submake-libpgport submake-catalog-headers submake-utils-headers postgres $(POSTGRES_IMP)

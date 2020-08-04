@@ -14,6 +14,11 @@ include $(top_builddir)/src/Makefile.global
 
 override CPPFLAGS := -I. -I$(srcdir) $(CPPFLAGS)
 
+# CUDA
+ifeq ($(enable_cuda),yes)
+override CFLAGS += -DENABLE_GPUQO
+endif
+
 OBJS = guc.o help_config.o pg_config.o pg_controldata.o pg_rusage.o \
        ps_status.o queryenvironment.o rls.o sampling.o superuser.o \
        timeout.o tzparser.o

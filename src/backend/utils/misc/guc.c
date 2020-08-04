@@ -686,6 +686,10 @@ const char *const config_group_names[] =
 	gettext_noop("Query Tuning / Planner Cost Constants"),
 	/* QUERY_TUNING_GEQO */
 	gettext_noop("Query Tuning / Genetic Query Optimizer"),
+#ifdef ENABLE_GPUQO
+	/* QUERY_TUNING_GPUQO */
+	gettext_noop("Query Tuning / GPU Optimizer"),
+#endif
 	/* QUERY_TUNING_OTHER */
 	gettext_noop("Query Tuning / Other Planner Options"),
 	/* LOGGING */
@@ -1063,6 +1067,18 @@ static struct config_bool ConfigureNamesBool[] =
 		true,
 		NULL, NULL, NULL
 	},
+#ifdef ENABLE_GPUQO
+	{
+		{"gpuqo", PGC_USERSET, 	QUERY_TUNING_GPUQO,
+			gettext_noop("Enables GPU optimization."),
+			gettext_noop("Run the join order optimizer in GPU"),
+			GUC_EXPLAIN
+		},
+		&enable_gpuqo,
+		true,
+		NULL, NULL, NULL
+	},
+#endif
 	{
 		/* Not for general use --- used by SET SESSION AUTHORIZATION */
 		{"is_superuser", PGC_INTERNAL, UNGROUPED,
@@ -2028,6 +2044,18 @@ static struct config_int ConfigureNamesInt[] =
 		12, 2, INT_MAX,
 		NULL, NULL, NULL
 	},
+#ifdef ENABLE_GPUQO
+	{
+		{"gpuqo_threshold", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the threshold of FROM items beyond which GPUQO is used."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_threshold,
+		8, 2, INT_MAX,
+		NULL, NULL, NULL
+	},
+#endif
 	{
 		{"geqo_effort", PGC_USERSET, QUERY_TUNING_GEQO,
 			gettext_noop("GEQO: effort is used to set the default for other GEQO parameters."),

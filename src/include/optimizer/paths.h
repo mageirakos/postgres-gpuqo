@@ -22,6 +22,10 @@
  */
 extern PGDLLIMPORT bool enable_geqo;
 extern PGDLLIMPORT int geqo_threshold;
+#ifdef ENABLE_GPUQO
+extern PGDLLIMPORT bool enable_gpuqo;
+extern PGDLLIMPORT int gpuqo_threshold;
+#endif
 extern PGDLLIMPORT int min_parallel_table_scan_size;
 extern PGDLLIMPORT int min_parallel_index_scan_size;
 

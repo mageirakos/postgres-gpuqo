@@ -396,6 +396,11 @@
 #geqo_selection_bias = 2.0		# range 1.5-2.0
 #geqo_seed = 0.0			# range 0.0-1.0
 
+# - Genetic Query Optimizer -
+
+#gpuqo = on
+#gpuqo_threshold = 8
+
 # - Other Planner Options -
 
 #default_statistics_target = 100	# range 1-10000
