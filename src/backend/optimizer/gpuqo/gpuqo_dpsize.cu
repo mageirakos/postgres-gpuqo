@@ -178,28 +178,6 @@ public:
     }
 };
 
-struct compareCost : public thrust::binary_function<JoinRelation, JoinRelation, bool>
-{
-    compareCost(){}
-
-    __host__ __device__ 
-    bool operator()(const JoinRelation &jr1, const JoinRelation &jr2) const
-    {
-        return jr1.cost < jr2.cost;
-    }
-};
-
-struct minCost : public thrust::binary_function<JoinRelation, JoinRelation, JoinRelation>
-{
-    minCost(){}
-
-    __host__ __device__ 
-    JoinRelation operator()(const JoinRelation &jr1, const JoinRelation &jr2) const
-    {
-        return jr1.cost <= jr2.cost ? jr1 : jr2;
-    }
-};
-
 void buildQueryTree(int idx, 
                             thrust::device_vector<RelationID> &gpu_memo_keys,
                             thrust::device_vector<JoinRelation> &gpu_memo_vals,
@@ -383,7 +361,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
                 gpu_memo_keys.begin()+partition_offsets[i-1],
                 gpu_memo_vals.begin()+partition_offsets[i-1],
                 thrust::equal_to<unsigned int>(),
-                minCost()
+                thrust::minimum<JoinRelation>()
             );
 
             STOP_TIMING(compute_prune);

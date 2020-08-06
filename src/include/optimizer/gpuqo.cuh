@@ -21,26 +21,31 @@ struct JoinRelation{
 	// possible
 
 public:
+	__host__ __device__
 	bool operator<(const JoinRelation &o) const
 	{
 		return cost < o.cost;
 	}
 
+	__host__ __device__
 	bool operator>(const JoinRelation &o) const
 	{
 		return cost > o.cost;
 	}
 
+	__host__ __device__
 	bool operator==(const JoinRelation &o) const
 	{
 		return cost == o.cost;
 	}
 
+	__host__ __device__
 	bool operator<=(const JoinRelation &o) const
 	{
 		return cost <= o.cost;
 	}
 
+	__host__ __device__
 	bool operator>=(const JoinRelation &o) const
 	{
 		return cost >= o.cost;
