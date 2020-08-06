@@ -41,17 +41,20 @@
 struct enumerate : public thrust::unary_function< int,thrust::tuple<RelationID, JoinRelation> >
 {
     thrust::device_ptr<RelationID> memo_keys;
+    thrust::device_ptr<JoinRelation> memo_vals;
     thrust::device_ptr<unsigned int> partition_offsets;
     thrust::device_ptr<unsigned int> partition_sizes;
     int iid;
 public:
     enumerate(
         thrust::device_ptr<RelationID> _memo_keys,
+        thrust::device_ptr<JoinRelation> _memo_vals,
         thrust::device_ptr<unsigned int> _partition_offsets,
         thrust::device_ptr<unsigned int> _partition_sizes,
         int _iid
-    ) : memo_keys(_memo_keys), partition_offsets(_partition_offsets), 
-    partition_sizes(_partition_sizes), iid(_iid)
+    ) : memo_keys(_memo_keys), memo_vals(_memo_vals), 
+        partition_offsets(_partition_offsets), 
+        partition_sizes(_partition_sizes), iid(_iid)
     {}
 
     __device__
@@ -76,8 +79,15 @@ public:
 
         jr.left_relation_idx = partition_offsets[lp] + l;
         jr.right_relation_idx = partition_offsets[rp] + r;
+        
+        RelationID left_id = memo_keys[jr.left_relation_idx];
+        RelationID right_id = memo_keys[jr.right_relation_idx];
+        JoinRelation left_rel = memo_vals[jr.left_relation_idx];
+        JoinRelation right_rel = memo_vals[jr.right_relation_idx];
+        
+        jr.edges = left_rel.edges | right_rel.edges;
 
-        relid = memo_keys[jr.left_relation_idx] | memo_keys[jr.right_relation_idx];
+        relid = left_id | right_id;
 
         return thrust::tuple<RelationID, JoinRelation>(relid, jr);
     }
@@ -114,16 +124,7 @@ public:
         if (left_id & right_id) // not disjoint
             return true;
 
-        RelationID left_edges = 0;
-        for (int i = 0; i < n_rels; i++){
-            int base_relid = 1<<i;
-            BaseRelation base_rel = base_rels[i];
-            if (left_id & base_relid){
-                left_edges |= base_rel.edges;
-            }
-        }
-
-        if (left_edges & right_id) // connected
+        if (left_rel.edges & right_id) // connected
             return false;
         else // not connected
             return true;
@@ -156,24 +157,24 @@ public:
 
         double sel = 1.0;
         
-        // maybe I can first accumulate all edges as in filter?
-        // maybe I can iterate more efficiently in theese bitsets
-        for (int i = 0; i < n_rels; i++){
+        // for each edge of the left relation that gets into the right relation
+        // I divide selectivity by the number of baserel tuples
+        // This is quick and dirty but also wrong: in theory I sould check which
+        // of the two relation the index refers to and use the number of tuples
+        // of that table.
+        for (int i = 1; i <= n_rels; i++){
             int base_relid = 1<<i;
-            if (left_id & base_relid){
-                for (int j = 0; j < n_rels; j++){
-                    int peer_relid = 1<<j;
-                    BaseRelation base_rel_left = base_rels[i];
-                    if (base_rel_left.edges & peer_relid & right_id){
-                        BaseRelation base_rel_right = base_rels[j];
-                        sel *= 1.0 / base_rel_right.tuples;
-                    }
-                }
+            BaseRelation baserel = base_rels[i-1];
+            if (left_rel.edges & right_id & base_relid){
+                sel *= 1.0 / baserel.tuples;
             }
         }
         
         double rows = sel * (double) left_rel.rows * (double) right_rel.rows;
         jr.rows = rows > 1 ? round(rows) : 1;
+
+        // this cost function represents the "cost" of an hash join
+        // once again, this is pretty random
         jr.cost = jr.rows + left_rel.cost + right_rel.cost;
 
         return jr;
@@ -234,6 +235,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
         t.right_relation_idx = 0; 
         t.cost = 0.2*baserels[i].rows; 
         t.rows = baserels[i].rows; 
+        t.edges = baserels[i].edges;
         gpu_memo_vals[i] = t;
 
         partition_sizes[i] = i == 0 ? N : 0;
@@ -299,6 +301,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
                 )),
                 enumerate(
                     gpu_memo_keys.data(), 
+                    gpu_memo_vals.data(), 
                     gpu_partition_offsets.data(), 
                     gpu_partition_sizes.data(), 
                     i

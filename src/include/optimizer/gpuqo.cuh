@@ -11,6 +11,7 @@
 #define GPUQO_CUH
 
 #include <iostream>
+#include "optimizer/gpuqo_common.h"
 #include "optimizer/gpuqo_uninitalloc.cuh"
 
 struct JoinRelation{
@@ -18,6 +19,7 @@ struct JoinRelation{
 	unsigned int right_relation_idx;
 	unsigned int rows;
 	double cost;
+	EdgeMask edges;
 	// I could store more information but I'm striving to keep it as small as 
 	// possible
 
