@@ -26,18 +26,15 @@
 
 #include "optimizer/gpuqo.cuh"
 #include "optimizer/gpuqo_timing.cuh"
+#include "optimizer/gpuqo_debug.cuh"
+#include "optimizer/gpuqo_cost.cuh"
 
 #define MIN_SCRATCHPAD_CAPACITY 16384
 
-#define printVectorOffset(from, offset, to) { \
-    auto mIter = (from); \
-    mIter += (offset); \
-    for(int mCount=offset; mIter != (to); ++mIter, ++mCount) \
-        std::cout << mCount << " : " << *mIter << std::endl; \
-}
-
-#define printVector(from, to) printVectorOffset((from), 0, (to))
-
+/* enumerate
+ *
+ *	 enumeration for DPsize algorithm
+ */
 struct enumerate : public thrust::unary_function< int,thrust::tuple<RelationID, JoinRelation> >
 {
     thrust::device_ptr<RelationID> memo_keys;
@@ -131,55 +128,6 @@ public:
     }
 };
 
-struct cost : public thrust::unary_function<JoinRelation,JoinRelation>
-{
-    thrust::device_ptr<RelationID> memo_keys;
-    thrust::device_ptr<JoinRelation> memo_vals;
-    thrust::device_ptr<BaseRelation> base_rels;
-    int n_rels;
-public:
-    cost(
-        thrust::device_ptr<RelationID> _memo_keys,
-        thrust::device_ptr<JoinRelation> _memo_vals,
-        thrust::device_ptr<BaseRelation> _base_rels,
-        int _n_rels
-    ) : memo_keys(_memo_keys), memo_vals(_memo_vals), base_rels(_base_rels),
-        n_rels(_n_rels)
-    {}
-
-    __device__
-    JoinRelation operator()(JoinRelation jr) 
-    {
-        RelationID left_id = memo_keys[jr.left_relation_idx];
-        RelationID right_id = memo_keys[jr.right_relation_idx];
-        JoinRelation left_rel = memo_vals[jr.left_relation_idx];
-        JoinRelation right_rel = memo_vals[jr.right_relation_idx];
-
-        double sel = 1.0;
-        
-        // for each edge of the left relation that gets into the right relation
-        // I divide selectivity by the number of baserel tuples
-        // This is quick and dirty but also wrong: in theory I sould check which
-        // of the two relation the index refers to and use the number of tuples
-        // of that table.
-        for (int i = 1; i <= n_rels; i++){
-            int base_relid = 1<<i;
-            BaseRelation baserel = base_rels[i-1];
-            if (left_rel.edges & right_id & base_relid){
-                sel *= 1.0 / baserel.tuples;
-            }
-        }
-        
-        double rows = sel * (double) left_rel.rows * (double) right_rel.rows;
-        jr.rows = rows > 1 ? round(rows) : 1;
-
-        // this cost function represents the "cost" of an hash join
-        // once again, this is pretty random
-        jr.cost = jr.rows + left_rel.cost + right_rel.cost;
-
-        return jr;
-    }
-};
 
 void buildQueryTree(int idx, 
                     uninit_device_vector_relid &gpu_memo_keys,
@@ -268,6 +216,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
 
         for(int i=2; i<=N; i++){
             START_TIMING(iter_init);
+            
             // calculate size of required temp space
             int n_combinations = 0;
             for (int j=1; j<i; j++){
@@ -368,7 +317,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
                 newEnd.get_iterator_tuple().get<0>(),
                 thrust::make_transform_iterator(
                     gpu_scratchpad_vals.begin(),
-                    cost(
+                    joinCost(
                         gpu_memo_keys.data(), 
                         gpu_memo_vals.data(),
                         gpu_baserels.data(),

@@ -55,12 +55,7 @@ public:
 	}
 };
 
-std::ostream & operator<<(std::ostream &os, const JoinRelation& jr)
-{
-	os<<"("<<jr.left_relation_idx<<","<<jr.right_relation_idx;
-	os<<"): rows="<<jr.rows<<", cost="<<jr.cost;
-	return os;
-}
+extern std::ostream & operator<<(std::ostream &os, const JoinRelation& jr);
 
 typedef thrust::device_vector<RelationID, uninitialized_allocator<RelationID> > uninit_device_vector_relid;
 typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation> > uninit_device_vector_joinrel;

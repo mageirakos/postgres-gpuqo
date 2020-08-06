@@ -12,7 +12,7 @@ top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
 OBJS   = gpuqo_main.o 
-NVOBJS = gpuqo_dpsize.o
+NVOBJS = gpuqo_dpsize.o gpuqo_cost.o gpuqo_joinrelation.o
 
 # NVIDIA-specific code (do not edit)
 
@@ -40,7 +40,7 @@ $(NVLINK): $(NVOBJS)
 	$(NVCC) $(NVCCFLAGS) $^ -o $@ $(GENCODE_FLAGS) -dlink
 
 $(NVOBJS): %.o: %.cu
-	$(NVCC) $(NVCCFLAGS) -c $< -o $@ $(GENCODE_FLAGS) 
+	$(NVCC) $(NVCCFLAGS) -dc $< -o $@ $(GENCODE_FLAGS) 
 
 
 include $(top_srcdir)/src/backend/common.mk
