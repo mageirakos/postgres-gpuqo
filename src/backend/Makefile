@@ -53,7 +53,7 @@ endif
 
 # CUDA
 ifeq ($(enable_cuda),yes)
-LIBS += -lcudart -lcudadevrt
+LIBS += -lcudart -lcudadevrt -lstdc++
 LDFLAGS += -L "$(cuda_path)/lib64"
 override CFLAGS += -DENABLE_GPUQO
 endif
