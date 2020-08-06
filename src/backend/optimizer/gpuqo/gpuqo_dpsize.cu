@@ -179,9 +179,9 @@ public:
 };
 
 void buildQueryTree(int idx, 
-                            thrust::device_vector<RelationID> &gpu_memo_keys,
-                            thrust::device_vector<JoinRelation> &gpu_memo_vals,
-                            QueryTree **qt)
+                    uninit_device_vector_relid &gpu_memo_keys,
+                    uninit_device_vector_joinrel &gpu_memo_vals,
+                    QueryTree **qt)
 {
     JoinRelation jr = gpu_memo_vals[idx];
     RelationID relid = gpu_memo_keys[idx];
@@ -216,8 +216,8 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
     START_TIMING(init);
     
     thrust::device_vector<BaseRelation> gpu_baserels(baserels, baserels + N);
-    thrust::device_vector<RelationID> gpu_memo_keys(std::pow(2,N));
-    thrust::device_vector<JoinRelation> gpu_memo_vals(std::pow(2,N));
+    uninit_device_vector_relid gpu_memo_keys(std::pow(2,N));
+    uninit_device_vector_joinrel gpu_memo_vals(std::pow(2,N));
     thrust::host_vector<unsigned int> partition_offsets(N);
     thrust::host_vector<unsigned int> partition_sizes(N);
     thrust::device_vector<unsigned int> gpu_partition_offsets(N);
@@ -226,12 +226,14 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
 
     for(int i=0; i<N; i++){
         gpu_memo_keys[i] = baserels[i].id;
+
         JoinRelation t;
         t.left_relation_idx = 0; 
         t.right_relation_idx = 0; 
         t.cost = 0.2*baserels[i].rows; 
         t.rows = baserels[i].rows; 
         gpu_memo_vals[i] = t;
+
         partition_sizes[i] = i == 0 ? N : 0;
         partition_offsets[i] = i == 1 ? N : 0;
     }

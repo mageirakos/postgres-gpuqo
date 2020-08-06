@@ -11,6 +11,7 @@
 #define GPUQO_CUH
 
 #include <iostream>
+#include "optimizer/gpuqo_uninitalloc.cuh"
 
 struct JoinRelation{
 	unsigned int left_relation_idx;
@@ -58,5 +59,8 @@ std::ostream & operator<<(std::ostream &os, const JoinRelation& jr)
 	os<<"): rows="<<jr.rows<<", cost="<<jr.cost;
 	return os;
 }
+
+typedef thrust::device_vector<RelationID, uninitialized_allocator<RelationID> > uninit_device_vector_relid;
+typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation> > uninit_device_vector_joinrel;
 
 #endif							/* GPUQO_CUH */
