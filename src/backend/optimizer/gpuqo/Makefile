@@ -29,7 +29,7 @@ else
 NVCCFLAGS += -O2 
 endif
 
-ifeq ($(enable_profile),yes)
+ifeq ($(enable_gpuqo_profiling),yes)
 NVCCFLAGS += -DGPUQO_PROFILE
 endif
 
