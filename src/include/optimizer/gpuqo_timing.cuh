@@ -12,8 +12,11 @@
 
 #include <chrono>
 
+// activate profiling as a conequence of debug (if not yet active)
 #ifdef GPUQO_DEBUG
+#ifndef GPUQO_PROFILE
 #define GPUQO_PROFILE
+#endif
 #endif
 
 typedef std::chrono::steady_clock::time_point time_point;
