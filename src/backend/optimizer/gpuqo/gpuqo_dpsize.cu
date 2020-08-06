@@ -27,6 +27,8 @@
 #include "optimizer/gpuqo.cuh"
 #include "optimizer/gpuqo_timing.cuh"
 
+#define MIN_SCRATCHPAD_CAPACITY 16384
+
 #define printVectorOffset(from, offset, to) { \
     auto mIter = (from); \
     mIter += (offset); \
@@ -240,6 +242,11 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
     gpu_partition_offsets = partition_offsets;
     gpu_partition_sizes = partition_sizes;
 
+    uninit_device_vector_relid gpu_scratchpad_keys;
+    gpu_scratchpad_keys.reserve(MIN_SCRATCHPAD_CAPACITY);
+    uninit_device_vector_joinrel gpu_scratchpad_vals;
+    gpu_scratchpad_vals.reserve(MIN_SCRATCHPAD_CAPACITY);
+
     STOP_TIMING(init);
 
 #ifdef GPUQO_DEBUG
@@ -269,8 +276,13 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
             printf("Starting iteration %d: %d combinations\n", i, n_combinations);
 #endif
             // allocate temp scratchpad
-            thrust::device_vector<RelationID> gpu_scratchpad_keys(n_combinations);
-            thrust::device_vector<JoinRelation> gpu_scratchpad_vals(n_combinations);
+            // prevent unneeded copy of old values in case new memory should be
+            // allocated
+            gpu_scratchpad_keys.resize(0); 
+            gpu_scratchpad_keys.resize(n_combinations);
+            // same as before
+            gpu_scratchpad_vals.resize(0); 
+            gpu_scratchpad_vals.resize(n_combinations);
 
             STOP_TIMING(iter_init);
             START_TIMING(enumerate);
