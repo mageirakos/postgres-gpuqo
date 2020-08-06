@@ -875,8 +875,16 @@ if test x"$enable_cuda" != x"no" ; then
   if test x"$NVCC_CHECK" != x"yes" ; then
     AC_MSG_ERROR(CUDA was not found!)
   fi
+  AC_MSG_CHECKING([CUDA compute capability])
+  PGAC_ARG_REQ(with, cudasm,
+                  [SM], [Compile for compute capability SM)],
+                  [], [with_cudasm="30 35 37 50 52 60 61 70 75"])
+  AC_MSG_RESULT([$with_cudasm])
+  AC_SUBST(with_cudasm)
+else
+  with_cudasm=""
+  AC_SUBST(with_cudasm)
 fi
-
 
 #
 # Readline

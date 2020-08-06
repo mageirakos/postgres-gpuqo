@@ -206,6 +206,7 @@ enable_thread_safety	= @enable_thread_safety@
 
 enable_cuda	= @enable_cuda@
 cuda_path	= @cuda_path@
+with_cudasm	= @with_cudasm@
 
 python_includespec	= @python_includespec@
 python_libdir		= @python_libdir@

@@ -707,6 +707,7 @@ with_libxml
 XML2_CONFIG
 UUID_EXTRA_OBJS
 with_uuid
+with_cudasm
 NVCC_CHECK
 cuda_path
 enable_cuda
@@ -860,6 +861,7 @@ with_openssl
 with_selinux
 with_systemd
 enable_cuda
+with_cudasm
 with_readline
 with_libedit_preferred
 with_uuid
@@ -1565,6 +1567,7 @@ Optional Packages:
   --with-openssl          build with OpenSSL support
   --with-selinux          build with SELinux support
   --with-systemd          build with systemd support
+  --with-cudasm=SM        Compile for compute capability SM)
   --without-readline      do not use GNU Readline nor BSD Libedit for editing
   --with-libedit-preferred
                           prefer BSD Libedit over GNU Readline
@@ -8050,8 +8053,38 @@ fi
   if test x"$NVCC_CHECK" != x"yes" ; then
     as_fn_error $? "CUDA was not found!" "$LINENO" 5
   fi
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking CUDA compute capability" >&5
+$as_echo_n "checking CUDA compute capability... " >&6; }
+
+
+
+# Check whether --with-cudasm was given.
+if test "${with_cudasm+set}" = set; then :
+  withval=$with_cudasm;
+  case $withval in
+    yes)
+      as_fn_error $? "argument required for --with-cudasm option" "$LINENO" 5
+      ;;
+    no)
+      as_fn_error $? "argument required for --with-cudasm option" "$LINENO" 5
+      ;;
+    *)
+
+      ;;
+  esac
+
+else
+  with_cudasm="30 35 37 50 52 60 61 70 75"
 fi
 
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_cudasm" >&5
+$as_echo "$with_cudasm" >&6; }
+
+else
+  with_cudasm=""
+
+fi
 
 #
 # Readline

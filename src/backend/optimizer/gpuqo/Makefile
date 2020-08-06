@@ -12,7 +12,7 @@ top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
 OBJS   = gpuqo_main.o 
-NVOBJS = gpuqo_kernel.o
+NVOBJS = gpuqo_dpsize.o
 
 # NVIDIA-specific code (do not edit)
 
@@ -20,10 +20,20 @@ NVLINK = dlink.o
 OBJS += $(NVLINK)
 OBJS += $(NVOBJS)
 
-SM := 35
 NVCC := $(cuda_path)/bin/nvcc
-NVCCFLAGS = -O2
-GENCODE_FLAGS = -gencode arch=compute_$(SM),code=sm_$(SM)
+NVCCFLAGS = $(CPPFLAGS)
+
+ifeq ($(enable_debug),yes)
+NVCCFLAGS += -O0 -g -DGPUQO_DEBUG
+else
+NVCCFLAGS += -O2 
+endif
+
+ifeq ($(enable_profile),yes)
+NVCCFLAGS += -DGPUQO_PROFILE
+endif
+
+GENCODE_FLAGS = $(foreach sm, $(with_cudasm), -gencode arch=compute_$(sm),code=sm_$(sm))
 BUILDDIR = $(top_builddir)/$(subdir)
 
 $(NVLINK): $(NVOBJS)
