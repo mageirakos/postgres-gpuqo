@@ -20,4 +20,6 @@ extern RelOptInfo *gpuqo(PlannerInfo *root,
 
 extern QueryTree* gpuqo_dpsize(BaseRelation baserels[], int N);
 
+extern bool gpuqo_check_can_run(PlannerInfo* root);
+
 #endif							/* GPUQO_H */

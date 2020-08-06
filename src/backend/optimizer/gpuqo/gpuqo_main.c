@@ -22,6 +22,22 @@ FixedBitMask bitmapset2FixedBitMask(Bitmapset* set);
 void printQueryTree(QueryTree* qt, int indent);
 RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int number_of_rels, List *initial_rels);
 
+/*
+ * gpuqo_check_can_run
+ *	  checks that there are no join order contraints.
+ */
+bool 
+gpuqo_check_can_run(PlannerInfo* root)
+{
+    if (list_length(root->join_info_list) != 0)
+        return false;
+
+    if (list_length(root->placeholder_list) != 0)
+        return false;
+
+    return true;
+}
+
 void printQueryTree(QueryTree* qt, int indent){
     int i;
 

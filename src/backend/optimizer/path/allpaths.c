@@ -2814,7 +2814,9 @@ make_rel_from_joinlist(PlannerInfo *root, List *joinlist)
 		if (join_search_hook)
 			return (*join_search_hook) (root, levels_needed, initial_rels);
 #ifdef ENABLE_GPUQO
-		else if (enable_gpuqo && levels_needed >= gpuqo_threshold)
+		else if (enable_gpuqo && levels_needed >= gpuqo_threshold 
+				&& (!enable_geqo || levels_needed < geqo_threshold)
+				&& gpuqo_check_can_run(root))
 			return gpuqo(root, levels_needed, initial_rels);
 #endif
 		else if (enable_geqo && levels_needed >= geqo_threshold)
