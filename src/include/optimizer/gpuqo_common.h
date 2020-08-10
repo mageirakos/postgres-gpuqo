@@ -31,4 +31,8 @@ typedef struct QueryTree{
 	struct QueryTree* right;
 } QueryTree;
 
+typedef struct EdgeInfo{
+	double sel;
+} EdgeInfo;
+
 #endif							/* GPUQO_COMMON_H */

@@ -157,7 +157,7 @@ void buildQueryTree(int idx,
  */
 extern "C"
 QueryTree*
-gpuqo_dpsize(BaseRelation baserels[], int N)
+gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
 {
     DECLARE_TIMING(gpuqo_dpsize);
     DECLARE_TIMING(init);
@@ -167,6 +167,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
     START_TIMING(init);
     
     thrust::device_vector<BaseRelation> gpu_baserels(baserels, baserels + N);
+    thrust::device_vector<EdgeInfo> gpu_edge_table(edge_table, edge_table + N*N);
     uninit_device_vector_relid gpu_memo_keys(std::pow(2,N));
     uninit_device_vector_joinrel gpu_memo_vals(std::pow(2,N));
     thrust::host_vector<unsigned int> partition_offsets(N);
@@ -321,6 +322,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N)
                         gpu_memo_keys.data(), 
                         gpu_memo_vals.data(),
                         gpu_baserels.data(),
+                        gpu_edge_table.data(),
                         N
                     )
                 ),

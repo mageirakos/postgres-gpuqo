@@ -23,6 +23,7 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
 FixedBitMask bitmapset2FixedBitMask(Bitmapset* set);
 void printQueryTree(QueryTree* qt, int indent);
 RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int number_of_rels, List *initial_rels);
+void makeEdgeTable(PlannerInfo *root, int number_of_rels, List *initial_rels, BaseRelation* base_rels, EdgeInfo* edge_table);
 
 /*
  * gpuqo_check_can_run
@@ -138,6 +139,61 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
     return baserel;
 }
 
+void makeEdgeTable(PlannerInfo *root, int number_of_rels, List *initial_rels, BaseRelation* base_rels, EdgeInfo* edge_table){
+    ListCell* lc_inner;
+    ListCell* lc_outer;
+    EdgeInfo edge_info;
+    RelOptInfo* joinrel;
+    List	   *restrictlist = NULL;
+    int i, j;
+
+    i = 0;
+    foreach(lc_outer, initial_rels){
+        RelOptInfo* rel_outer = (RelOptInfo*) lfirst(lc_outer);
+        j = 0;
+        foreach(lc_inner, initial_rels){
+            RelOptInfo* rel_inner = (RelOptInfo*) lfirst(lc_inner);
+            
+            if (base_rels[i].edges & bitmapset2FixedBitMask(rel_inner->relids)){
+                double sel;
+                SpecialJoinInfo sjinfo;
+                
+                sjinfo.type = T_SpecialJoinInfo;
+                sjinfo.jointype = JOIN_INNER;
+                /* we don't bother trying to make the remaining fields valid */
+                sjinfo.lhs_strict = false;
+                sjinfo.delay_upper_joins = false;
+                sjinfo.semi_can_btree = false;
+                sjinfo.semi_can_hash = false;
+                sjinfo.semi_operators = NIL;
+                sjinfo.semi_rhs_exprs = NIL;
+                sjinfo.min_lefthand = rel_outer->relids;
+                sjinfo.min_righthand = rel_inner->relids;
+                sjinfo.syn_lefthand = rel_outer->relids;
+                sjinfo.syn_righthand = rel_inner->relids;
+
+                joinrel = build_join_rel(root,
+                                        bms_union(rel_outer->relids, 
+                                                  rel_inner->relids),
+                                        rel_outer,
+                                        rel_inner,
+                                        &sjinfo,
+                                        &restrictlist);
+
+                // this is just a quick'n'dirty way, in reality the number of
+                // rows is clamped so I might underestimate the selectivity
+                sel = joinrel->rows / (rel_inner->rows*rel_outer->rows);
+                edge_info.sel = sel < 1 ? sel : 1;
+            } else {
+                edge_info.sel = 1; // cross-join selectivity
+            }
+            edge_table[i*number_of_rels+j] = edge_info;
+            j++;
+        }
+        i++;
+    }
+}
+
 /*
  * gpuqo
  *	  solution of the query optimization problem
@@ -151,6 +207,7 @@ gpuqo(PlannerInfo *root, int number_of_rels, List *initial_rels)
     int i;
     RelOptInfo* rel;
     BaseRelation* baserels;
+    EdgeInfo* edge_table;
     QueryTree* query_tree;
 	
 #ifdef OPTIMIZER_DEBUG
@@ -158,16 +215,19 @@ gpuqo(PlannerInfo *root, int number_of_rels, List *initial_rels)
 #endif
 
     baserels = (BaseRelation*) malloc(number_of_rels * sizeof(BaseRelation));
+    edge_table = (EdgeInfo*) malloc(number_of_rels * number_of_rels * sizeof(EdgeInfo));
 
     i = 0;
     foreach(lc, initial_rels){
         rel = (RelOptInfo *) lfirst(lc);
         baserels[i++] = makeBaseRelation(rel, root);
     }
+    makeEdgeTable(root, number_of_rels, initial_rels, baserels, edge_table);
 
-    query_tree = gpuqo_dpsize(baserels, number_of_rels);
+    query_tree = gpuqo_dpsize(baserels, number_of_rels, edge_table);
 
     free(baserels);
+    free(edge_table);
 
 #ifdef OPTIMIZER_DEBUG
     printQueryTree(query_tree, 2);
