@@ -478,13 +478,13 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
             printf("It took %d pruning iterations", pruning_iter);
 #endif
             
-            PRINT_TOTAL_TIMING(iter_init);
-            PRINT_TOTAL_TIMING(copy_pruned);
-            PRINT_TOTAL_TIMING(enumerate);
-            PRINT_TOTAL_TIMING(filter);
-            PRINT_TOTAL_TIMING(sort);
-            PRINT_TOTAL_TIMING(compute_prune);
-            PRINT_TOTAL_TIMING(update_offsets);
+            PRINT_CHECKPOINT_TIMING(iter_init);
+            PRINT_CHECKPOINT_TIMING(copy_pruned);
+            PRINT_CHECKPOINT_TIMING(enumerate);
+            PRINT_CHECKPOINT_TIMING(filter);
+            PRINT_CHECKPOINT_TIMING(sort);
+            PRINT_CHECKPOINT_TIMING(compute_prune);
+            PRINT_CHECKPOINT_TIMING(update_offsets);
         } // dpsize loop: for i = 2..N
 
         START_TIMING(build_qt);
