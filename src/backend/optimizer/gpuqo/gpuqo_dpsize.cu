@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <cmath>
+#include <cstdint>
 
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
@@ -29,7 +30,11 @@
 #include "optimizer/gpuqo_debug.cuh"
 #include "optimizer/gpuqo_cost.cuh"
 
+#define GB 1024ll*1024ll*1024ll
+
 #define MIN_SCRATCHPAD_CAPACITY 16384
+#define MAX_SCRATCHPAD_CAPACITY_GB 1
+#define MAX_SCRATCHPAD_CAPACITY (MAX_SCRATCHPAD_CAPACITY_GB * GB / (sizeof(JoinRelation)+sizeof(RelationID)))
 
 /* enumerate
  *
@@ -42,16 +47,18 @@ struct enumerate : public thrust::unary_function< int,thrust::tuple<RelationID, 
     thrust::device_ptr<unsigned int> partition_offsets;
     thrust::device_ptr<unsigned int> partition_sizes;
     int iid;
+    int offset;
 public:
     enumerate(
         thrust::device_ptr<RelationID> _memo_keys,
         thrust::device_ptr<JoinRelation> _memo_vals,
         thrust::device_ptr<unsigned int> _partition_offsets,
         thrust::device_ptr<unsigned int> _partition_sizes,
-        int _iid
+        int _iid,
+        int _offset
     ) : memo_keys(_memo_keys), memo_vals(_memo_vals), 
         partition_offsets(_partition_offsets), 
-        partition_sizes(_partition_sizes), iid(_iid)
+        partition_sizes(_partition_sizes), iid(_iid), offset(_offset)
     {}
 
     __device__
@@ -60,6 +67,7 @@ public:
         int lp = 0;
         int rp = iid - 2;
         int o = partition_sizes[lp] * partition_sizes[rp];
+        cid += offset;
 
         while (cid >= o){
             cid -= o;
@@ -193,6 +201,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
     gpu_partition_offsets = partition_offsets;
     gpu_partition_sizes = partition_sizes;
 
+    // scratchpad size is increased on demand, starting from a minimum capacity
     uninit_device_vector_relid gpu_scratchpad_keys;
     gpu_scratchpad_keys.reserve(MIN_SCRATCHPAD_CAPACITY);
     uninit_device_vector_joinrel gpu_scratchpad_vals;
@@ -206,8 +215,9 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
 #endif
 
     START_TIMING(execute);
-    try{
+    try{ // catch any exception in thrust
         DECLARE_TIMING(iter_init);
+        DECLARE_TIMING(copy_pruned);
         DECLARE_TIMING(enumerate);
         DECLARE_TIMING(filter);
         DECLARE_TIMING(sort);
@@ -215,160 +225,269 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
         DECLARE_TIMING(update_offsets);
         DECLARE_TIMING(build_qt);
 
+        // iterate over the size of the resulting joinrel
         for(int i=2; i<=N; i++){
             START_TIMING(iter_init);
             
-            // calculate size of required temp space
-            int n_combinations = 0;
+            // calculate number of combinations of relations that make up 
+            // a joinrel of size i
+            uint64_t n_combinations = 0;
             for (int j=1; j<i; j++){
                 n_combinations += partition_sizes[j-1] * partition_sizes[i-j-1];
             }
 
-#ifdef GPUQO_DEBUG
+#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
             printf("Starting iteration %d: %d combinations\n", i, n_combinations);
 #endif
-            // allocate temp scratchpad
-            // prevent unneeded copy of old values in case new memory should be
-            // allocated
-            gpu_scratchpad_keys.resize(0); 
-            gpu_scratchpad_keys.resize(n_combinations);
-            // same as before
-            gpu_scratchpad_vals.resize(0); 
-            gpu_scratchpad_vals.resize(n_combinations);
 
-            STOP_TIMING(iter_init);
-            START_TIMING(enumerate);
-            
-            // fill scratchpad
-            thrust::tabulate(
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    gpu_scratchpad_keys.begin(),
-                    gpu_scratchpad_vals.begin()
-                )),
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    gpu_scratchpad_keys.end(),
-                    gpu_scratchpad_vals.end()
-                )),
-                enumerate(
-                    gpu_memo_keys.data(), 
-                    gpu_memo_vals.data(), 
-                    gpu_partition_offsets.data(), 
-                    gpu_partition_sizes.data(), 
-                    i
-                )
-            );
-
-            STOP_TIMING(enumerate);
-
-#ifdef GPUQO_DEBUG
-            printf("After tabulate\n");
-            printVector(gpu_scratchpad_keys.begin(), gpu_scratchpad_keys.end());
-            printVector(gpu_scratchpad_vals.begin(), gpu_scratchpad_vals.end());
-#endif
-
-            START_TIMING(filter);
-            // filter out invalid pairs
-            auto newEnd = thrust::remove_if(
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    gpu_scratchpad_keys.begin(),
-                    gpu_scratchpad_vals.begin()
-                )),
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    gpu_scratchpad_keys.end(),
-                    gpu_scratchpad_vals.end()
-                )),
-                filter(
-                    gpu_memo_keys.data(), 
-                    gpu_memo_vals.data(),
-                    gpu_baserels.data(), 
-                    N
-                )
-            );
-
-            STOP_TIMING(filter);
-
-#ifdef GPUQO_DEBUG
-            printf("After remove_if\n");
-            printVector(gpu_scratchpad_keys.begin(), newEnd.get_iterator_tuple().get<0>());
-            printVector(gpu_scratchpad_vals.begin(), newEnd.get_iterator_tuple().get<1>());
-#endif
-
-            START_TIMING(sort);
-
-            // sort by key (prepare for pruning)
-            thrust::sort_by_key(
-                gpu_scratchpad_keys.begin(),
-                newEnd.get_iterator_tuple().get<0>(),
-                gpu_scratchpad_vals.begin()
-            );
-
-            STOP_TIMING(sort);
-
-#ifdef GPUQO_DEBUG
-            printf("After sort_by_key\n");
-            printVector(gpu_scratchpad_keys.begin(), newEnd.get_iterator_tuple().get<0>());
-            printVector(gpu_scratchpad_vals.begin(), newEnd.get_iterator_tuple().get<1>());
-#endif
-
-            START_TIMING(compute_prune);
-
-            // calculate cost, prune and copy to table
-            auto out_iters = thrust::reduce_by_key(
-                gpu_scratchpad_keys.begin(),
-                newEnd.get_iterator_tuple().get<0>(),
-                thrust::make_transform_iterator(
-                    gpu_scratchpad_vals.begin(),
-                    joinCost(
-                        gpu_memo_keys.data(), 
-                        gpu_memo_vals.data(),
-                        gpu_baserels.data(),
-                        gpu_edge_table.data(),
-                        N
-                    )
-                ),
-                gpu_memo_keys.begin()+partition_offsets[i-1],
-                gpu_memo_vals.begin()+partition_offsets[i-1],
-                thrust::equal_to<unsigned int>(),
-                thrust::minimum<JoinRelation>()
-            );
-
-            STOP_TIMING(compute_prune);
-
-#ifdef GPUQO_DEBUG
-            printf("After reduce_by_key\n");
-            printVector(gpu_memo_keys.begin(), out_iters.first);
-            printVector(gpu_memo_vals.begin(), out_iters.second);
-#endif
-
-            START_TIMING(update_offsets);
-
-            // update ps and po
-            partition_sizes[i-1] = thrust::distance(
-                gpu_memo_keys.begin()+partition_offsets[i-1],
-                out_iters.first
-            ); // TODO check inclusive/exclusive
-            gpu_partition_sizes[i-1] = partition_sizes[i-1];
-            
-            if (i < N){
-                partition_offsets[i] = partition_sizes[i-1] + partition_offsets[i-1];
-                gpu_partition_offsets[i] = partition_offsets[i];
+            // If < MAX_SCRATCHPAD_CAPACITY I may need to increase it
+            if (n_combinations < MAX_SCRATCHPAD_CAPACITY){
+                // allocate temp scratchpad
+                // prevent unneeded copy of old values in case new memory should be
+                // allocated
+                gpu_scratchpad_keys.resize(0); 
+                gpu_scratchpad_keys.resize(n_combinations);
+                // same as before
+                gpu_scratchpad_vals.resize(0); 
+                gpu_scratchpad_vals.resize(n_combinations);
+            } else{
+                // If >= MAX_SCRATCHPAD_CAPACITY only need to increase up to
+                // MAX_SCRATCHPAD_CAPACITY, if not already done so
+                if (gpu_scratchpad_keys.size() < MAX_SCRATCHPAD_CAPACITY){
+                    gpu_scratchpad_keys.resize(0); 
+                    gpu_scratchpad_keys.resize(MAX_SCRATCHPAD_CAPACITY);
+                }
+                if (gpu_scratchpad_vals.size() < MAX_SCRATCHPAD_CAPACITY){
+                    gpu_scratchpad_vals.resize(0); 
+                    gpu_scratchpad_vals.resize(MAX_SCRATCHPAD_CAPACITY);
+                }
             }
 
-            STOP_TIMING(update_offsets);
+            STOP_TIMING(iter_init);
+
+            // offset of cid for the enumeration
+            uint64_t offset = 0;
+
+            // count how many times I had to sort+prune
+            // NB: either a really high number of tables or a small scratchpad
+            //     is required to make multiple sort+prune steps
+            int pruning_iter = 0;
+
+            // size of the already filtered joinrels at the beginning of the 
+            // scratchpad
+            int temp_size;
+
+            // until I go through every possible iteration
+            while (offset < n_combinations){
+                if (pruning_iter != 0){
+                    // if I already pruned at least once, I need to fetch those 
+                    // partially pruned samples from the memo to the scratchpad
+                    START_TIMING(copy_pruned);
+                    thrust::copy(
+                        thrust::make_zip_iterator(thrust::make_tuple(
+                            gpu_memo_keys.begin()+partition_offsets[i-1],
+                            gpu_memo_vals.begin()+partition_offsets[i-1]
+                        )),
+                        thrust::make_zip_iterator(thrust::make_tuple(
+                            gpu_memo_keys.begin()+partition_offsets[i-1]+partition_sizes[i-1],
+                            gpu_memo_vals.begin()+partition_offsets[i-1]+partition_sizes[i-1]
+                        )),
+                        thrust::make_zip_iterator(thrust::make_tuple(
+                            gpu_scratchpad_keys.begin(),
+                            gpu_scratchpad_vals.begin()
+                        ))
+                    );
+
+                    // I now have already ps[i-1] joinrels in the sratchpad
+                    temp_size = partition_sizes[i-1];
+                    STOP_TIMING(copy_pruned);
+                } else {
+                    // scratchpad is initially empty
+                    temp_size = 0;
+                }
+
+                // until there are no more combinations or the scratchpad is
+                // too full (threshold of 0.5 max capacity is arbitrary)
+                while (offset < n_combinations 
+                            && temp_size < MAX_SCRATCHPAD_CAPACITY/2)
+                {
+                    // how many combinations I will try at this iteration
+                    int chunk_size;
+
+                    if (n_combinations - offset < MAX_SCRATCHPAD_CAPACITY - temp_size){
+                        // all remaining
+                        chunk_size = n_combinations - offset;
+                    } else{
+                        // up to scratchpad capacity
+                        chunk_size = MAX_SCRATCHPAD_CAPACITY - temp_size;
+                    }
+
+                    START_TIMING(enumerate);
+                    // fill scratchpad
+                    thrust::tabulate(
+                        thrust::make_zip_iterator(thrust::make_tuple(
+                            gpu_scratchpad_keys.begin()+temp_size,
+                            gpu_scratchpad_vals.begin()+temp_size
+                        )),
+                        thrust::make_zip_iterator(thrust::make_tuple(
+                            gpu_scratchpad_keys.begin()+(chunk_size+temp_size),
+                            gpu_scratchpad_vals.begin()+(chunk_size+temp_size)
+                        )),
+                        enumerate(
+                            gpu_memo_keys.data(), 
+                            gpu_memo_vals.data(), 
+                            gpu_partition_offsets.data(), 
+                            gpu_partition_sizes.data(), 
+                            i,
+                            offset
+                        )
+                    );
+                    STOP_TIMING(enumerate);
 
 #ifdef GPUQO_DEBUG
-            printf("After partition_*\n");
-            printVector(partition_sizes.begin(), partition_sizes.end());
-            printVector(partition_offsets.begin(), partition_offsets.end());
+                    printf("After tabulate\n");
+                    printVector(
+                        gpu_scratchpad_keys.begin()+temp_size, 
+                        gpu_scratchpad_keys.begin()+(temp_size+chunk_size)
+                    );
+                    printVector(
+                        gpu_scratchpad_vals.begin()+temp_size, 
+                        gpu_scratchpad_vals.begin()+(temp_size+chunk_size)
+                    );
 #endif
 
-            PRINT_TIMING(iter_init);
-            PRINT_TIMING(enumerate);
-            PRINT_TIMING(filter);
-            PRINT_TIMING(sort);
-            PRINT_TIMING(compute_prune);
-            PRINT_TIMING(update_offsets);
-        }
+                    START_TIMING(filter);
+                    // filter out invalid pairs
+                    auto newEnd = thrust::remove_if(
+                        thrust::make_zip_iterator(thrust::make_tuple(
+                            gpu_scratchpad_keys.begin()+temp_size,
+                            gpu_scratchpad_vals.begin()+temp_size
+                        )),
+                        thrust::make_zip_iterator(thrust::make_tuple(
+                            gpu_scratchpad_keys.begin()+(temp_size+chunk_size),
+                            gpu_scratchpad_vals.begin()+(temp_size+chunk_size)
+                        )),
+                        filter(
+                            gpu_memo_keys.data(), 
+                            gpu_memo_vals.data(),
+                            gpu_baserels.data(), 
+                            N
+                        )
+                    );
+
+                    STOP_TIMING(filter);
+
+#ifdef GPUQO_DEBUG
+                    printf("After remove_if\n");
+                    printVector(
+                        gpu_scratchpad_keys.begin()+temp_size, 
+                        newEnd.get_iterator_tuple().get<0>()
+                    );
+                    printVector(
+                        gpu_scratchpad_vals.begin()+temp_size, 
+                        newEnd.get_iterator_tuple().get<1>()
+                    );
+#endif
+                    // get how many rels remain after filter and add it to 
+                    // temp_size
+                    temp_size += thrust::distance(
+                        gpu_scratchpad_keys.begin()+temp_size,
+                        newEnd.get_iterator_tuple().get<0>()
+                    );
+
+                    // increase offset for next iteration and/or for exit check 
+                    offset += chunk_size;
+                } // filtering loop: while(off<n_comb && temp_s < cap)
+
+                // I now have either all valid combinations or 0.5 scratchpad
+                // capacity combinations. In the first case, I will prune once
+                // and exit. In the second case, there are still some 
+                // combinations to try so I will prune this partial result and
+                // then reload it back in the scratchpad to finish execution
+
+                START_TIMING(sort);
+
+                // sort by key (prepare for pruning)
+                thrust::sort_by_key(
+                    gpu_scratchpad_keys.begin(),
+                    gpu_scratchpad_keys.begin() + temp_size,
+                    gpu_scratchpad_vals.begin()
+                );
+    
+                STOP_TIMING(sort);
+    
+#ifdef GPUQO_DEBUG
+                printf("After sort_by_key\n");
+                printVector(gpu_scratchpad_keys.begin(), gpu_scratchpad_keys.begin() + temp_size);
+                printVector(gpu_scratchpad_vals.begin(), gpu_scratchpad_vals.begin() + temp_size);
+#endif
+    
+                START_TIMING(compute_prune);
+    
+                // calculate cost, prune and copy to table
+                auto out_iters = thrust::reduce_by_key(
+                    gpu_scratchpad_keys.begin(),
+                    gpu_scratchpad_keys.begin() + temp_size,
+                    thrust::make_transform_iterator(
+                        gpu_scratchpad_vals.begin(),
+                        joinCost(
+                            gpu_memo_keys.data(), 
+                            gpu_memo_vals.data(),
+                            gpu_baserels.data(),
+                            gpu_edge_table.data(),
+                            N
+                        )
+                    ),
+                    gpu_memo_keys.begin()+partition_offsets[i-1],
+                    gpu_memo_vals.begin()+partition_offsets[i-1],
+                    thrust::equal_to<unsigned int>(),
+                    thrust::minimum<JoinRelation>()
+                );
+    
+                STOP_TIMING(compute_prune);
+    
+#ifdef GPUQO_DEBUG
+                printf("After reduce_by_key\n");
+                printVector(gpu_memo_keys.begin(), out_iters.first);
+                printVector(gpu_memo_vals.begin(), out_iters.second);
+#endif
+    
+                START_TIMING(update_offsets);
+    
+                // update ps and po
+                partition_sizes[i-1] = thrust::distance(
+                    gpu_memo_keys.begin()+partition_offsets[i-1],
+                    out_iters.first
+                );
+                gpu_partition_sizes[i-1] = partition_sizes[i-1];
+                
+                if (i < N){
+                    partition_offsets[i] = partition_sizes[i-1] + partition_offsets[i-1];
+                    gpu_partition_offsets[i] = partition_offsets[i];
+                }
+    
+                STOP_TIMING(update_offsets);
+    
+#ifdef GPUQO_DEBUG
+                printf("After partition_*\n");
+                printVector(partition_sizes.begin(), partition_sizes.end());
+                printVector(partition_offsets.begin(), partition_offsets.end());
+#endif
+                pruning_iter++;
+            } // pruning loop: while(offset<n_combinations)
+
+#ifdef GPUQO_DEBUG
+            printf("It took %d pruning iterations", pruning_iter);
+#endif
+            
+            PRINT_TOTAL_TIMING(iter_init);
+            PRINT_TOTAL_TIMING(copy_pruned);
+            PRINT_TOTAL_TIMING(enumerate);
+            PRINT_TOTAL_TIMING(filter);
+            PRINT_TOTAL_TIMING(sort);
+            PRINT_TOTAL_TIMING(compute_prune);
+            PRINT_TOTAL_TIMING(update_offsets);
+        } // dpsize loop: for i = 2..N
 
         START_TIMING(build_qt);
             
@@ -377,6 +496,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
         STOP_TIMING(build_qt);
     
         PRINT_TOTAL_TIMING(iter_init);
+        PRINT_TOTAL_TIMING(copy_pruned);
         PRINT_TOTAL_TIMING(enumerate);
         PRINT_TOTAL_TIMING(filter);
         PRINT_TOTAL_TIMING(sort);
