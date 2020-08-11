@@ -10,6 +10,10 @@
 #ifndef GPUQO_COMMON_H
 #define GPUQO_COMMON_H
 
+extern int gpuqo_dpsize_min_scratchpad_size_mb;
+extern int gpuqo_dpsize_max_scratchpad_size_mb;
+extern int gpuqo_dpsize_max_memo_size_mb;
+
 // For the moment it's limited to 64 relations
 // I need to find a way to efficiently and dynamically increase this value
 typedef unsigned long long FixedBitMask;

@@ -51,6 +51,7 @@
 #include "miscadmin.h"
 #include "optimizer/cost.h"
 #include "optimizer/geqo.h"
+#include "optimizer/gpuqo_common.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/paths.h"
 #include "optimizer/planmain.h"
@@ -2053,6 +2054,36 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&gpuqo_threshold,
 		8, 2, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dpsize_min_scratchpad_size_mb", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the minimum allocated memory for the scratchpad (DPSIZE only)."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsize_max_scratchpad_size_mb,
+		10, 1, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dpsize_max_scratchpad_size_mb", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the maximum allocated memory for the scratchpad (DPSIZE only)."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsize_max_scratchpad_size_mb,
+		1024, 1, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dpsize_max_memo_size_mb", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the maximum allocated memory for the memo (DPSIZE only)."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsize_max_memo_size_mb,
+		2048, 1, INT_MAX,
 		NULL, NULL, NULL
 	},
 #endif

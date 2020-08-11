@@ -30,11 +30,20 @@
 #include "optimizer/gpuqo_debug.cuh"
 #include "optimizer/gpuqo_cost.cuh"
 
-#define GB 1024ll*1024ll*1024ll
+#define KB 1024ULL
+#define MB (KB*1024)
+#define GB (MB*1024)
 
-#define MIN_SCRATCHPAD_CAPACITY 16384
-#define MAX_SCRATCHPAD_CAPACITY_GB 1
-#define MAX_SCRATCHPAD_CAPACITY (MAX_SCRATCHPAD_CAPACITY_GB * GB / (sizeof(JoinRelation)+sizeof(RelationID)))
+#define RELSIZE (sizeof(JoinRelation)+sizeof(RelationID))
+
+#define MIN_SCRATCHPAD_CAPACITY (gpuqo_dpsize_max_scratchpad_size_mb*MB / RELSIZE)
+#define MAX_SCRATCHPAD_CAPACITY (gpuqo_dpsize_max_scratchpad_size_mb*MB / RELSIZE)
+#define PRUNE_THRESHOLD (MAX_SCRATCHPAD_CAPACITY*2/3)
+#define MAX_MEMO_SIZE (gpuqo_dpsize_max_memo_size_mb*MB / RELSIZE)
+
+int gpuqo_dpsize_min_scratchpad_size_mb;
+int gpuqo_dpsize_max_scratchpad_size_mb;
+int gpuqo_dpsize_max_memo_size_mb;
 
 /* enumerate
  *
@@ -188,9 +197,13 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
     
     START_TIMING(gpuqo_dpsize);
     START_TIMING(init);
+
+    uint64_t memo_size = std::min(1ULL<<N, MAX_MEMO_SIZE);
     
     thrust::device_vector<BaseRelation> gpu_baserels(baserels, baserels + N);
     thrust::device_vector<EdgeInfo> gpu_edge_table(edge_table, edge_table + N*N);
+    uninit_device_vector_relid gpu_memo_keys(memo_size);
+    uninit_device_vector_joinrel gpu_memo_vals(memo_size);
     thrust::host_vector<uint64_t> partition_offsets(N);
     thrust::host_vector<uint64_t> partition_sizes(N);
     thrust::device_vector<uint64_t> gpu_partition_offsets(N);
@@ -322,7 +335,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                 // until there are no more combinations or the scratchpad is
                 // too full (threshold of 0.5 max capacity is arbitrary)
                 while (offset < n_combinations 
-                            && temp_size < MAX_SCRATCHPAD_CAPACITY/2)
+                            && temp_size < PRUNE_THRESHOLD)
                 {
                     // how many combinations I will try at this iteration
                     uint64_t chunk_size;

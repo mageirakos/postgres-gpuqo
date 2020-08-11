@@ -400,6 +400,9 @@
 
 #gpuqo = on
 #gpuqo_threshold = 8
+#gpuqo_dpsize_min_scratchpad_size_mb = 1
+#gpuqo_dpsize_max_scratchpad_size_mb = 1024
+#gpuqo_dpsize_max_memo_size_mb = 2048
 
 # - Other Planner Options -
 
