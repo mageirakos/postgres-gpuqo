@@ -33,13 +33,7 @@
 #define KB 1024ULL
 #define MB (KB*1024)
 #define GB (MB*1024)
-
 #define RELSIZE (sizeof(JoinRelation)+sizeof(RelationID))
-
-#define MIN_SCRATCHPAD_CAPACITY (gpuqo_dpsize_max_scratchpad_size_mb*MB / RELSIZE)
-#define MAX_SCRATCHPAD_CAPACITY (gpuqo_dpsize_max_scratchpad_size_mb*MB / RELSIZE)
-#define PRUNE_THRESHOLD (MAX_SCRATCHPAD_CAPACITY*2/3)
-#define MAX_MEMO_SIZE (gpuqo_dpsize_max_memo_size_mb*MB / RELSIZE)
 
 int gpuqo_dpsize_min_scratchpad_size_mb;
 int gpuqo_dpsize_max_scratchpad_size_mb;
@@ -198,7 +192,12 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
     START_TIMING(gpuqo_dpsize);
     START_TIMING(init);
 
-    uint64_t memo_size = std::min(1ULL<<N, MAX_MEMO_SIZE);
+    uint64_t min_scratchpad_capacity = gpuqo_dpsize_min_scratchpad_size_mb * MB / RELSIZE;
+    uint64_t max_scratchpad_capacity = gpuqo_dpsize_max_scratchpad_size_mb * MB / RELSIZE;
+    uint64_t prune_threshold = max_scratchpad_capacity * 2 / 3;
+    uint64_t max_memo_size = gpuqo_dpsize_max_memo_size_mb * MB / RELSIZE;
+
+    uint64_t memo_size = std::min((uint64_t) 1ULL<<N, max_memo_size);
     
     thrust::device_vector<BaseRelation> gpu_baserels(baserels, baserels + N);
     thrust::device_vector<EdgeInfo> gpu_edge_table(edge_table, edge_table + N*N);
@@ -229,9 +228,9 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
 
     // scratchpad size is increased on demand, starting from a minimum capacity
     uninit_device_vector_relid gpu_scratchpad_keys;
-    gpu_scratchpad_keys.reserve(MIN_SCRATCHPAD_CAPACITY);
+    gpu_scratchpad_keys.reserve(min_scratchpad_capacity);
     uninit_device_vector_joinrel gpu_scratchpad_vals;
-    gpu_scratchpad_vals.reserve(MIN_SCRATCHPAD_CAPACITY);
+    gpu_scratchpad_vals.reserve(min_scratchpad_capacity);
 
     STOP_TIMING(init);
 
@@ -266,8 +265,8 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
             printf("\nStarting iteration %d: %d combinations\n", i, n_combinations);
 #endif
 
-            // If < MAX_SCRATCHPAD_CAPACITY I may need to increase it
-            if (n_combinations < MAX_SCRATCHPAD_CAPACITY){
+            // If < max_scratchpad_capacity I may need to increase it
+            if (n_combinations < max_scratchpad_capacity){
                 // allocate temp scratchpad
                 // prevent unneeded copy of old values in case new memory should be
                 // allocated
@@ -277,15 +276,15 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                 gpu_scratchpad_vals.resize(0); 
                 gpu_scratchpad_vals.resize(n_combinations);
             } else{
-                // If >= MAX_SCRATCHPAD_CAPACITY only need to increase up to
-                // MAX_SCRATCHPAD_CAPACITY, if not already done so
-                if (gpu_scratchpad_keys.size() < MAX_SCRATCHPAD_CAPACITY){
+                // If >= max_scratchpad_capacity only need to increase up to
+                // max_scratchpad_capacity, if not already done so
+                if (gpu_scratchpad_keys.size() < max_scratchpad_capacity){
                     gpu_scratchpad_keys.resize(0); 
-                    gpu_scratchpad_keys.resize(MAX_SCRATCHPAD_CAPACITY);
+                    gpu_scratchpad_keys.resize(max_scratchpad_capacity);
                 }
-                if (gpu_scratchpad_vals.size() < MAX_SCRATCHPAD_CAPACITY){
+                if (gpu_scratchpad_vals.size() < max_scratchpad_capacity){
                     gpu_scratchpad_vals.resize(0); 
-                    gpu_scratchpad_vals.resize(MAX_SCRATCHPAD_CAPACITY);
+                    gpu_scratchpad_vals.resize(max_scratchpad_capacity);
                 }
             }
 
@@ -335,17 +334,17 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                 // until there are no more combinations or the scratchpad is
                 // too full (threshold of 0.5 max capacity is arbitrary)
                 while (offset < n_combinations 
-                            && temp_size < PRUNE_THRESHOLD)
+                            && temp_size < prune_threshold)
                 {
                     // how many combinations I will try at this iteration
                     uint64_t chunk_size;
 
-                    if (n_combinations - offset < MAX_SCRATCHPAD_CAPACITY - temp_size){
+                    if (n_combinations - offset < max_scratchpad_capacity - temp_size){
                         // all remaining
                         chunk_size = n_combinations - offset;
                     } else{
                         // up to scratchpad capacity
-                        chunk_size = MAX_SCRATCHPAD_CAPACITY - temp_size;
+                        chunk_size = max_scratchpad_capacity - temp_size;
                     }
 
                     START_TIMING(enumerate);
