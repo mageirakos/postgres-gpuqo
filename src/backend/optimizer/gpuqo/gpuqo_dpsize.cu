@@ -84,6 +84,14 @@ public:
 
         jr.left_relation_idx = partition_offsets[lp] + l;
         jr.right_relation_idx = partition_offsets[rp] + r;
+
+#ifdef GPUQO_DEBUG
+        printf("%llu: %llu %llu\n", 
+            cid, 
+            jr.left_relation_idx,
+            jr.right_relation_idx
+        );
+#endif
         
         RelationID left_id = memo_keys[jr.left_relation_idx];
         RelationID right_id = memo_keys[jr.right_relation_idx];
@@ -120,6 +128,13 @@ public:
     {
         RelationID relid = t.get<0>();
         JoinRelation jr = t.get<1>();
+
+#ifdef GPUQO_DEBUG
+        printf("%llu %llu\n", 
+            jr.left_relation_idx,
+            jr.right_relation_idx
+        );
+#endif
 
         RelationID left_id = memo_keys[jr.left_relation_idx];
         RelationID right_id = memo_keys[jr.right_relation_idx];
@@ -235,7 +250,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
             }
 
 #if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
-            printf("Starting iteration %d: %d combinations\n", i, n_combinations);
+            printf("\nStarting iteration %d: %d combinations\n", i, n_combinations);
 #endif
 
             // If < MAX_SCRATCHPAD_CAPACITY I may need to increase it
