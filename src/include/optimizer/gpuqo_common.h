@@ -12,20 +12,20 @@
 
 // For the moment it's limited to 64 relations
 // I need to find a way to efficiently and dynamically increase this value
-typedef unsigned int FixedBitMask;
+typedef unsigned long long FixedBitMask;
 typedef FixedBitMask EdgeMask;
 typedef FixedBitMask RelationID;
 
 typedef struct BaseRelation{
 	RelationID id;
-	unsigned int rows;
-	unsigned int tuples;
+	double rows;
+	double tuples;
 	EdgeMask edges;
 } BaseRelation;
 
 typedef struct QueryTree{
 	RelationID id;
-	unsigned int rows;
+	double rows;
 	double cost;
 	struct QueryTree* left;
 	struct QueryTree* right;

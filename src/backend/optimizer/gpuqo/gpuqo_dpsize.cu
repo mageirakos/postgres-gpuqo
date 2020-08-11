@@ -40,33 +40,33 @@
  *
  *	 enumeration for DPsize algorithm
  */
-struct enumerate : public thrust::unary_function< int,thrust::tuple<RelationID, JoinRelation> >
+struct enumerate : public thrust::unary_function< uint64_t,thrust::tuple<RelationID, JoinRelation> >
 {
     thrust::device_ptr<RelationID> memo_keys;
     thrust::device_ptr<JoinRelation> memo_vals;
-    thrust::device_ptr<unsigned int> partition_offsets;
-    thrust::device_ptr<unsigned int> partition_sizes;
+    thrust::device_ptr<uint64_t> partition_offsets;
+    thrust::device_ptr<uint64_t> partition_sizes;
     int iid;
-    int offset;
+    uint64_t offset;
 public:
     enumerate(
         thrust::device_ptr<RelationID> _memo_keys,
         thrust::device_ptr<JoinRelation> _memo_vals,
-        thrust::device_ptr<unsigned int> _partition_offsets,
-        thrust::device_ptr<unsigned int> _partition_sizes,
+        thrust::device_ptr<uint64_t> _partition_offsets,
+        thrust::device_ptr<uint64_t> _partition_sizes,
         int _iid,
-        int _offset
+        uint64_t _offset
     ) : memo_keys(_memo_keys), memo_vals(_memo_vals), 
         partition_offsets(_partition_offsets), 
         partition_sizes(_partition_sizes), iid(_iid), offset(_offset)
     {}
 
     __device__
-    thrust::tuple<RelationID, JoinRelation> operator()(unsigned int cid) 
+    thrust::tuple<RelationID, JoinRelation> operator()(uint64_t cid) 
     {
-        int lp = 0;
-        int rp = iid - 2;
-        int o = partition_sizes[lp] * partition_sizes[rp];
+        uint64_t lp = 0;
+        uint64_t rp = iid - 2;
+        uint64_t o = partition_sizes[lp] * partition_sizes[rp];
         cid += offset;
 
         while (cid >= o){
@@ -76,8 +76,8 @@ public:
             o = partition_sizes[lp] * partition_sizes[rp];
         }
 
-        int l = cid / partition_sizes[rp];
-        int r = cid % partition_sizes[rp];
+        uint64_t l = cid / partition_sizes[rp];
+        uint64_t r = cid % partition_sizes[rp];
 
         RelationID relid;
         JoinRelation jr;
@@ -137,7 +137,7 @@ public:
 };
 
 
-void buildQueryTree(int idx, 
+void buildQueryTree(uint64_t idx, 
                     uninit_device_vector_relid &gpu_memo_keys,
                     uninit_device_vector_joinrel &gpu_memo_vals,
                     QueryTree **qt)
@@ -176,12 +176,10 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
     
     thrust::device_vector<BaseRelation> gpu_baserels(baserels, baserels + N);
     thrust::device_vector<EdgeInfo> gpu_edge_table(edge_table, edge_table + N*N);
-    uninit_device_vector_relid gpu_memo_keys(std::pow(2,N));
-    uninit_device_vector_joinrel gpu_memo_vals(std::pow(2,N));
-    thrust::host_vector<unsigned int> partition_offsets(N);
-    thrust::host_vector<unsigned int> partition_sizes(N);
-    thrust::device_vector<unsigned int> gpu_partition_offsets(N);
-    thrust::device_vector<unsigned int> gpu_partition_sizes(N);
+    thrust::host_vector<uint64_t> partition_offsets(N);
+    thrust::host_vector<uint64_t> partition_sizes(N);
+    thrust::device_vector<uint64_t> gpu_partition_offsets(N);
+    thrust::device_vector<uint64_t> gpu_partition_sizes(N);
     QueryTree* out = NULL;
 
     for(int i=0; i<N; i++){
@@ -275,7 +273,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
 
             // size of the already filtered joinrels at the beginning of the 
             // scratchpad
-            int temp_size;
+            uint64_t temp_size;
 
             // until I go through every possible iteration
             while (offset < n_combinations){
@@ -312,7 +310,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                             && temp_size < MAX_SCRATCHPAD_CAPACITY/2)
                 {
                     // how many combinations I will try at this iteration
-                    int chunk_size;
+                    uint64_t chunk_size;
 
                     if (n_combinations - offset < MAX_SCRATCHPAD_CAPACITY - temp_size){
                         // all remaining
@@ -440,7 +438,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                     ),
                     gpu_memo_keys.begin()+partition_offsets[i-1],
                     gpu_memo_vals.begin()+partition_offsets[i-1],
-                    thrust::equal_to<unsigned int>(),
+                    thrust::equal_to<uint64_t>(),
                     thrust::minimum<JoinRelation>()
                 );
     

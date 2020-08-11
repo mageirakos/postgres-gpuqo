@@ -24,7 +24,7 @@ double compute_join_cost(JoinRelation join_rel,
 );
 
 extern __host__ __device__
-unsigned int estimate_join_rows(JoinRelation join_rel, 
+double estimate_join_rows(JoinRelation join_rel, 
                     RelationID &left_id, JoinRelation &left_rel,
                     RelationID &right_id, JoinRelation &right_rel,
                     BaseRelation* base_rels, EdgeInfo* edge_table,

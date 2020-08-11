@@ -13,7 +13,7 @@
 #define printVectorOffset(from, offset, to) { \
     auto mIter = (from); \
     mIter += (offset); \
-    for(int mCount=offset; mIter != (to); ++mIter, ++mCount) \
+    for(uint64_t mCount=offset; mIter != (to); ++mIter, ++mCount) \
         std::cout << mCount << " : " << *mIter << std::endl; \
 }
 

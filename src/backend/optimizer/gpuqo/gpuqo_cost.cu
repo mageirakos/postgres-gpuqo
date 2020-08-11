@@ -9,6 +9,7 @@
  */
 
 #include <cmath>
+#include <cstdint>
 
 #include "optimizer/gpuqo_common.h"
 
@@ -32,7 +33,7 @@ compute_join_cost(JoinRelation join_rel,
 }
 
 __host__ __device__
-unsigned int 
+double 
 estimate_join_rows(JoinRelation join_rel, 
                     RelationID &left_id, JoinRelation &left_rel,
                     RelationID &right_id, JoinRelation &right_rel,
@@ -48,11 +49,11 @@ estimate_join_rows(JoinRelation join_rel,
     // NB: edges might be multiple so I need to check every baserel in the left
     // joinrel
     for (int i = 1; i <= number_of_rels; i++){
-        int base_relid_left = 1<<i;
+        uint64_t base_relid_left = 1<<i;
         BaseRelation baserel_left = base_rels[i-1];
         if (base_relid_left & left_id){
             for (int j = 1; j <= number_of_rels; j++){
-                int base_relid_right = 1<<j;
+                uint64_t base_relid_right = 1<<j;
                 if (baserel_left.edges & right_id & base_relid_right){
                     sel *= edge_table[(i-1)*number_of_rels+(j-1)].sel;
                 }
@@ -60,7 +61,7 @@ estimate_join_rows(JoinRelation join_rel,
         }
     }
     
-    double rows = sel * (double) left_rel.rows * (double) right_rel.rows;
+    double rows = sel * left_rel.rows * right_rel.rows;
 
     // clamp the number of rows
     return rows > 1 ? round(rows) : 1;

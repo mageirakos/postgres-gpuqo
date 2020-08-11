@@ -15,9 +15,9 @@
 #include "optimizer/gpuqo_uninitalloc.cuh"
 
 struct JoinRelation{
-	unsigned int left_relation_idx;
-	unsigned int right_relation_idx;
-	unsigned int rows;
+	uint64_t left_relation_idx;
+	uint64_t right_relation_idx;
+	double rows;
 	double cost;
 	EdgeMask edges;
 	// I could store more information but I'm striving to keep it as small as 

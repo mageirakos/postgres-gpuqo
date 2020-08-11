@@ -52,7 +52,7 @@ void printQueryTree(QueryTree* qt, int indent){
 
     for (i = 0; i<indent; i++)
         printf(" ");
-    printf("%d (rows=%d, cost=%.2f)\n", qt->id, qt->rows, qt->cost);
+    printf("%llu (rows=%.0f, cost=%.2f)\n", qt->id, qt->rows, qt->cost);
 
     printQueryTree(qt->left, indent + 2);
     printQueryTree(qt->right, indent + 2);
