@@ -21,134 +21,95 @@
 #include "optimizer/gpuqo_debug.cuh"
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
+#include "optimizer/gpuqo_cpu_common.cuh"
 
-typedef std::vector< std::list< std::pair<RelationID, JoinRelation*> > > memo_t;
-typedef std::unordered_map<RelationID, JoinRelation*> map_t;
+struct GpuqoCPUDPSizeExtra{
+    vector_list_t rels_per_level;
 
-void buildQueryTree(RelationID relid, map_t &joinrels, QueryTree **qt)
-{
-    auto relid_jr_pair = joinrels.find(relid);
-    if (relid_jr_pair == joinrels.end()){
-        (*qt) = NULL;
-        return;
+    GpuqoCPUDPSizeExtra(int N) : rels_per_level(N+1) {}
+};
+
+void gpuqo_cpu_dpsize_init(BaseRelation baserels[], int N, EdgeInfo edge_table[], memo_t &memo, void** extra){
+    *extra = (void*) new GpuqoCPUDPSizeExtra(N);
+    struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) *extra;
+
+    for(auto iter = memo.begin(); iter != memo.end(); ++iter){
+        mExtra->rels_per_level[1].push_back(*iter);
     }
-    JoinRelation* jr = relid_jr_pair->second;
-
-    (*qt) = new QueryTree;
-    (*qt)->id = relid;
-    (*qt)->left = NULL;
-    (*qt)->right = NULL;
-    (*qt)->rows = jr->rows;
-    (*qt)->cost = jr->cost;
-
-    buildQueryTree(jr->left_relation_id, joinrels, &((*qt)->left));
-    buildQueryTree(jr->right_relation_id, joinrels, &((*qt)->right));
 }
 
-/* gpuqo_cpu_dpsize
- *
- *	 Sequential CPU baseline for GPU query optimization using the DP size
- *    algorithm.
- */
-extern "C"
-QueryTree*
-gpuqo_cpu_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
-{
-    DECLARE_TIMING(gpuqo_cpu_dpsize);
-
-    START_TIMING(gpuqo_cpu_dpsize);
-
-    memo_t memo(N+1);
-    map_t joinrels;
-    QueryTree* out = NULL;
-
-    for(int i=0; i<N; i++){
-        JoinRelation *jr = new JoinRelation;
-        jr->left_relation_id = 0; 
-        jr->right_relation_id = 0; 
-        jr->cost = 0.2*baserels[i].rows; 
-        jr->rows = baserels[i].rows; 
-        jr->edges = baserels[i].edges;
-        memo[1].push_back(std::make_pair(baserels[i].id, jr));
-        joinrels.insert(std::make_pair(baserels[i].id, jr));
-    }
+void gpuqo_cpu_dpsize_enumerate(BaseRelation baserels[], int N, EdgeInfo edge_table[], join_f join_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
+    struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) extra;
 
     for (int join_s=2; join_s<=N; join_s++){
         for (int big_s = join_s-1; big_s >= (join_s+1)/2; big_s--){
             int small_s = join_s-big_s;
-            for (auto big_i = memo[big_s].begin(); 
-                    big_i != memo[big_s].end(); ++big_i){
-                for (auto small_i = memo[small_s].begin(); 
-                        small_i != memo[small_s].end(); ++small_i){
+            for (auto big_i = mExtra->rels_per_level[big_s].begin(); 
+                    big_i != mExtra->rels_per_level[big_s].end(); ++big_i){
+                for (auto small_i = mExtra->rels_per_level[small_s].begin(); 
+                        small_i != mExtra->rels_per_level[small_s].end(); ++small_i){
                     RelationID left_id = big_i->first;
                     JoinRelation *left_rel = big_i->second;
                     RelationID right_id = small_i->first;
                     JoinRelation *right_rel = small_i->second;
                     
-                    if (!is_disjoint(left_id, right_id) 
-                            || !is_connected(left_id, *left_rel, 
-                                             right_id, *right_rel,
-                                             baserels, edge_table, N)){
-
-                        continue;
-                    }
-
-                    for (int j=0; j<2; j++){ // try this pair and the inverse
-                        RelationID join_id = left_id | right_id;
-                        JoinRelation* join_rel = new JoinRelation;
-
-                        join_rel->left_relation_id = left_id;
-                        join_rel->right_relation_id = right_id;
-                        join_rel->edges = left_rel->edges | right_rel -> edges;
-
-                        join_rel->rows = estimate_join_rows(
-                            *join_rel,
-                            left_id, *left_rel,
-                            right_id, *right_rel,
-                            baserels, edge_table, N
-                        );
-                        join_rel->cost = compute_join_cost(
-                            *join_rel,
-                            left_id, *left_rel,
-                            right_id, *right_rel,
-                            baserels, edge_table, N
-                        );
-
-                        auto find_iter = joinrels.find(join_id);
-                        if (find_iter != joinrels.end()){
-                            JoinRelation* old_jr = find_iter->second;
-                            if (join_rel->cost < old_jr->cost){
-                                *old_jr = *join_rel;
-                            }
-                            delete join_rel;
-                        } else{
-                            joinrels.insert(std::make_pair(join_id, join_rel));
-                            memo[join_s].push_back(std::make_pair(join_id, join_rel));
-                        }
-
-                        // swap and try the opposite
-                        right_id = big_i->first;
-                        right_rel = big_i->second;
-                        left_id = small_i->first;
-                        left_rel = small_i->second;
-                    }
-                    
+                    join_function(join_s, 
+                        right_id, *right_rel,
+                        left_id, *left_rel, 
+                        baserels, edge_table, N, memo, extra, algorithm
+                    );
                 }
             } 
         }
     }
 
-    buildQueryTree(memo[N].front().first, joinrels, &out);
+}
 
-    // delete all dynamically allocated memory
-    for (auto iter=joinrels.begin(); iter != joinrels.end(); ++iter){
-        delete iter->second;
-    }
+bool gpuqo_cpu_dpsize_check_join(int level,
+                            RelationID left_id, JoinRelation &left_rel,
+                            RelationID right_id, JoinRelation &right_rel,
+                            BaseRelation* base_rels, EdgeInfo* edge_table,
+                            int number_of_rels, memo_t &memo, void* extra){
 
-    STOP_TIMING(gpuqo_cpu_dpsize);
-    PRINT_TIMING(gpuqo_cpu_dpsize);
+    return (is_disjoint(left_id, right_id) 
+        && is_connected(left_id, left_rel, 
+                        right_id, right_rel,
+                        base_rels, edge_table, number_of_rels));
+}
 
-    return out;
+void gpuqo_cpu_dpsize_post_join(int level, bool newrel,
+                            RelationID join_id, JoinRelation &join_rel,
+                            RelationID left_id, JoinRelation &left_rel,
+                            RelationID right_id, JoinRelation &right_rel,
+                            BaseRelation* base_rels, EdgeInfo* edge_table,
+                            int number_of_rels, memo_t &memo, void* extra){
+    struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) extra;
+    if (newrel)
+        mExtra->rels_per_level[level].push_back(std::make_pair(join_id, &join_rel));
+}
+
+void gpuqo_cpu_dpsize_teardown(BaseRelation baserels[], int N, EdgeInfo edge_table[], memo_t &memo, void* extra){
+    delete ((struct GpuqoCPUDPSizeExtra*) extra);
+}
+
+DPCPUAlgorithm gpuqo_cpu_dpsize_alg = {
+    .init_function = gpuqo_cpu_dpsize_init,
+    .enumerate_function = gpuqo_cpu_dpsize_enumerate,
+    .check_join_function = gpuqo_cpu_dpsize_check_join,
+    .post_join_function = gpuqo_cpu_dpsize_post_join,
+    .teardown_function = gpuqo_cpu_dpsize_teardown
+};
+
+/* gpuqo_cpu_dpsize
+ *
+ *	 Sequential CPU baseline for GPU query optimization using the DP size
+ *   algorithm.
+ */
+extern "C"
+QueryTree*
+gpuqo_cpu_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
+{
+    return gpuqo_cpu_generic(baserels, N, edge_table, gpuqo_cpu_dpsize_alg);
 }
 
 
