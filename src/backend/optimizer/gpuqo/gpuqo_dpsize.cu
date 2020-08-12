@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------
  *
- * gpuqo_dpsize.c
+ * gpuqo_dpsize.cu
  *
- * src/backend/optimizer/gpuqo/gpuqo_dpsize.c
+ * src/backend/optimizer/gpuqo/gpuqo_dpsize.cu
  *
  *-------------------------------------------------------------------------
  */
@@ -29,6 +29,7 @@
 #include "optimizer/gpuqo_timing.cuh"
 #include "optimizer/gpuqo_debug.cuh"
 #include "optimizer/gpuqo_cost.cuh"
+#include "optimizer/gpuqo_filter.cuh"
 
 #define KB 1024ULL
 #define MB (KB*1024)
@@ -108,52 +109,6 @@ public:
         return thrust::tuple<RelationID, JoinRelation>(relid, jr);
     }
 };
-
-
-struct filter : public thrust::unary_function<thrust::tuple<RelationID, JoinRelation>, bool>
-{
-    thrust::device_ptr<RelationID> memo_keys;
-    thrust::device_ptr<JoinRelation> memo_vals;
-    thrust::device_ptr<BaseRelation> base_rels;
-    int n_rels;
-public:
-    filter(
-        thrust::device_ptr<RelationID> _memo_keys,
-        thrust::device_ptr<JoinRelation> _memo_vals,
-        thrust::device_ptr<BaseRelation> _base_rels,
-        int _n_rels
-    ) : memo_keys(_memo_keys), memo_vals(_memo_vals), base_rels(_base_rels),
-        n_rels(_n_rels)
-    {}
-
-    __device__
-    bool operator()(thrust::tuple<RelationID, JoinRelation> t) 
-    {
-        RelationID relid = t.get<0>();
-        JoinRelation jr = t.get<1>();
-
-#ifdef GPUQO_DEBUG
-        printf("%llu %llu\n", 
-            jr.left_relation_idx,
-            jr.right_relation_idx
-        );
-#endif
-
-        RelationID left_id = memo_keys[jr.left_relation_idx];
-        RelationID right_id = memo_keys[jr.right_relation_idx];
-        JoinRelation left_rel = memo_vals[jr.left_relation_idx];
-        JoinRelation right_rel = memo_vals[jr.right_relation_idx];
-
-        if (left_id & right_id) // not disjoint
-            return true;
-
-        if (left_rel.edges & right_id) // connected
-            return false;
-        else // not connected
-            return true;
-    }
-};
-
 
 void buildQueryTree(uint64_t idx, 
                     uninit_device_vector_relid &gpu_memo_keys,
@@ -392,10 +347,11 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                             gpu_scratchpad_keys.begin()+(temp_size+chunk_size),
                             gpu_scratchpad_vals.begin()+(temp_size+chunk_size)
                         )),
-                        filter(
+                        filterJoinedDisconnected(
                             gpu_memo_keys.data(), 
                             gpu_memo_vals.data(),
                             gpu_baserels.data(), 
+                            gpu_edge_table.data(), 
                             N
                         )
                     );
