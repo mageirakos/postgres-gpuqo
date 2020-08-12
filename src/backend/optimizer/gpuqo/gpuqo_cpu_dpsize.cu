@@ -140,6 +140,11 @@ gpuqo_cpu_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
 
     buildQueryTree(memo[N].front().first, joinrels, &out);
 
+    // delete all dynamically allocated memory
+    for (auto iter=joinrels.begin(); iter != joinrels.end(); ++iter){
+        delete iter->second;
+    }
+
     STOP_TIMING(gpuqo_cpu_dpsize);
     PRINT_TIMING(gpuqo_cpu_dpsize);
 
