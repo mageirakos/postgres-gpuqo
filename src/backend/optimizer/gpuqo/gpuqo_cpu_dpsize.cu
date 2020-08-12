@@ -54,6 +54,10 @@ extern "C"
 QueryTree*
 gpuqo_cpu_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
 {
+    DECLARE_TIMING(gpuqo_cpu_dpsize);
+
+    START_TIMING(gpuqo_cpu_dpsize);
+
     memo_t memo(N+1);
     map_t joinrels;
     QueryTree* out = NULL;
@@ -89,7 +93,7 @@ gpuqo_cpu_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                         continue;
                     }
 
-                    for (int j=0; j<2; j++){
+                    for (int j=0; j<2; j++){ // try this pair and the inverse
                         RelationID join_id = left_id | right_id;
                         JoinRelation* join_rel = new JoinRelation;
 
@@ -135,6 +139,9 @@ gpuqo_cpu_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
     }
 
     buildQueryTree(memo[N].front().first, joinrels, &out);
+
+    STOP_TIMING(gpuqo_cpu_dpsize);
+    PRINT_TIMING(gpuqo_cpu_dpsize);
 
     return out;
 }
