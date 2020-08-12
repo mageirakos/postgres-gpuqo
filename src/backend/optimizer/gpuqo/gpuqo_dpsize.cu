@@ -40,11 +40,11 @@ int gpuqo_dpsize_min_scratchpad_size_mb;
 int gpuqo_dpsize_max_scratchpad_size_mb;
 int gpuqo_dpsize_max_memo_size_mb;
 
-/* enumerate
+/* unrankDPSize
  *
- *	 enumeration for DPsize algorithm
+ *	 unrank algorithm for DPsize GPU variant
  */
-struct enumerate : public thrust::unary_function< uint64_t,thrust::tuple<RelationID, JoinRelation> >
+struct unrankDPSize : public thrust::unary_function< uint64_t,thrust::tuple<RelationID, JoinRelation> >
 {
     thrust::device_ptr<RelationID> memo_keys;
     thrust::device_ptr<JoinRelation> memo_vals;
@@ -53,7 +53,7 @@ struct enumerate : public thrust::unary_function< uint64_t,thrust::tuple<Relatio
     int iid;
     uint64_t offset;
 public:
-    enumerate(
+    unrankDPSize(
         thrust::device_ptr<RelationID> _memo_keys,
         thrust::device_ptr<JoinRelation> _memo_vals,
         thrust::device_ptr<uint64_t> _partition_offsets,
@@ -198,7 +198,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
     try{ // catch any exception in thrust
         DECLARE_NV_TIMING(iter_init);
         DECLARE_NV_TIMING(copy_pruned);
-        DECLARE_NV_TIMING(enumerate);
+        DECLARE_NV_TIMING(unrank);
         DECLARE_NV_TIMING(filter);
         DECLARE_NV_TIMING(sort);
         DECLARE_NV_TIMING(compute_prune);
@@ -302,7 +302,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                         chunk_size = max_scratchpad_capacity - temp_size;
                     }
 
-                    START_TIMING(enumerate);
+                    START_TIMING(unrank);
                     // fill scratchpad
                     thrust::tabulate(
                         thrust::make_zip_iterator(thrust::make_tuple(
@@ -313,7 +313,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                             gpu_scratchpad_keys.begin()+(chunk_size+temp_size),
                             gpu_scratchpad_vals.begin()+(chunk_size+temp_size)
                         )),
-                        enumerate(
+                        unrankDPSize(
                             gpu_memo_keys.data(), 
                             gpu_memo_vals.data(), 
                             gpu_partition_offsets.data(), 
@@ -322,7 +322,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                             offset
                         )
                     );
-                    STOP_TIMING(enumerate);
+                    STOP_TIMING(unrank);
 
 #ifdef GPUQO_DEBUG
                     printf("After tabulate\n");
@@ -463,7 +463,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
             
             PRINT_CHECKPOINT_TIMING(iter_init);
             PRINT_CHECKPOINT_TIMING(copy_pruned);
-            PRINT_CHECKPOINT_TIMING(enumerate);
+            PRINT_CHECKPOINT_TIMING(unrank);
             PRINT_CHECKPOINT_TIMING(filter);
             PRINT_CHECKPOINT_TIMING(sort);
             PRINT_CHECKPOINT_TIMING(compute_prune);
@@ -478,7 +478,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
     
         PRINT_TOTAL_TIMING(iter_init);
         PRINT_TOTAL_TIMING(copy_pruned);
-        PRINT_TOTAL_TIMING(enumerate);
+        PRINT_TOTAL_TIMING(unrank);
         PRINT_TOTAL_TIMING(filter);
         PRINT_TOTAL_TIMING(sort);
         PRINT_TOTAL_TIMING(compute_prune);
