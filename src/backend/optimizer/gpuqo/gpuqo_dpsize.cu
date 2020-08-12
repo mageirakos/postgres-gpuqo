@@ -141,8 +141,8 @@ QueryTree*
 gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
 {
     DECLARE_TIMING(gpuqo_dpsize);
-    DECLARE_TIMING(init);
-    DECLARE_TIMING(execute);
+    DECLARE_NV_TIMING(init);
+    DECLARE_NV_TIMING(execute);
     
     START_TIMING(gpuqo_dpsize);
     START_TIMING(init);
@@ -196,14 +196,14 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
 
     START_TIMING(execute);
     try{ // catch any exception in thrust
-        DECLARE_TIMING(iter_init);
-        DECLARE_TIMING(copy_pruned);
-        DECLARE_TIMING(enumerate);
-        DECLARE_TIMING(filter);
-        DECLARE_TIMING(sort);
-        DECLARE_TIMING(compute_prune);
-        DECLARE_TIMING(update_offsets);
-        DECLARE_TIMING(build_qt);
+        DECLARE_NV_TIMING(iter_init);
+        DECLARE_NV_TIMING(copy_pruned);
+        DECLARE_NV_TIMING(enumerate);
+        DECLARE_NV_TIMING(filter);
+        DECLARE_NV_TIMING(sort);
+        DECLARE_NV_TIMING(compute_prune);
+        DECLARE_NV_TIMING(update_offsets);
+        DECLARE_NV_TIMING(build_qt);
 
         // iterate over the size of the resulting joinrel
         for(int i=2; i<=N; i++){
