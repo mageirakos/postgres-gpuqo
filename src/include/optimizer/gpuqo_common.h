@@ -11,11 +11,11 @@
 #define GPUQO_COMMON_H
 
 typedef enum GpuqoAlgorithm {
-	GPUQO_DPSIZE,
+	GPUQO_DPSIZE = 0,
 	GPUQO_CPU_DPSIZE
 } GpuqoAlgorithm;
 
-extern GpuqoAlgorithm gpuqo_algorithm;
+extern int gpuqo_algorithm;
 extern int gpuqo_dpsize_min_scratchpad_size_mb;
 extern int gpuqo_dpsize_max_scratchpad_size_mb;
 extern int gpuqo_dpsize_max_memo_size_mb;

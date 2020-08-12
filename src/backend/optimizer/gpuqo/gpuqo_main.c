@@ -19,7 +19,7 @@
 #include "optimizer/paths.h"
 #include "optimizer/gpuqo.h"
 
-GpuqoAlgorithm gpuqo_algorithm;
+int gpuqo_algorithm;
 
 BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
 FixedBitMask bitmapset2FixedBitMask(Bitmapset* set);
