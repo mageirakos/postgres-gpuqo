@@ -458,6 +458,12 @@ const struct config_enum_entry ssl_protocol_versions_info[] = {
 	{NULL, 0, false}
 };
 
+const struct config_enum_entry gpuqo_algorithm_options[] = {
+	{"dpsize", GPUQO_DPSIZE, false},
+	{"cpu_dpsize", GPUQO_CPU_DPSIZE, false},
+	{NULL, 0, false}
+};
+
 static struct config_enum_entry shared_memory_options[] = {
 #ifndef WIN32
 	{"sysv", SHMEM_TYPE_SYSV, false},
@@ -4593,6 +4599,16 @@ static struct config_enum ConfigureNamesEnum[] =
 		&ssl_max_protocol_version,
 		PG_TLS_ANY,
 		ssl_protocol_versions_info,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gpuqo_algorithm", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Use the selected algorithm in GPUQO module"),
+			NULL
+		},
+		&gpuqo_algorithm,
+		GPUQO_DPSIZE, gpuqo_algorithm_options,
 		NULL, NULL, NULL
 	},
 

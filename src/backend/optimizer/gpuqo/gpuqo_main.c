@@ -19,6 +19,8 @@
 #include "optimizer/paths.h"
 #include "optimizer/gpuqo.h"
 
+GpuqoAlgorithm gpuqo_algorithm;
+
 BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
 FixedBitMask bitmapset2FixedBitMask(Bitmapset* set);
 void printQueryTree(QueryTree* qt, int indent);
@@ -224,7 +226,16 @@ gpuqo(PlannerInfo *root, int number_of_rels, List *initial_rels)
     }
     makeEdgeTable(root, number_of_rels, initial_rels, baserels, edge_table);
 
-    query_tree = gpuqo_dpsize(baserels, number_of_rels, edge_table);
+    switch (gpuqo_algorithm)
+    {
+    case GPUQO_DPSIZE:
+        query_tree = gpuqo_dpsize(baserels, number_of_rels, edge_table);
+        break;
+    case GPUQO_CPU_DPSIZE:
+        query_tree = gpuqo_cpu_dpsize(baserels, number_of_rels, edge_table);
+        break;
+    }
+    
 
     free(baserels);
     free(edge_table);

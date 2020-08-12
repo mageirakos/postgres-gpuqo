@@ -15,8 +15,14 @@
 #include "optimizer/gpuqo_uninitalloc.cuh"
 
 struct JoinRelation{
-	uint64_t left_relation_idx;
-	uint64_t right_relation_idx;
+	union{
+		uint64_t left_relation_idx;
+		RelationID left_relation_id;
+	};
+	union{
+		uint64_t right_relation_idx;
+		RelationID right_relation_id;
+	};
 	double rows;
 	double cost;
 	EdgeMask edges;
