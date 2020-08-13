@@ -138,7 +138,7 @@ void buildQueryTree(uint64_t idx,
  */
 extern "C"
 QueryTree*
-gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
+gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 {
     DECLARE_TIMING(gpuqo_dpsize);
     DECLARE_NV_TIMING(init);
@@ -152,31 +152,31 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
     uint64_t prune_threshold = max_scratchpad_capacity * 2 / 3;
     uint64_t max_memo_size = gpuqo_dpsize_max_memo_size_mb * MB / RELSIZE;
 
-    uint64_t memo_size = std::min((uint64_t) 1ULL<<N, max_memo_size);
+    uint64_t memo_size = std::min((uint64_t) 1ULL<<n_rels, max_memo_size);
     
-    thrust::device_vector<BaseRelation> gpu_baserels(baserels, baserels + N);
-    thrust::device_vector<EdgeInfo> gpu_edge_table(edge_table, edge_table + N*N);
+    thrust::device_vector<BaseRelation> gpu_base_rels(base_rels, base_rels + n_rels);
+    thrust::device_vector<EdgeInfo> gpu_edge_table(edge_table, edge_table + n_rels*n_rels);
     uninit_device_vector_relid gpu_memo_keys(memo_size);
     uninit_device_vector_joinrel gpu_memo_vals(memo_size);
-    thrust::host_vector<uint64_t> partition_offsets(N);
-    thrust::host_vector<uint64_t> partition_sizes(N);
-    thrust::device_vector<uint64_t> gpu_partition_offsets(N);
-    thrust::device_vector<uint64_t> gpu_partition_sizes(N);
+    thrust::host_vector<uint64_t> partition_offsets(n_rels);
+    thrust::host_vector<uint64_t> partition_sizes(n_rels);
+    thrust::device_vector<uint64_t> gpu_partition_offsets(n_rels);
+    thrust::device_vector<uint64_t> gpu_partition_sizes(n_rels);
     QueryTree* out = NULL;
 
-    for(int i=0; i<N; i++){
-        gpu_memo_keys[i] = baserels[i].id;
+    for(int i=0; i<n_rels; i++){
+        gpu_memo_keys[i] = base_rels[i].id;
 
         JoinRelation t;
         t.left_relation_idx = 0; 
         t.right_relation_idx = 0; 
-        t.cost = 0.2*baserels[i].rows; 
-        t.rows = baserels[i].rows; 
-        t.edges = baserels[i].edges;
+        t.cost = 0.2*base_rels[i].rows; 
+        t.rows = base_rels[i].rows; 
+        t.edges = base_rels[i].edges;
         gpu_memo_vals[i] = t;
 
-        partition_sizes[i] = i == 0 ? N : 0;
-        partition_offsets[i] = i == 1 ? N : 0;
+        partition_sizes[i] = i == 0 ? n_rels : 0;
+        partition_offsets[i] = i == 1 ? n_rels : 0;
     }
     gpu_partition_offsets = partition_offsets;
     gpu_partition_sizes = partition_sizes;
@@ -190,8 +190,8 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
     STOP_TIMING(init);
 
 #ifdef GPUQO_DEBUG
-    printVector(gpu_memo_keys.begin(), gpu_memo_keys.begin() + N);
-    printVector(gpu_memo_vals.begin(), gpu_memo_vals.begin() + N);    
+    printVector(gpu_memo_keys.begin(), gpu_memo_keys.begin() + n_rels);
+    printVector(gpu_memo_vals.begin(), gpu_memo_vals.begin() + n_rels);    
 #endif
 
     START_TIMING(execute);
@@ -206,7 +206,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
         DECLARE_NV_TIMING(build_qt);
 
         // iterate over the size of the resulting joinrel
-        for(int i=2; i<=N; i++){
+        for(int i=2; i<=n_rels; i++){
             START_TIMING(iter_init);
             
             // calculate number of combinations of relations that make up 
@@ -350,9 +350,9 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                         filterJoinedDisconnected(
                             gpu_memo_keys.data(), 
                             gpu_memo_vals.data(),
-                            gpu_baserels.data(), 
-                            gpu_edge_table.data(), 
-                            N
+                            gpu_base_rels.data(), 
+                            n_rels,
+                            gpu_edge_table.data()
                         )
                     );
 
@@ -414,9 +414,9 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                         joinCost(
                             gpu_memo_keys.data(), 
                             gpu_memo_vals.data(),
-                            gpu_baserels.data(),
-                            gpu_edge_table.data(),
-                            N
+                            gpu_base_rels.data(),
+                            n_rels,
+                            gpu_edge_table.data()
                         )
                     ),
                     gpu_memo_keys.begin()+partition_offsets[i-1],
@@ -442,7 +442,7 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
                 );
                 gpu_partition_sizes[i-1] = partition_sizes[i-1];
                 
-                if (i < N){
+                if (i < n_rels){
                     partition_offsets[i] = partition_sizes[i-1] + partition_offsets[i-1];
                     gpu_partition_offsets[i] = partition_offsets[i];
                 }
@@ -468,11 +468,11 @@ gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
             PRINT_CHECKPOINT_TIMING(sort);
             PRINT_CHECKPOINT_TIMING(compute_prune);
             PRINT_CHECKPOINT_TIMING(update_offsets);
-        } // dpsize loop: for i = 2..N
+        } // dpsize loop: for i = 2..n_rels
 
         START_TIMING(build_qt);
             
-        buildQueryTree(partition_offsets[N-1], gpu_memo_keys, gpu_memo_vals, &out);
+        buildQueryTree(partition_offsets[n_rels-1], gpu_memo_keys, gpu_memo_vals, &out);
     
         STOP_TIMING(build_qt);
     

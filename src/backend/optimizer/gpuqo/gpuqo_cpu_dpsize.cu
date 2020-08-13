@@ -26,11 +26,11 @@
 struct GpuqoCPUDPSizeExtra{
     vector_list_t rels_per_level;
 
-    GpuqoCPUDPSizeExtra(int N) : rels_per_level(N+1) {}
+    GpuqoCPUDPSizeExtra(int n_rels) : rels_per_level(n_rels+1) {}
 };
 
-void gpuqo_cpu_dpsize_init(BaseRelation baserels[], int N, EdgeInfo edge_table[], memo_t &memo, void** extra){
-    *extra = (void*) new GpuqoCPUDPSizeExtra(N);
+void gpuqo_cpu_dpsize_init(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, void** extra){
+    *extra = (void*) new GpuqoCPUDPSizeExtra(n_rels);
     struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) *extra;
 
     for(auto iter = memo.begin(); iter != memo.end(); ++iter){
@@ -38,10 +38,10 @@ void gpuqo_cpu_dpsize_init(BaseRelation baserels[], int N, EdgeInfo edge_table[]
     }
 }
 
-void gpuqo_cpu_dpsize_enumerate(BaseRelation baserels[], int N, EdgeInfo edge_table[], join_f join_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
+void gpuqo_cpu_dpsize_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], join_f join_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
     struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) extra;
 
-    for (int join_s=2; join_s<=N; join_s++){
+    for (int join_s=2; join_s<=n_rels; join_s++){
         for (int big_s = join_s-1; big_s >= (join_s+1)/2; big_s--){
             int small_s = join_s-big_s;
             for (auto big_i = mExtra->rels_per_level[big_s].begin(); 
@@ -56,7 +56,7 @@ void gpuqo_cpu_dpsize_enumerate(BaseRelation baserels[], int N, EdgeInfo edge_ta
                     join_function(join_s, 
                         right_id, *right_rel,
                         left_id, *left_rel, 
-                        baserels, edge_table, N, memo, extra, algorithm
+                        base_rels, n_rels, edge_table, memo, extra, algorithm
                     );
                 }
             } 
@@ -68,27 +68,27 @@ void gpuqo_cpu_dpsize_enumerate(BaseRelation baserels[], int N, EdgeInfo edge_ta
 bool gpuqo_cpu_dpsize_check_join(int level,
                             RelationID left_id, JoinRelation &left_rel,
                             RelationID right_id, JoinRelation &right_rel,
-                            BaseRelation* base_rels, EdgeInfo* edge_table,
-                            int number_of_rels, memo_t &memo, void* extra){
+                            BaseRelation* base_rels, int n_rels, 
+                            EdgeInfo* edge_table, memo_t &memo, void* extra){
 
     return (is_disjoint(left_id, right_id) 
         && is_connected(left_id, left_rel, 
                         right_id, right_rel,
-                        base_rels, edge_table, number_of_rels));
+                        base_rels, n_rels, edge_table));
 }
 
 void gpuqo_cpu_dpsize_post_join(int level, bool newrel,
                             RelationID join_id, JoinRelation &join_rel,
                             RelationID left_id, JoinRelation &left_rel,
                             RelationID right_id, JoinRelation &right_rel,
-                            BaseRelation* base_rels, EdgeInfo* edge_table,
-                            int number_of_rels, memo_t &memo, void* extra){
+                            BaseRelation* base_rels, int n_rels, 
+                            EdgeInfo* edge_table, memo_t &memo, void* extra){
     struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) extra;
     if (newrel)
         mExtra->rels_per_level[level].push_back(std::make_pair(join_id, &join_rel));
 }
 
-void gpuqo_cpu_dpsize_teardown(BaseRelation baserels[], int N, EdgeInfo edge_table[], memo_t &memo, void* extra){
+void gpuqo_cpu_dpsize_teardown(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, void* extra){
     delete ((struct GpuqoCPUDPSizeExtra*) extra);
 }
 
@@ -107,9 +107,9 @@ DPCPUAlgorithm gpuqo_cpu_dpsize_alg = {
  */
 extern "C"
 QueryTree*
-gpuqo_cpu_dpsize(BaseRelation baserels[], int N, EdgeInfo edge_table[])
+gpuqo_cpu_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 {
-    return gpuqo_cpu_generic(baserels, N, edge_table, gpuqo_cpu_dpsize_alg);
+    return gpuqo_cpu_generic(base_rels, n_rels, edge_table, gpuqo_cpu_dpsize_alg);
 }
 
 

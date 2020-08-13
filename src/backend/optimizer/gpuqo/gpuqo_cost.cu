@@ -23,9 +23,8 @@ double
 compute_join_cost(JoinRelation &join_rel, 
                     RelationID &left_id, JoinRelation &left_rel,
                     RelationID &right_id, JoinRelation &right_rel,
-                    BaseRelation* base_rels, EdgeInfo* edge_table,
-                    int number_of_rels
-                )
+                    BaseRelation* base_rels, int n_rels,
+                    EdgeInfo* edge_table)
 {
     // this cost function represents the "cost" of an hash join
     // once again, this is pretty random
@@ -37,9 +36,8 @@ double
 estimate_join_rows(JoinRelation &join_rel, 
                     RelationID &left_id, JoinRelation &left_rel,
                     RelationID &right_id, JoinRelation &right_rel,
-                    BaseRelation* base_rels, EdgeInfo* edge_table,
-                    int number_of_rels
-                ) 
+                    BaseRelation* base_rels, int n_rels,
+                    EdgeInfo* edge_table) 
 {
     double sel = 1.0;
     
@@ -48,14 +46,14 @@ estimate_join_rows(JoinRelation &join_rel,
     // I multiply the selectivity by the selectivity of that edge
     // NB: edges might be multiple so I need to check every baserel in the left
     // joinrel
-    for (int i = 1; i <= number_of_rels; i++){
+    for (int i = 1; i <= n_rels; i++){
         RelationID base_relid_left = BMS64_NTH(i);
         BaseRelation baserel_left = base_rels[i-1];
         if (BMS64_INTERSECTS(base_relid_left, left_id)){
-            for (int j = 1; j <= number_of_rels; j++){
+            for (int j = 1; j <= n_rels; j++){
                 RelationID base_relid_right = BMS64_NTH(j);
                 if (BMS64_INTERSECTS(BMS64_INTERSECTION(baserel_left.edges, right_id), base_relid_right)){
-                    sel *= edge_table[(i-1)*number_of_rels+(j-1)].sel;
+                    sel *= edge_table[(i-1)*n_rels+(j-1)].sel;
                 }
             }
         }
@@ -76,10 +74,10 @@ JoinRelation joinCost::operator()(JoinRelation jr){
     JoinRelation right_rel = memo_vals[jr.right_relation_idx];
 
     jr.rows = estimate_join_rows(jr, left_id, left_rel, right_id, right_rel,
-                                base_rels.get(), edge_table.get(), n_rels);
+                                base_rels.get(), n_rels,edge_table.get());
 
     jr.cost = compute_join_cost(jr, left_id, left_rel, right_id, right_rel,
-                                base_rels.get(), edge_table.get(), n_rels);
+                                base_rels.get(), n_rels, edge_table.get());
 
     return jr;
 }

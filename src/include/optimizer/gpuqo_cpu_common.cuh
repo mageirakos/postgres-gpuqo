@@ -33,23 +33,23 @@ struct DPCPUAlgorithm;
 typedef void (*join_f)(int level, 
 					RelationID left_id, JoinRelation &left_rel,
 					RelationID right_id, JoinRelation &right_rel,
-					BaseRelation* base_rels, EdgeInfo* edge_table,
-					int number_of_rels, memo_t &memo, void* extra,
+					BaseRelation* base_rels, int n_rels,
+					EdgeInfo* edge_table, memo_t &memo, void* extra,
 					struct DPCPUAlgorithm algorithm);
 typedef bool (*check_join_f)(int level, 
 					RelationID left_id, JoinRelation &left_rel,
 					RelationID right_id, JoinRelation &right_rel,
-					BaseRelation* base_rels, EdgeInfo* edge_table,
-					int number_of_rels, memo_t &memo, void* extra);
+					BaseRelation* base_rels, int n_rels, 
+					EdgeInfo* edge_table, memo_t &memo, void* extra);
 typedef void (*post_join_f)(int level,  bool new_rel,
 					RelationID join_id, JoinRelation &join_rel,
 					RelationID left_id, JoinRelation &left_rel,
 					RelationID right_id, JoinRelation &right_rel,
-					BaseRelation* base_rels, EdgeInfo* edge_table,
-					int number_of_rels, memo_t &memo, void* extra);
-typedef void (*enumerate_f)(BaseRelation baserels[], int N, EdgeInfo edge_table[], join_f join_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm);
-typedef void (*init_f)(BaseRelation baserels[], int N, EdgeInfo edge_table[], memo_t &memo, void** extra);
-typedef void (*teardown_f)(BaseRelation baserels[], int N, EdgeInfo edge_table[], memo_t &memo, void* extra);
+					BaseRelation* base_rels, int n_rels, 
+					EdgeInfo* edge_table, memo_t &memo, void* extra);
+typedef void (*enumerate_f)(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], join_f join_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm);
+typedef void (*init_f)(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, void** extra);
+typedef void (*teardown_f)(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, void* extra);
 
 typedef struct DPCPUAlgorithm{
 	init_f init_function;
@@ -59,6 +59,6 @@ typedef struct DPCPUAlgorithm{
 	teardown_f teardown_function;
 } DPCPUAlgorithm;
 
-extern QueryTree* gpuqo_cpu_generic(BaseRelation baserels[], int N, EdgeInfo edge_table[], DPCPUAlgorithm algorithm);
+extern QueryTree* gpuqo_cpu_generic(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], DPCPUAlgorithm algorithm);
 
 #endif							/* GPUQO_COMMON_CUH */

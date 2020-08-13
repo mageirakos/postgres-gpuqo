@@ -49,8 +49,8 @@ void build_query_tree(RelationID relid, memo_t &memo, QueryTree **qt)
  */
 JoinRelation* make_join_relation(RelationID left_id, JoinRelation &left_rel,
                                  RelationID right_id, JoinRelation &right_rel,
-                                 BaseRelation* base_rels, EdgeInfo* edge_table,
-                                 int number_of_rels){
+                                 BaseRelation* base_rels, int n_rels,
+                                 EdgeInfo* edge_table){
 
     JoinRelation* join_rel = new JoinRelation;
 
@@ -62,14 +62,14 @@ JoinRelation* make_join_relation(RelationID left_id, JoinRelation &left_rel,
         *join_rel,
         left_id, left_rel,
         right_id, right_rel,
-        base_rels, edge_table, number_of_rels
+        base_rels, n_rels, edge_table
     );
 
     join_rel->cost = compute_join_cost(
         *join_rel,
         left_id, left_rel,
         right_id, right_rel,
-        base_rels, edge_table, number_of_rels
+        base_rels, n_rels, edge_table
     );
 
     return join_rel;
@@ -79,13 +79,13 @@ bool do_join(int level,
             RelationID &join_id, JoinRelation* &join_rel,
             RelationID left_id, JoinRelation &left_rel,
             RelationID right_id, JoinRelation &right_rel,
-            BaseRelation* base_rels, EdgeInfo* edge_table,
-            int number_of_rels, memo_t &memo, void* extra){
+            BaseRelation* base_rels, int n_rels, 
+            EdgeInfo* edge_table, memo_t &memo, void* extra){
     join_id = BMS64_UNION(left_id, right_id);
     join_rel = make_join_relation(
         left_id, left_rel,
         right_id, right_rel,
-        base_rels, edge_table, number_of_rels
+        base_rels, n_rels, edge_table
     );
 
     auto find_iter = memo.find(join_id);
@@ -105,12 +105,12 @@ bool do_join(int level,
 void gpuqo_cpu_generic_join(int level, 
                             RelationID left_id, JoinRelation &left_rel,
                             RelationID right_id, JoinRelation &right_rel,
-                            BaseRelation* base_rels, EdgeInfo* edge_table,
-                            int number_of_rels, memo_t &memo, void* extra, 
+                            BaseRelation* base_rels, int n_rels, 
+                            EdgeInfo* edge_table, memo_t &memo, void* extra, 
                             struct DPCPUAlgorithm algorithm){
     if (algorithm.check_join_function(level, left_id, left_rel, 
                             right_id, right_rel,
-                            base_rels, edge_table, number_of_rels, memo, extra)){
+                            base_rels, n_rels, edge_table, memo, extra)){
         RelationID join_id1, join_id2;
         JoinRelation *join_rel1, *join_rel2;
         bool new_joinrel;
@@ -118,26 +118,26 @@ void gpuqo_cpu_generic_join(int level,
                             join_id1, join_rel1,
                             left_id, left_rel, 
                             right_id, right_rel,
-                            base_rels, edge_table, number_of_rels, memo, extra);
+                            base_rels, n_rels, edge_table, memo, extra);
         algorithm.post_join_function(level, new_joinrel, 
                             join_id1, *join_rel1,
                             left_id, left_rel, 
                             right_id, right_rel,
-                            base_rels, edge_table, number_of_rels, memo, extra);
+                            base_rels, n_rels, edge_table, memo, extra);
         new_joinrel = do_join(level, 
                             join_id2, join_rel2,
                             right_id, right_rel,
                             left_id, left_rel, 
-                            base_rels, edge_table, number_of_rels, memo, extra);
+                            base_rels, n_rels, edge_table, memo, extra);
         algorithm.post_join_function(level, new_joinrel, 
                             join_id2, *join_rel2,
                             left_id, left_rel, 
                             right_id, right_rel,
-                            base_rels, edge_table, number_of_rels, memo, extra);
+                            base_rels, n_rels, edge_table, memo, extra);
     }
 }
 
-QueryTree* gpuqo_cpu_generic(BaseRelation baserels[], int N, 
+QueryTree* gpuqo_cpu_generic(BaseRelation base_rels[], int n_rels, 
                              EdgeInfo edge_table[], DPCPUAlgorithm algorithm){
     
     DECLARE_TIMING(gpuqo_cpu_dpsize);
@@ -148,22 +148,22 @@ QueryTree* gpuqo_cpu_generic(BaseRelation baserels[], int N,
     QueryTree* out = NULL;
     RelationID joinrel = 0ULL;
 
-    for(int i=0; i<N; i++){
+    for(int i=0; i<n_rels; i++){
         JoinRelation *jr = new JoinRelation;
         jr->left_relation_id = 0; 
         jr->right_relation_id = 0; 
-        jr->cost = 0.2*baserels[i].rows; 
-        jr->rows = baserels[i].rows; 
-        jr->edges = baserels[i].edges;
-        memo.insert(std::make_pair(baserels[i].id, jr));
+        jr->cost = 0.2*base_rels[i].rows; 
+        jr->rows = base_rels[i].rows; 
+        jr->edges = base_rels[i].edges;
+        memo.insert(std::make_pair(base_rels[i].id, jr));
     }
 
-    algorithm.init_function(baserels, N, edge_table, memo, &extra);
+    algorithm.init_function(base_rels, n_rels, edge_table, memo, &extra);
     
-    algorithm.enumerate_function(baserels, N, edge_table,gpuqo_cpu_generic_join, memo, extra, algorithm);
+    algorithm.enumerate_function(base_rels, n_rels, edge_table,gpuqo_cpu_generic_join, memo, extra, algorithm);
 
-    for (int i = 0; i < N; i++)
-        joinrel = BMS64_UNION(joinrel, baserels[i].id);
+    for (int i = 0; i < n_rels; i++)
+        joinrel = BMS64_UNION(joinrel, base_rels[i].id);
 
     build_query_tree(joinrel, memo, &out);
 
@@ -172,7 +172,7 @@ QueryTree* gpuqo_cpu_generic(BaseRelation baserels[], int N,
         delete iter->second;
     }
 
-    algorithm.teardown_function(baserels, N, edge_table, memo, extra);
+    algorithm.teardown_function(base_rels, n_rels, edge_table, memo, extra);
 
     STOP_TIMING(gpuqo_cpu_dpsize);
     PRINT_TIMING(gpuqo_cpu_dpsize);

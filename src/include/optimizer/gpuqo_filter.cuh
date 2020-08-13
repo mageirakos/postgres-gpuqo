@@ -21,8 +21,8 @@ bool is_disjoint(RelationID &left_id, RelationID &right_id);
 extern __host__ __device__
 bool is_connected(RelationID &left_id, JoinRelation &left_rel,
                     RelationID &right_id, JoinRelation &right_rel,
-                    BaseRelation* base_rels, EdgeInfo* edge_table,
-                    int number_of_rels
+                    BaseRelation* base_rels, int n_rels, 
+                    EdgeInfo* edge_table
 );
 
 struct filterJoinedDisconnected : public thrust::unary_function<thrust::tuple<RelationID, JoinRelation>, bool>
@@ -37,8 +37,8 @@ public:
         thrust::device_ptr<RelationID> _memo_keys,
         thrust::device_ptr<JoinRelation> _memo_vals,
         thrust::device_ptr<BaseRelation> _base_rels,
-        thrust::device_ptr<EdgeInfo> _edge_table,
-        int _n_rels
+        int _n_rels,
+        thrust::device_ptr<EdgeInfo> _edge_table
     ) : memo_keys(_memo_keys), memo_vals(_memo_vals), base_rels(_base_rels),
         edge_table(_edge_table), n_rels(_n_rels)
     {}

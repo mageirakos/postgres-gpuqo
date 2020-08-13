@@ -24,7 +24,7 @@
 #include "optimizer/gpuqo_cpu_common.cuh"
 
 typedef void (*emit_f)(RelationID left_id, RelationID right_id,
-                    BaseRelation* base_rels, int number_of_rels,
+                    BaseRelation* base_rels, int n_rels,
                     EdgeInfo* edge_table, memo_t &memo, void* extra,
                     struct DPCPUAlgorithm algorithm);
 
@@ -58,55 +58,55 @@ RelationID get_neighbours(RelationID set, BaseRelation* base_rels, int n_rels){
     return BMS64_DIFFERENCE(neigs, set);
 }
 
-void enumerate_csg_rec(RelationID S, RelationID X, RelationID cmp, BaseRelation baserels[], int n_rels, EdgeInfo edge_table[], emit_f emit_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
-    RelationID N = BMS64_DIFFERENCE(get_neighbours(S, baserels, n_rels), X);
+void enumerate_csg_rec(RelationID S, RelationID X, RelationID cmp, BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], emit_f emit_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
+    RelationID N = BMS64_DIFFERENCE(get_neighbours(S, base_rels, n_rels), X);
     std::list<RelationID> *subsets = get_all_subsets(N);
     for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
         RelationID emit_set = BMS64_UNION(S, *subset);
-        emit_function(cmp, emit_set, baserels, n_rels, edge_table, memo, extra, algorithm);
+        emit_function(cmp, emit_set, base_rels, n_rels, edge_table, memo, extra, algorithm);
     }
     for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
         enumerate_csg_rec(BMS64_UNION(S, *subset), BMS64_UNION(X, N), cmp,
-            baserels, n_rels, edge_table, emit_function, memo, extra, algorithm);
+            base_rels, n_rels, edge_table, emit_function, memo, extra, algorithm);
     }
     delete subsets; 
 }
 
-void enumerate_csg(BaseRelation baserels[], int N, EdgeInfo edge_table[], emit_f emit_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
-    for (int i=N; i>=1; i--){
+void enumerate_csg(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], emit_f emit_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
+    for (int i=n_rels; i>=1; i--){
         RelationID subset = BMS64_NTH(i);
 
-        emit_function(subset, BMS64_EMPTY, baserels, N, edge_table, memo, extra, algorithm);
+        emit_function(subset, BMS64_EMPTY, base_rels, n_rels, edge_table, memo, extra, algorithm);
 
         enumerate_csg_rec(subset, BMS64_SET_ALL_LOWER(subset), BMS64_EMPTY,
-            baserels, N, edge_table, emit_function, memo, extra, algorithm);
+            base_rels, n_rels, edge_table, emit_function, memo, extra, algorithm);
 
     }
 }
 
-void enumerate_cmp(RelationID S, BaseRelation baserels[], int n_rels, EdgeInfo edge_table[], emit_f emit_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
+void enumerate_cmp(RelationID S, BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], emit_f emit_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
     RelationID X = BMS64_UNION(BMS64_SET_ALL_LOWER(S), S);
-    RelationID N = BMS64_DIFFERENCE(get_neighbours(S, baserels, n_rels), X);
+    RelationID N = BMS64_DIFFERENCE(get_neighbours(S, base_rels, n_rels), X);
     for (int i=n_rels; i>=1; i--){
         RelationID v = BMS64_NTH(i);
         if (BMS64_INTERSECTS(v, N)){
-            emit_function(S, v, baserels, n_rels, edge_table, memo, extra, algorithm);
+            emit_function(S, v, base_rels, n_rels, edge_table, memo, extra, algorithm);
 
             RelationID newX = BMS64_UNION(X, 
                                 BMS64_INTERSECTION(BMS64_SET_ALL_LOWER(v), N));
             enumerate_csg_rec(v, newX, S,
-                baserels, n_rels, edge_table, emit_function, memo, extra, algorithm);
+                base_rels, n_rels, edge_table, emit_function, memo, extra, algorithm);
         }
     }
 }
 
-void gpuqo_cpu_dpccp_init(BaseRelation baserels[], int N, EdgeInfo edge_table[], memo_t &memo, void** extra){
+void gpuqo_cpu_dpccp_init(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, void** extra){
     *extra = (void*) new GpuqoCPUDPCcpExtra;
 }
 
 
 void gpuqo_cpu_dpccp_emit(RelationID left_id, RelationID right_id,
-                        BaseRelation* base_rels, int number_of_rels, 
+                        BaseRelation* base_rels, int n_rels, 
                         EdgeInfo* edge_table, memo_t &memo, void* extra,
                         struct DPCPUAlgorithm algorithm){
     struct GpuqoCPUDPCcpExtra* mExtra = (struct GpuqoCPUDPCcpExtra*) extra;
@@ -125,34 +125,34 @@ void gpuqo_cpu_dpccp_emit(RelationID left_id, RelationID right_id,
         mExtra->join_function(level, 
             right_id, *right_rel,
             left_id, *left_rel, 
-            base_rels, edge_table, number_of_rels, memo, extra, algorithm
+            base_rels, n_rels, edge_table, memo, extra, algorithm
         );
 
     } else if (left_id != BMS64_EMPTY) {
-        enumerate_cmp(left_id, base_rels, number_of_rels, edge_table, gpuqo_cpu_dpccp_emit, memo, extra, algorithm);
+        enumerate_cmp(left_id, base_rels, n_rels, edge_table, gpuqo_cpu_dpccp_emit, memo, extra, algorithm);
     } else{
-        enumerate_cmp(right_id, base_rels, number_of_rels, edge_table, gpuqo_cpu_dpccp_emit, memo, extra, algorithm);
+        enumerate_cmp(right_id, base_rels, n_rels, edge_table, gpuqo_cpu_dpccp_emit, memo, extra, algorithm);
     }
 }
 
-void gpuqo_cpu_dpccp_enumerate(BaseRelation baserels[], int N, EdgeInfo edge_table[], join_f join_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
+void gpuqo_cpu_dpccp_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], join_f join_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
     struct GpuqoCPUDPCcpExtra* mExtra = (struct GpuqoCPUDPCcpExtra*) extra;
     mExtra->join_function = join_function;
 
-    enumerate_csg(baserels, N, edge_table, gpuqo_cpu_dpccp_emit, memo, extra,  algorithm);
+    enumerate_csg(base_rels, n_rels, edge_table, gpuqo_cpu_dpccp_emit, memo, extra,  algorithm);
 }
 
 bool gpuqo_cpu_dpccp_check_join(int level,
                             RelationID left_id, JoinRelation &left_rel,
                             RelationID right_id, JoinRelation &right_rel,
-                            BaseRelation* base_rels, EdgeInfo* edge_table,
-                            int number_of_rels, memo_t &memo, void* extra){
+                            BaseRelation* base_rels, int n_rels,
+                            EdgeInfo* edge_table, memo_t &memo, void* extra){
     
     // No check is necessary since dpccp guarantees all joinpairs are valid
     Assert(is_disjoint(left_id, right_id) 
         && is_connected(left_id, left_rel, 
                         right_id, right_rel,
-                        base_rels, edge_table, number_of_rels));
+                        base_rels, n_rels, edge_table));
     return true;
 }
 
@@ -160,12 +160,12 @@ void gpuqo_cpu_dpccp_post_join(int level, bool newrel,
                             RelationID join_id, JoinRelation &join_rel,
                             RelationID left_id, JoinRelation &left_rel,
                             RelationID right_id, JoinRelation &right_rel,
-                            BaseRelation* base_rels, EdgeInfo* edge_table,
-                            int number_of_rels, memo_t &memo, void* extra){
+                            BaseRelation* base_rels, int n_rels, 
+                            EdgeInfo* edge_table, memo_t &memo, void* extra){
     // nothing to do
 }
 
-void gpuqo_cpu_dpccp_teardown(BaseRelation baserels[], int N, EdgeInfo edge_table[], memo_t &memo, void* extra){
+void gpuqo_cpu_dpccp_teardown(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, void* extra){
     delete ((struct GpuqoCPUDPCcpExtra*) extra);
 }
 
@@ -184,7 +184,7 @@ DPCPUAlgorithm gpuqo_cpu_dpccp_alg = {
  */
 extern "C"
 QueryTree*
-gpuqo_cpu_dpccp(BaseRelation baserels[], int N, EdgeInfo edge_table[])
+gpuqo_cpu_dpccp(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 {
-    return gpuqo_cpu_generic(baserels, N, edge_table, gpuqo_cpu_dpccp_alg);
+    return gpuqo_cpu_generic(base_rels, n_rels, edge_table, gpuqo_cpu_dpccp_alg);
 }
