@@ -15,6 +15,7 @@
 typedef enum GpuqoAlgorithm {
 	GPUQO_DPSIZE = 0,
 	GPUQO_CPU_DPSIZE,
+	GPUQO_CPU_DPSUB,
 	GPUQO_CPU_DPCCP
 } GpuqoAlgorithm;
 

@@ -12,7 +12,7 @@ top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
 OBJS   = gpuqo_main.o 
-NVOBJS = gpuqo_dpsize.o gpuqo_cost.o gpuqo_joinrelation.o gpuqo_filter.o  gpuqo_cpu_common.o gpuqo_cpu_dpsize.o gpuqo_cpu_dpccp.o
+NVOBJS = gpuqo_dpsize.o gpuqo_cost.o gpuqo_joinrelation.o gpuqo_filter.o  gpuqo_cpu_common.o gpuqo_cpu_dpsize.o gpuqo_cpu_dpsub.o gpuqo_cpu_dpccp.o
 
 # NVIDIA-specific code (do not edit)
 
