@@ -52,6 +52,11 @@ JoinRelation* make_join_relation(RelationID left_id, JoinRelation &left_rel,
                                  BaseRelation* base_rels, int n_rels,
                                  EdgeInfo* edge_table){
 
+    // give possibility to user to interrupt
+    // This function is called by all CPU functions so putting it here catches
+    // all of them
+    CHECK_FOR_INTERRUPTS();
+
     JoinRelation* join_rel = new JoinRelation;
 
     join_rel->left_relation_id = left_id;

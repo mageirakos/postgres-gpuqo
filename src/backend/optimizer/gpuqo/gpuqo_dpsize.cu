@@ -302,6 +302,9 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
                         chunk_size = max_scratchpad_capacity - temp_size;
                     }
 
+                    // give possibility to user to interrupt
+                    CHECK_FOR_INTERRUPTS();
+
                     START_TIMING(unrank);
                     // fill scratchpad
                     thrust::tabulate(
@@ -335,6 +338,8 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
                         gpu_scratchpad_vals.begin()+(temp_size+chunk_size)
                     );
 #endif
+                    // give possibility to user to interrupt
+                    CHECK_FOR_INTERRUPTS();
 
                     START_TIMING(filter);
                     // filter out invalid pairs
@@ -386,6 +391,9 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
                 // combinations to try so I will prune this partial result and
                 // then reload it back in the scratchpad to finish execution
 
+                // give possibility to user to interrupt
+                CHECK_FOR_INTERRUPTS();
+
                 START_TIMING(sort);
 
                 // sort by key (prepare for pruning)
@@ -402,6 +410,8 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
                 printVector(gpu_scratchpad_keys.begin(), gpu_scratchpad_keys.begin() + temp_size);
                 printVector(gpu_scratchpad_vals.begin(), gpu_scratchpad_vals.begin() + temp_size);
 #endif
+                // give possibility to user to interrupt
+                CHECK_FOR_INTERRUPTS();
     
                 START_TIMING(compute_prune);
     

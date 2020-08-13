@@ -77,4 +77,14 @@ typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation
 #define Assert(p) assert(p)
 #endif
 
+#include "signal.h"
+extern "C" void ProcessInterrupts(void);
+extern "C" volatile sig_atomic_t InterruptPending;
+
+#define CHECK_FOR_INTERRUPTS() \
+do { \
+	if (InterruptPending) \
+		ProcessInterrupts(); \
+} while(0)
+
 #endif							/* GPUQO_CUH */
