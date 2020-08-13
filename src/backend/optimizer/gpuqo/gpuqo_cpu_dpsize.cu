@@ -72,7 +72,7 @@ bool gpuqo_cpu_dpsize_check_join(int level,
                             EdgeInfo* edge_table, memo_t &memo, void* extra){
 
     return (is_disjoint(left_id, right_id) 
-        && is_connected(left_id, left_rel, 
+        && are_connected(left_id, left_rel, 
                         right_id, right_rel,
                         base_rels, n_rels, edge_table));
 }

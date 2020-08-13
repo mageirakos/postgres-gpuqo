@@ -25,7 +25,7 @@ bool is_disjoint(RelationID &left_id, RelationID &right_id)
 }
 
 __host__ __device__
-bool is_connected(RelationID &left_id, JoinRelation &left_rel,
+bool are_connected(RelationID &left_id, JoinRelation &left_rel,
                     RelationID &right_id, JoinRelation &right_rel,
                     BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table)
 {
@@ -54,6 +54,6 @@ bool filterJoinedDisconnected::operator()(thrust::tuple<RelationID, JoinRelation
     if (!is_disjoint(left_id, right_id)) // not disjoint
         return true;
     else{
-        return !is_connected(left_id, left_rel, right_id, right_rel, base_rels.get(), n_rels, edge_table.get());
+        return !are_connected(left_id, left_rel, right_id, right_rel, base_rels.get(), n_rels, edge_table.get());
     }
 }

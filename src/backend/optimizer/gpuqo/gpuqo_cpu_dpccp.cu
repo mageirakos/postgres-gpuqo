@@ -150,7 +150,7 @@ bool gpuqo_cpu_dpccp_check_join(int level,
     
     // No check is necessary since dpccp guarantees all joinpairs are valid
     Assert(is_disjoint(left_id, right_id) 
-        && is_connected(left_id, left_rel, 
+        && are_connected(left_id, left_rel, 
                         right_id, right_rel,
                         base_rels, n_rels, edge_table));
     return true;
