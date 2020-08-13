@@ -56,7 +56,7 @@ JoinRelation* make_join_relation(RelationID left_id, JoinRelation &left_rel,
 
     join_rel->left_relation_id = left_id;
     join_rel->right_relation_id = right_id;
-    join_rel->edges = left_rel.edges | right_rel.edges;
+    join_rel->edges = BMS64_UNION(left_rel.edges, right_rel.edges);
 
     join_rel->rows = estimate_join_rows(
         *join_rel,
@@ -81,7 +81,7 @@ bool do_join(int level,
             RelationID right_id, JoinRelation &right_rel,
             BaseRelation* base_rels, EdgeInfo* edge_table,
             int number_of_rels, memo_t &memo, void* extra){
-    join_id = left_id | right_id;
+    join_id = BMS64_UNION(left_id, right_id);
     join_rel = make_join_relation(
         left_id, left_rel,
         right_id, right_rel,
@@ -163,7 +163,7 @@ QueryTree* gpuqo_cpu_generic(BaseRelation baserels[], int N,
     algorithm.enumerate_function(baserels, N, edge_table,gpuqo_cpu_generic_join, memo, extra, algorithm);
 
     for (int i = 0; i < N; i++)
-        joinrel |= baserels[i].id;
+        joinrel = BMS64_UNION(joinrel, baserels[i].id);
 
     build_query_tree(joinrel, memo, &out);
 

@@ -21,7 +21,7 @@
 __host__ __device__
 bool is_disjoint(RelationID &left_id, RelationID &right_id)
 {
-    return (left_id & right_id) == 0ULL;
+    return !BMS64_INTERSECTS(left_id, right_id);
 }
 
 __host__ __device__

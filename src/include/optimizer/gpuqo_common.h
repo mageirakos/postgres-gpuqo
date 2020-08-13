@@ -10,6 +10,8 @@
 #ifndef GPUQO_COMMON_H
 #define GPUQO_COMMON_H
 
+#include <optimizer/gpuqo_bitmapset.h>
+
 typedef enum GpuqoAlgorithm {
 	GPUQO_DPSIZE = 0,
 	GPUQO_CPU_DPSIZE
@@ -20,11 +22,8 @@ extern int gpuqo_dpsize_min_scratchpad_size_mb;
 extern int gpuqo_dpsize_max_scratchpad_size_mb;
 extern int gpuqo_dpsize_max_memo_size_mb;
 
-// For the moment it's limited to 64 relations
-// I need to find a way to efficiently and dynamically increase this value
-typedef unsigned long long FixedBitMask;
-typedef FixedBitMask EdgeMask;
-typedef FixedBitMask RelationID;
+typedef Bitmapset64 EdgeMask;
+typedef Bitmapset64 RelationID;
 
 typedef struct BaseRelation{
 	RelationID id;

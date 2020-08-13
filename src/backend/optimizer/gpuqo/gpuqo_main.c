@@ -22,7 +22,7 @@
 int gpuqo_algorithm;
 
 BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
-FixedBitMask bitmapset2FixedBitMask(Bitmapset* set);
+Bitmapset64 convertBitmapset(Bitmapset* set);
 void printQueryTree(QueryTree* qt, int indent);
 RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int number_of_rels, List *initial_rels);
 void makeEdgeTable(PlannerInfo *root, int number_of_rels, List *initial_rels, BaseRelation* base_rels, EdgeInfo* edge_table);
@@ -110,7 +110,7 @@ RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int numb
     return this_rel;
 }
 
-FixedBitMask bitmapset2FixedBitMask(Bitmapset* set){
+Bitmapset64 convertBitmapset(Bitmapset* set){
     if (set->nwords > 1){
         printf("WARNING: only relids of 64 bits are supported!\n");
     }
@@ -125,13 +125,13 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
     baserel.rows = rel->rows;
     baserel.tuples = rel->tuples;
     
-    baserel.id = bitmapset2FixedBitMask(rel->relids);
+    baserel.id = convertBitmapset(rel->relids);
 
     baserel.edges = 0;
     foreach(lc, root->eq_classes){
         EquivalenceClass *ec = (EquivalenceClass *) lfirst(lc);
         if (bms_overlap(rel->relids, ec->ec_relids)){
-            baserel.edges |= bitmapset2FixedBitMask(ec->ec_relids);
+            baserel.edges |= convertBitmapset(ec->ec_relids);
         }
     }
 
@@ -156,7 +156,7 @@ void makeEdgeTable(PlannerInfo *root, int number_of_rels, List *initial_rels, Ba
         foreach(lc_inner, initial_rels){
             RelOptInfo* rel_inner = (RelOptInfo*) lfirst(lc_inner);
             
-            if (base_rels[i].edges & bitmapset2FixedBitMask(rel_inner->relids)){
+            if (base_rels[i].edges & convertBitmapset(rel_inner->relids)){
                 double sel;
                 SpecialJoinInfo sjinfo;
                 

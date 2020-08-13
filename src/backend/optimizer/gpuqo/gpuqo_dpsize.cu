@@ -102,9 +102,9 @@ public:
         JoinRelation left_rel = memo_vals[jr.left_relation_idx];
         JoinRelation right_rel = memo_vals[jr.right_relation_idx];
         
-        jr.edges = left_rel.edges | right_rel.edges;
+        jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
 
-        relid = left_id | right_id;
+        relid = BMS64_UNION(left_id, right_id);
 
         return thrust::tuple<RelationID, JoinRelation>(relid, jr);
     }
