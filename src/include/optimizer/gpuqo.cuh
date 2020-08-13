@@ -66,4 +66,15 @@ extern std::ostream & operator<<(std::ostream &os, const JoinRelation& jr);
 typedef thrust::device_vector<RelationID, uninitialized_allocator<RelationID> > uninit_device_vector_relid;
 typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation> > uninit_device_vector_joinrel;
 
+// I did not want to include the full c.h for fear of conflicts so I just 
+// include the definitions (to get USE_ASSERT_CHECKING) and just define the
+// Assert macro as in c.h
+#include "pg_config.h"
+#ifndef USE_ASSERT_CHECKING
+#define Assert(condition)	((void)true)
+#else
+#include <assert.h>
+#define Assert(p) assert(p)
+#endif
+
 #endif							/* GPUQO_CUH */
