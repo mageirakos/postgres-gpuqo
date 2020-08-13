@@ -45,7 +45,8 @@ void build_query_tree(JoinRelation *jr, memo_t &memo, QueryTree **qt)
  *
  *	 Builds a join relation from left and right relations.
  */
-JoinRelation* make_join_relation(JoinRelation &left_rel,JoinRelation &right_rel,
+template<typename T>
+T* make_join_relation(T &left_rel,T &right_rel,
                                  BaseRelation* base_rels, int n_rels,
                                  EdgeInfo* edge_table){
 
@@ -54,7 +55,7 @@ JoinRelation* make_join_relation(JoinRelation &left_rel,JoinRelation &right_rel,
     // all of them
     CHECK_FOR_INTERRUPTS();
 
-    JoinRelation* join_rel = new JoinRelation;
+    JoinRelation* join_rel = (JoinRelation*) new T;
 
     join_rel->id = BMS64_UNION(left_rel.id, right_rel.id);
     join_rel->left_relation_id = left_rel.id;
@@ -76,10 +77,11 @@ JoinRelation* make_join_relation(JoinRelation &left_rel,JoinRelation &right_rel,
     return join_rel;
 }
 
-bool do_join(int level, JoinRelation* &join_rel, JoinRelation &left_rel,
-            JoinRelation &right_rel, BaseRelation* base_rels, int n_rels, 
+template<typename T>
+bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel, 
+            BaseRelation* base_rels, int n_rels, 
             EdgeInfo* edge_table, memo_t &memo, void* extra){
-    join_rel = make_join_relation(
+    join_rel = make_join_relation<T>(
         left_rel, right_rel,
         base_rels, n_rels, edge_table
     );
@@ -107,14 +109,16 @@ void gpuqo_cpu_generic_join(int level, bool try_swap,
                             base_rels, n_rels, edge_table, memo, extra)){
         JoinRelation *join_rel1, *join_rel2;
         bool new_joinrel;
-        new_joinrel = do_join(level, join_rel1, left_rel, right_rel,
-                            base_rels, n_rels, edge_table, memo, extra);
+        new_joinrel = do_join<JoinRelation>(level, join_rel1, 
+                            left_rel, right_rel, base_rels, n_rels, edge_table, 
+                            memo, extra);
         algorithm.post_join_function(level, new_joinrel, *join_rel1, 
                             left_rel,  right_rel, base_rels, n_rels,
                             edge_table, memo, extra);
         if (try_swap){
-            new_joinrel = do_join(level, join_rel2, right_rel, left_rel, 
-                                base_rels, n_rels, edge_table, memo, extra);
+            new_joinrel = do_join<JoinRelation>(level, join_rel2, right_rel, 
+                                left_rel, base_rels, n_rels, edge_table, memo,
+                                extra);
             algorithm.post_join_function(level, new_joinrel, *join_rel2,
                                 left_rel, right_rel, base_rels, n_rels,
                                 edge_table, memo, extra);
