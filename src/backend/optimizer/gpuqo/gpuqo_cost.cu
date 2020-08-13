@@ -49,11 +49,11 @@ estimate_join_rows(JoinRelation &join_rel,
     // NB: edges might be multiple so I need to check every baserel in the left
     // joinrel
     for (int i = 1; i <= number_of_rels; i++){
-        RelationID base_relid_left = 1<<i;
+        RelationID base_relid_left = BMS64_NTH(i);
         BaseRelation baserel_left = base_rels[i-1];
         if (BMS64_INTERSECTS(base_relid_left, left_id)){
             for (int j = 1; j <= number_of_rels; j++){
-                RelationID base_relid_right = 1<<j;
+                RelationID base_relid_right = BMS64_NTH(j);
                 if (BMS64_INTERSECTS(BMS64_INTERSECTION(baserel_left.edges, right_id), base_relid_right)){
                     sel *= edge_table[(i-1)*number_of_rels+(j-1)].sel;
                 }
