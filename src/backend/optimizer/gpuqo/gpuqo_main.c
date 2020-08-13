@@ -234,6 +234,9 @@ gpuqo(PlannerInfo *root, int number_of_rels, List *initial_rels)
     case GPUQO_CPU_DPSIZE:
         query_tree = gpuqo_cpu_dpsize(baserels, number_of_rels, edge_table);
         break;
+    case GPUQO_CPU_DPCCP:
+        query_tree = gpuqo_cpu_dpccp(baserels, number_of_rels, edge_table);
+        break;
     }
     
 

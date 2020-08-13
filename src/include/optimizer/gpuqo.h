@@ -20,6 +20,7 @@ extern RelOptInfo *gpuqo(PlannerInfo *root,
 
 extern QueryTree* gpuqo_dpsize(BaseRelation baserels[], int N, EdgeInfo* edge_table);
 extern QueryTree* gpuqo_cpu_dpsize(BaseRelation baserels[], int N, EdgeInfo* edge_table);
+extern QueryTree* gpuqo_cpu_dpccp(BaseRelation baserels[], int N, EdgeInfo* edge_table);
 
 extern bool gpuqo_check_can_run(PlannerInfo* root);
 

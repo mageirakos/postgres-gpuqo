@@ -461,6 +461,7 @@ const struct config_enum_entry ssl_protocol_versions_info[] = {
 const struct config_enum_entry gpuqo_algorithm_options[] = {
 	{"dpsize", GPUQO_DPSIZE, false},
 	{"cpu_dpsize", GPUQO_CPU_DPSIZE, false},
+	{"cpu_dpccp", GPUQO_CPU_DPCCP, false},
 	{NULL, 0, false}
 };
 
