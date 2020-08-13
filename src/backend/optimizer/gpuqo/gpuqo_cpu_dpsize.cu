@@ -53,7 +53,7 @@ void gpuqo_cpu_dpsize_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo e
                     RelationID right_id = small_i->first;
                     JoinRelation *right_rel = small_i->second;
                     
-                    join_function(join_s, 
+                    join_function(join_s, true,
                         right_id, *right_rel,
                         left_id, *left_rel, 
                         base_rels, n_rels, edge_table, memo, extra, algorithm

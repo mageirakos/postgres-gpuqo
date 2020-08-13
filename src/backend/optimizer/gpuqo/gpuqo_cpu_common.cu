@@ -107,7 +107,7 @@ bool do_join(int level,
     }
 }
 
-void gpuqo_cpu_generic_join(int level, 
+void gpuqo_cpu_generic_join(int level, bool try_swap,
                             RelationID left_id, JoinRelation &left_rel,
                             RelationID right_id, JoinRelation &right_rel,
                             BaseRelation* base_rels, int n_rels, 
@@ -129,16 +129,18 @@ void gpuqo_cpu_generic_join(int level,
                             left_id, left_rel, 
                             right_id, right_rel,
                             base_rels, n_rels, edge_table, memo, extra);
-        new_joinrel = do_join(level, 
-                            join_id2, join_rel2,
-                            right_id, right_rel,
-                            left_id, left_rel, 
-                            base_rels, n_rels, edge_table, memo, extra);
-        algorithm.post_join_function(level, new_joinrel, 
-                            join_id2, *join_rel2,
-                            left_id, left_rel, 
-                            right_id, right_rel,
-                            base_rels, n_rels, edge_table, memo, extra);
+        if (try_swap){
+            new_joinrel = do_join(level, 
+                                join_id2, join_rel2,
+                                right_id, right_rel,
+                                left_id, left_rel, 
+                                base_rels, n_rels, edge_table, memo, extra);
+            algorithm.post_join_function(level, new_joinrel, 
+                                join_id2, *join_rel2,
+                                left_id, left_rel, 
+                                right_id, right_rel,
+                                base_rels, n_rels, edge_table, memo, extra);
+        }
     }
 }
 

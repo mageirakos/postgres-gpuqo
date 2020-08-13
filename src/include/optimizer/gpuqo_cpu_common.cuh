@@ -30,7 +30,7 @@ typedef std::unordered_map<RelationID, JoinRelation*> memo_t;
 
 struct DPCPUAlgorithm;
 
-typedef void (*join_f)(int level, 
+typedef void (*join_f)(int level, bool try_swap, 
 					RelationID left_id, JoinRelation &left_rel,
 					RelationID right_id, JoinRelation &right_rel,
 					BaseRelation* base_rels, int n_rels,

@@ -122,7 +122,7 @@ void gpuqo_cpu_dpccp_emit(RelationID left_id, RelationID right_id,
         RelationID joinset = BMS64_UNION(left_id, right_id);
         int level = BMS64_SIZE(joinset);
 
-        mExtra->join_function(level, 
+        mExtra->join_function(level, true,
             right_id, *right_rel,
             left_id, *left_rel, 
             base_rels, n_rels, edge_table, memo, extra, algorithm
