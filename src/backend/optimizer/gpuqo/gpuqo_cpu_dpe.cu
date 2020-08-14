@@ -110,6 +110,9 @@ void wait_and_swap_depbuf(DPEExtra* extra, BaseRelation *base_rels,
     pthread_cond_broadcast(&extra->depbufs.avail_jobs);
     extra->depbufs.n_waiting = 0;
 
+    // clear next depbuf
+    extra->depbufs.depbuf_next->clear();
+
     pthread_mutex_unlock(&extra->depbufs.depbuf_mutex);
 }
 
