@@ -21,7 +21,7 @@
 #include "optimizer/gpuqo_debug.cuh"
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
-#include "optimizer/gpuqo_cpu_common.cuh"
+#include "optimizer/gpuqo_cpu_sequential.cuh"
 
 void gpuqo_cpu_dpsub_init(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, void** extra){
     // nothing to do
@@ -98,7 +98,7 @@ extern "C"
 QueryTree*
 gpuqo_cpu_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 {
-    return gpuqo_cpu_generic(base_rels, n_rels, edge_table, gpuqo_cpu_dpsub_alg);
+    return gpuqo_cpu_sequential(base_rels, n_rels, edge_table, gpuqo_cpu_dpsub_alg);
 }
 
 

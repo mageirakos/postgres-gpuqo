@@ -1,14 +1,14 @@
 /*-------------------------------------------------------------------------
  *
- * gpuqo.cuh
- *	  function prototypes and struct definitions for CUDA/Thrust code
+ * gpuqo_cpu_common.cuh
+ *	  definition of common types and functions for all CPU implementations.
  *
- * src/include/optimizer/gpuqo.cuh
+ * src/include/optimizer/gpuqo_cpu_common.cuh
  *
  *-------------------------------------------------------------------------
  */
-#ifndef GPUQO_COMMON_CUH
-#define GPUQO_COMMON_CUH
+#ifndef GPUQO_CPU_COMMON_CUH
+#define GPUQO_CPU_COMMON_CUH
 
 #include <list>
 #include <vector>
@@ -54,6 +54,16 @@ typedef struct DPCPUAlgorithm{
 	teardown_f teardown_function;
 } DPCPUAlgorithm;
 
-extern QueryTree* gpuqo_cpu_generic(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], DPCPUAlgorithm algorithm);
+extern void build_query_tree(JoinRelation *jr, memo_t &memo, QueryTree **qt);
 
-#endif							/* GPUQO_COMMON_CUH */
+template<typename T>
+T* make_join_relation(T &left_rel,T &right_rel,
+                                 BaseRelation* base_rels, int n_rels,
+                                 EdgeInfo* edge_table);
+
+template<typename T>
+bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel, 
+            BaseRelation* base_rels, int n_rels, 
+            EdgeInfo* edge_table, memo_t &memo, void* extra);
+
+#endif							/* GPUQO_CPU_COMMON_CUH */
