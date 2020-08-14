@@ -33,22 +33,28 @@
 int gpuqo_dpe_n_threads;
 int gpuqo_dpe_pairs_per_depbuf;
 
-typedef struct ThreadArgs{
+typedef struct DependencyBuffers{
     DependencyBuffer* depbuf_curr;
     DependencyBuffer* depbuf_next;
+    pthread_cond_t avail_jobs;
+    pthread_mutex_t depbuf_mutex;
+    bool finish;
+} DependencyBuffers;
+
+typedef struct ThreadArgs{
+    int id;
     BaseRelation *base_rels;
     int n_rels;
     EdgeInfo *edge_table;
     memo_t *memo;
-    pthread_cond_t avail_jobs;
-    pthread_mutex_t depbuf_mutex;
-    bool finish;
+    DependencyBuffers* depbufs;
 } ThreadArgs;
 
 typedef struct DPEExtra{
     int job_count;
     pthread_t* threads;
-    ThreadArgs targs;    
+    DependencyBuffers depbufs;    
+    ThreadArgs* thread_args;
 } DPEExtra;
 
 void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels, 
@@ -79,23 +85,25 @@ void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels,
     }
 }
 
-void wait_and_swap_depbuf(DPEExtra* extra){
-    DependencyBuffer *depbuf_temp;
-
+void wait_and_swap_depbuf(DPEExtra* extra, BaseRelation *base_rels, 
+                            int n_rels, EdgeInfo *edge_table){
     // lend an hand to worker threads
-    process_depbuf(extra->targs.depbuf_curr, extra->targs.base_rels, 
-                    extra->targs.n_rels, extra->targs.edge_table);
+    process_depbuf(extra->depbufs.depbuf_curr, base_rels, n_rels, edge_table);
 
     // swap depbufs
-    pthread_mutex_lock(&extra->targs.depbuf_mutex);
+    pthread_mutex_lock(&extra->depbufs.depbuf_mutex);
 
     depbuf_temp = extra->targs.depbuf_curr;
 
-    extra->targs.depbuf_curr = extra->targs.depbuf_next;
-    extra->targs.depbuf_next = depbuf_temp;
+    // swap depbufs
+    DependencyBuffer* depbuf_temp = extra->depbufs.depbuf_curr;
+    extra->depbufs.depbuf_curr = extra->depbufs.depbuf_next;
+    extra->depbufs.depbuf_next = depbuf_temp;
 
-    pthread_cond_broadcast(&extra->targs.avail_jobs);
-    pthread_mutex_unlock(&extra->targs.depbuf_mutex);
+    // signal threads that they can start executing
+    pthread_cond_broadcast(&extra->depbufs.avail_jobs);
+
+    pthread_mutex_unlock(&extra->depbufs.depbuf_mutex);
 }
 
 bool submit_join(int level, JoinRelationDPE* &join_rel, 
@@ -119,10 +127,10 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
     DPEExtra* mExtra = (DPEExtra*) extra.impl;
 
     if (mExtra->job_count < gpuqo_dpe_pairs_per_depbuf){
-        mExtra->targs.depbuf_next->push(join_rel, &left_rel, &right_rel);
+        mExtra->depbufs.depbuf_next->push(join_rel, &left_rel, &right_rel);
         mExtra->job_count++;
     } else {
-        wait_and_swap_depbuf(mExtra);
+        wait_and_swap_depbuf(mExtra, base_rels, n_rels, edge_table);
         mExtra->job_count = 0;
     }
 
@@ -166,16 +174,18 @@ void* thread_function(void* _args){
     ThreadArgs *args = (ThreadArgs*) _args;
 
     while(true){
-        pthread_mutex_lock(&args->depbuf_mutex);
-        while(args->depbuf_curr->empty() 
-                && !args->finish)
-            pthread_cond_wait(&args->avail_jobs, &args->depbuf_mutex);
-        pthread_mutex_unlock(&args->depbuf_mutex);
+        pthread_mutex_lock(&args->depbufs->depbuf_mutex);
+        while(args->depbufs->depbuf_curr->empty() 
+                && !args->depbufs->finish){
+            pthread_cond_wait(&args->depbufs->avail_jobs, 
+                            &args->depbufs->depbuf_mutex);
+        }
+        pthread_mutex_unlock(&args->depbufs->depbuf_mutex);
 
-        if (args->finish)
+        if (args->depbufs->finish)
             return NULL;
 
-        process_depbuf(args->depbuf_curr, args->base_rels, 
+        process_depbuf(args->depbufs->depbuf_curr, args->base_rels, 
             args->n_rels, args->edge_table);
     }
 
@@ -196,21 +206,25 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
     DPEExtra* mExtra = (DPEExtra*) extra.impl;
 
     mExtra->threads = new pthread_t[gpuqo_dpe_n_threads-1];
+    mExtra->thread_args = new ThreadArgs[gpuqo_dpe_n_threads-1];
     mExtra->job_count = 0;
     
-    mExtra->targs.finish = false;
-    mExtra->targs.depbuf_curr = new DependencyBuffer(n_rels);
-    mExtra->targs.depbuf_next = new DependencyBuffer(n_rels);
-    mExtra->targs.base_rels = base_rels;
-    mExtra->targs.n_rels = n_rels;
-    mExtra->targs.edge_table = edge_table;
-    mExtra->targs.memo = &memo;
-    pthread_cond_init(&mExtra->targs.avail_jobs, NULL);
-    pthread_mutex_init(&mExtra->targs.depbuf_mutex, NULL);
+    mExtra->depbufs.finish = false;
+    mExtra->depbufs.depbuf_curr = new DependencyBuffer(n_rels);
+    mExtra->depbufs.depbuf_next = new DependencyBuffer(n_rels);
+    pthread_cond_init(&mExtra->depbufs.avail_jobs, NULL);
+    pthread_mutex_init(&mExtra->depbufs.depbuf_mutex, NULL);
 
     for (int i=0; i<gpuqo_dpe_n_threads-1; i++){
-        int ret = pthread_create(&mExtra->threads[i], NULL, 
-                                thread_function, (void*) &mExtra->targs);
+        mExtra->thread_args[i].id = i;
+        mExtra->thread_args[i].base_rels = base_rels;
+        mExtra->thread_args[i].n_rels = n_rels;
+        mExtra->thread_args[i].edge_table = edge_table;
+        mExtra->thread_args[i].memo = &memo;
+        mExtra->thread_args[i].depbufs = &mExtra->depbufs;
+        
+        int ret = pthread_create(&mExtra->threads[i], NULL, thread_function, 
+                                (void*) &mExtra->thread_args[i]);
 
         if (ret != 0){
             perror("pthread_create: ");
@@ -237,19 +251,18 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
     algorithm.enumerate_function(base_rels, n_rels, edge_table,gpuqo_cpu_dpe_join, memo, extra, algorithm);
 
     // finish depbuf_curr and set depbuf_next
-    wait_and_swap_depbuf(mExtra);
-    // help finishing depbuf_next
-    process_depbuf(mExtra->targs.depbuf_curr, mExtra->targs.base_rels, 
-        mExtra->targs.n_rels, mExtra->targs.edge_table);
+    wait_and_swap_depbuf(mExtra, base_rels, n_rels, edge_table);
+    // help finishing depbuf_next (which is now in depbuf_curr)
+    process_depbuf(mExtra->depbufs.depbuf_curr, base_rels, n_rels, edge_table);
 
     // stop worker threads
-    pthread_mutex_lock(&mExtra->targs.depbuf_mutex);
-    mExtra->targs.finish = true;
+    pthread_mutex_lock(&mExtra->depbufs.depbuf_mutex);
+    mExtra->depbufs.finish = true;
 
     // awake threads to let them realize it's over
-    pthread_cond_broadcast(&mExtra->targs.avail_jobs);
+    pthread_cond_broadcast(&mExtra->depbufs.avail_jobs);
 
-    pthread_mutex_unlock(&mExtra->targs.depbuf_mutex);
+    pthread_mutex_unlock(&mExtra->depbufs.depbuf_mutex);
 
     // wait threads to exit
     for (int i = 0; i < gpuqo_dpe_n_threads-1; i++){
@@ -272,9 +285,10 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
 
     algorithm.teardown_function(base_rels, n_rels, edge_table, memo, extra);
     
-    pthread_cond_destroy(&mExtra->targs.avail_jobs);
-    pthread_mutex_destroy(&mExtra->targs.depbuf_mutex);
+    pthread_cond_destroy(&mExtra->depbufs.avail_jobs);
+    pthread_mutex_destroy(&mExtra->depbufs.depbuf_mutex);
     delete mExtra->threads;
+    delete mExtra->thread_args;
     delete mExtra;
 
 
