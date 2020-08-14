@@ -22,6 +22,7 @@
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
 #include "optimizer/gpuqo_cpu_sequential.cuh"
+#include "optimizer/gpuqo_cpu_dpe.cuh"
 
 struct GpuqoCPUDPSizeExtra{
     vector_list_t rels_per_level;
@@ -97,6 +98,18 @@ QueryTree*
 gpuqo_cpu_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 {
     return gpuqo_cpu_sequential(base_rels, n_rels, edge_table, gpuqo_cpu_dpsize_alg);
+}
+
+/* gpuqo_cpu_dpsize
+ *
+ *	 Parallel CPU baseline for GPU query optimization using the DP size
+ *   algorithm.
+ */
+extern "C"
+QueryTree*
+gpuqo_dpe_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
+{
+    return gpuqo_cpu_dpe(base_rels, n_rels, edge_table, gpuqo_cpu_dpsize_alg);
 }
 
 

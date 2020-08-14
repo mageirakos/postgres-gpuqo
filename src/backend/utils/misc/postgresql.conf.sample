@@ -403,6 +403,8 @@
 #gpuqo_dpsize_min_scratchpad_size_mb = 1
 #gpuqo_dpsize_max_scratchpad_size_mb = 1024
 #gpuqo_dpsize_max_memo_size_mb = 2048
+#gpuqo_dpe_n_threads = 4
+#gpuqo_dpe_pairs_per_depbuf = 128
 
 # - Other Planner Options -
 

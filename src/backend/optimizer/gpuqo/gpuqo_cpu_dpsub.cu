@@ -22,6 +22,7 @@
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
 #include "optimizer/gpuqo_cpu_sequential.cuh"
+#include "optimizer/gpuqo_cpu_dpe.cuh"
 
 void gpuqo_cpu_dpsub_init(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, extra_t &extra){
     // nothing to do
@@ -99,6 +100,19 @@ QueryTree*
 gpuqo_cpu_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 {
     return gpuqo_cpu_sequential(base_rels, n_rels, edge_table, gpuqo_cpu_dpsub_alg);
+}
+
+
+/* gpuqo_dpe_dpsub
+ *
+ *	 Parallel CPU baseline for GPU query optimization using the DP sub
+ *   algorithm.
+ */
+extern "C"
+QueryTree*
+gpuqo_dpe_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
+{
+    return gpuqo_cpu_dpe(base_rels, n_rels, edge_table, gpuqo_cpu_dpsub_alg);
 }
 
 

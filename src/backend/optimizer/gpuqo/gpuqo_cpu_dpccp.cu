@@ -22,6 +22,7 @@
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
 #include "optimizer/gpuqo_cpu_sequential.cuh"
+#include "optimizer/gpuqo_cpu_dpe.cuh"
 
 typedef void (*emit_f)(RelationID left_id, RelationID right_id,
                     BaseRelation* base_rels, int n_rels,
@@ -182,4 +183,16 @@ QueryTree*
 gpuqo_cpu_dpccp(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 {
     return gpuqo_cpu_sequential(base_rels, n_rels, edge_table, gpuqo_cpu_dpccp_alg);
+}
+
+/* gpuqo_dpe_dpccp
+ *
+ *	 Parallel CPU baseline for GPU query optimization using the DP size
+ *   algorithm.
+ */
+extern "C"
+QueryTree*
+gpuqo_dpe_dpccp(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
+{
+    return gpuqo_cpu_dpe(base_rels, n_rels, edge_table, gpuqo_cpu_dpccp_alg);
 }

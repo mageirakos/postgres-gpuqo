@@ -463,6 +463,9 @@ const struct config_enum_entry gpuqo_algorithm_options[] = {
 	{"cpu_dpsize", GPUQO_CPU_DPSIZE, false},
 	{"cpu_dpsub", GPUQO_CPU_DPSUB, false},
 	{"cpu_dpccp", GPUQO_CPU_DPCCP, false},
+	{"dpe_dpsize", GPUQO_DPE_DPSIZE, false},
+	{"dpe_dpsub", GPUQO_DPE_DPSUB, false},
+	{"dpe_dpccp", GPUQO_DPE_DPCCP, false},
 	{NULL, 0, false}
 };
 
@@ -2092,6 +2095,26 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&gpuqo_dpsize_max_memo_size_mb,
 		2048, 1, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dpe_n_threads", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of parallel worker threads."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpe_n_threads,
+		4, 2, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dpe_pairs_per_depbuf", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of pairs per each dependency buffer."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpe_pairs_per_depbuf,
+		128, 2, INT_MAX,
 		NULL, NULL, NULL
 	},
 #endif

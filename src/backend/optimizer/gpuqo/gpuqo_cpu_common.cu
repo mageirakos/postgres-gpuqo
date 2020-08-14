@@ -13,6 +13,7 @@
 #include <iostream>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "optimizer/gpuqo_common.h"
 
@@ -22,6 +23,7 @@
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
 #include "optimizer/gpuqo_cpu_common.cuh"
+#include "optimizer/gpuqo_dependency_buffer.cuh"
 
 void build_query_tree(JoinRelation *jr, memo_t &memo, QueryTree **qt)
 {
@@ -60,6 +62,8 @@ T* build_join_relation(T &left_rel,T &right_rel){
     join_rel->right_relation_id = right_rel.id;
     join_rel->right_relation_ptr = &right_rel;
     join_rel->edges = BMS64_UNION(left_rel.edges, right_rel.edges);
+    join_rel->cost = std::numeric_limits<double>::max();
+    join_rel->rows = std::numeric_limits<double>::max();
 
     return join_rel;
 }
@@ -67,6 +71,8 @@ T* build_join_relation(T &left_rel,T &right_rel){
 // explicitly instantiate template implementations
 // by doing so I avoid defining the template in the header file
 template JoinRelation *build_join_relation<JoinRelation>(JoinRelation &, JoinRelation &);
+template JoinRelationDPE *build_join_relation<JoinRelationDPE>(JoinRelationDPE &, JoinRelationDPE &);
+
 /* make_join_relation
  *
  *	 Builds and fills a join relation from left and right relations.
@@ -99,6 +105,8 @@ T* make_join_relation(T &left_rel,T &right_rel,
 // explicitly instantiate template implementations
 // by doing so I avoid defining the template in the header file
 template JoinRelation *make_join_relation<JoinRelation>(JoinRelation &, JoinRelation &, BaseRelation *, int, EdgeInfo *);
+template JoinRelationDPE *make_join_relation<JoinRelationDPE>(JoinRelationDPE &, JoinRelationDPE &, BaseRelation *, int, EdgeInfo *);
+
 template<typename T>
 bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel, 
             BaseRelation* base_rels, int n_rels, 
@@ -125,3 +133,4 @@ bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel,
 // explicitly instantiate template implementations
 // by doing so I avoid defining the template in the header file
 template bool do_join<JoinRelation>(int, JoinRelation *&, JoinRelation &, JoinRelation &, BaseRelation *, int, EdgeInfo *, memo_t &, extra_t);
+template bool do_join<JoinRelationDPE>(int, JoinRelationDPE *&, JoinRelationDPE &, JoinRelationDPE &, BaseRelation *, int, EdgeInfo *, memo_t &, extra_t);

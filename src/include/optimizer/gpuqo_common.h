@@ -16,13 +16,18 @@ typedef enum GpuqoAlgorithm {
 	GPUQO_DPSIZE = 0,
 	GPUQO_CPU_DPSIZE,
 	GPUQO_CPU_DPSUB,
-	GPUQO_CPU_DPCCP
+	GPUQO_CPU_DPCCP,
+	GPUQO_DPE_DPSIZE,
+	GPUQO_DPE_DPSUB,
+	GPUQO_DPE_DPCCP
 } GpuqoAlgorithm;
 
 extern int gpuqo_algorithm;
 extern int gpuqo_dpsize_min_scratchpad_size_mb;
 extern int gpuqo_dpsize_max_scratchpad_size_mb;
 extern int gpuqo_dpsize_max_memo_size_mb;
+extern int gpuqo_dpe_n_threads;
+extern int gpuqo_dpe_pairs_per_depbuf;
 
 typedef Bitmapset64 EdgeMask;
 typedef Bitmapset64 RelationID;
