@@ -22,12 +22,12 @@
 #include "optimizer/gpuqo_debug.cuh"
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
-#include "optimizer/gpuqo_cpu_common.cuh"
+#include "optimizer/gpuqo_cpu_sequential.cuh"
 
-void gpuqo_cpu_generic_join(int level, bool try_swap,
+void gpuqo_cpu_sequential_join(int level, bool try_swap,
                             JoinRelation &left_rel, JoinRelation &right_rel,
                             BaseRelation* base_rels, int n_rels, 
-                            EdgeInfo* edge_table, memo_t &memo, void* extra, 
+                            EdgeInfo* edge_table, memo_t &memo, extra_t extra, 
                             struct DPCPUAlgorithm algorithm){
     if (algorithm.check_join_function(level, left_rel, right_rel,
                             base_rels, n_rels, edge_table, memo, extra)){
@@ -56,7 +56,7 @@ QueryTree* gpuqo_cpu_sequential(BaseRelation base_rels[], int n_rels,
     DECLARE_TIMING(gpuqo_cpu_sequential);
     START_TIMING(gpuqo_cpu_sequential);
 
-    void* extra;
+    extra_t extra;
     memo_t memo;
     QueryTree* out = NULL;
 
@@ -73,9 +73,9 @@ QueryTree* gpuqo_cpu_sequential(BaseRelation base_rels[], int n_rels,
         memo.insert(std::make_pair(base_rels[i].id, jr));
     }
 
-    algorithm.init_function(base_rels, n_rels, edge_table, memo, &extra);
+    algorithm.init_function(base_rels, n_rels, edge_table, memo, extra);
     
-    algorithm.enumerate_function(base_rels, n_rels, edge_table,gpuqo_cpu_generic_join, memo, extra, algorithm);
+    algorithm.enumerate_function(base_rels, n_rels, edge_table,gpuqo_cpu_sequential_join, memo, extra, algorithm);
 
     RelationID final_joinrel_id = 0ULL;
     for (int i = 0; i < n_rels; i++)

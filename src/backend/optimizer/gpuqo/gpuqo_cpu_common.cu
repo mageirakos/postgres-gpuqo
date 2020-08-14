@@ -102,7 +102,7 @@ template JoinRelation *make_join_relation<JoinRelation>(JoinRelation &, JoinRela
 template<typename T>
 bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel, 
             BaseRelation* base_rels, int n_rels, 
-            EdgeInfo* edge_table, memo_t &memo, void* extra){
+            EdgeInfo* edge_table, memo_t &memo, extra_t extra){
     join_rel = make_join_relation<T>(
         left_rel, right_rel,
         base_rels, n_rels, edge_table
@@ -124,4 +124,4 @@ bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel,
 
 // explicitly instantiate template implementations
 // by doing so I avoid defining the template in the header file
-template bool do_join<JoinRelation>(int, JoinRelation *&, JoinRelation &, JoinRelation &, BaseRelation *, int, EdgeInfo *, memo_t &, void *);
+template bool do_join<JoinRelation>(int, JoinRelation *&, JoinRelation &, JoinRelation &, BaseRelation *, int, EdgeInfo *, memo_t &, extra_t);

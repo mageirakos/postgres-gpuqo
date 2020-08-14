@@ -23,11 +23,11 @@
 #include "optimizer/gpuqo_filter.cuh"
 #include "optimizer/gpuqo_cpu_sequential.cuh"
 
-void gpuqo_cpu_dpsub_init(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, void** extra){
+void gpuqo_cpu_dpsub_init(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, extra_t &extra){
     // nothing to do
 }
 
-void gpuqo_cpu_dpsub_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], join_f join_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
+void gpuqo_cpu_dpsub_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
 
     // first bit is zero
     for (RelationID i=1; i < BMS64_NTH(n_rels); i++){
@@ -60,7 +60,7 @@ void gpuqo_cpu_dpsub_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo ed
 bool gpuqo_cpu_dpsub_check_join(int level, JoinRelation &left_rel,
                             JoinRelation &right_rel, BaseRelation* base_rels, 
                             int n_rels, EdgeInfo* edge_table, memo_t &memo, 
-                            void* extra){
+                            extra_t extra){
 
     // I do not need to check connectedness of the single joinrels since 
     // if they were not connected, they wouldn't have been generated and 
@@ -73,11 +73,11 @@ bool gpuqo_cpu_dpsub_check_join(int level, JoinRelation &left_rel,
 void gpuqo_cpu_dpsub_post_join(int level, bool newrel, JoinRelation &join_rel, 
                             JoinRelation &left_rel, JoinRelation &right_rel,
                             BaseRelation* base_rels, int n_rels, 
-                            EdgeInfo* edge_table, memo_t &memo, void* extra){
+                            EdgeInfo* edge_table, memo_t &memo, extra_t extra){
     // nothing to do
 }
 
-void gpuqo_cpu_dpsub_teardown(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, void* extra){
+void gpuqo_cpu_dpsub_teardown(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, extra_t extra){
     // nothing to do
 }
 
