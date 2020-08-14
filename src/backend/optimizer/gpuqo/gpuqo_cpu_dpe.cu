@@ -66,9 +66,9 @@ void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels,
             JoinRelationDPE *left_rel = iter->first;
             JoinRelationDPE *right_rel = iter->second;
 
-            while (left_rel->num_entry != 0) 
+            while (left_rel->num_entry.load(std::memory_order_acquire) != 0) 
                 ; // busy wait for entries to be ready
-            while (right_rel->num_entry != 0)
+            while (right_rel->num_entry.load(std::memory_order_acquire) != 0)
                 ; // busy wait for entries to be ready
 
             JoinRelationDPE* join_rel = make_join_relation(
@@ -119,7 +119,7 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
         out = false;
     } else{
         join_rel = build_join_relation<JoinRelationDPE>(left_rel, right_rel);
-        join_rel->num_entry = 0;
+        join_rel->num_entry.store(0, std::memory_order_consume);
         memo.insert(std::make_pair(join_rel->id, join_rel));
         out = true;
     }
@@ -242,7 +242,7 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
         jr->cost = 0.2*base_rels[i].rows; 
         jr->rows = base_rels[i].rows; 
         jr->edges = base_rels[i].edges;
-        jr->num_entry = 0;
+        jr->num_entry.store(0, std::memory_order_consume);
         memo.insert(std::make_pair(base_rels[i].id, (JoinRelation*) jr));
     }
 

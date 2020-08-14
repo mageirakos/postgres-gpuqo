@@ -36,13 +36,16 @@ void DependencyBuffer::push(JoinRelationDPE *join_rel,
     }
 
     if (entry == queues[index].end()){
-        join_rel->num_entry++;
+        int num = join_rel->num_entry.fetch_add(1, std::memory_order_consume);
+        Assert(num >= 0);
+        
         depbuf_entry_t temp = std::make_pair(
             join_rel, 
             depbuf_list_t()
         );
 
-        if (left_rel->num_entry == 0 && right_rel->num_entry == 0){
+        if (left_rel->num_entry.load(std::memory_order_consume) == 0 
+                && right_rel->num_entry.load(std::memory_order_consume) == 0){
             queues[index].push_front(temp);
             entry = queues[index].begin();
         } else {
@@ -59,6 +62,7 @@ void DependencyBuffer::push(JoinRelationDPE *join_rel,
 
 depbuf_entry_t DependencyBuffer::pop(){
     depbuf_entry_t out;
+    int num;
     out.first = NULL; 
 
     pthread_mutex_lock(&mutex);
@@ -67,8 +71,10 @@ depbuf_entry_t DependencyBuffer::pop(){
         goto exit;
 
     out = queues[first_non_empty].front();
-    out.first->num_entry--;
     queues[first_non_empty].pop_front();
+
+    num = out.first->num_entry.fetch_sub(1, std::memory_order_release);
+    Assert(num > 0);
 
     while (queues[first_non_empty].empty() && first_non_empty < n_rels*n_rels)
         first_non_empty++;
