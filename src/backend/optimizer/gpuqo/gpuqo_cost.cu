@@ -43,17 +43,22 @@ estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
     // I multiply the selectivity by the selectivity of that edge
     // NB: edges might be multiple so I need to check every baserel in the left
     // joinrel
-    for (int i = 1; i <= n_rels; i++){
-        RelationID base_relid_left = BMS64_NTH(i);
-        BaseRelation baserel_left = base_rels[i-1];
-        if (BMS64_INTERSECTS(base_relid_left, left_rel.id)){
-            for (int j = 1; j <= n_rels; j++){
-                RelationID base_relid_right = BMS64_NTH(j);
-                if (BMS64_INTERSECTS(BMS64_INTERSECTION(baserel_left.edges, right_rel.id), base_relid_right)){
-                    sel *= edge_table[(i-1)*n_rels+(j-1)].sel;
-                }
+    RelationID left_id = left_rel.id;
+    while (left_id != BMS64_EMPTY){
+        // -1 since it's 1-indexed, 
+        // another -1 since relation with id 0b10 is at index 0 and so on
+        int baserel_left_idx = BMS64_LOWEST_POS(left_id) - 2;
+        BaseRelation &baserel_left = base_rels[baserel_left_idx];
+        RelationID baserel_left_edges = baserel_left.edges;
+
+        while (baserel_left_edges != BMS64_EMPTY){
+            int baserel_right_idx = BMS64_LOWEST_POS(baserel_left_edges) - 2;
+            if (BMS64_IS_SET(right_rel.id, baserel_right_idx+1)){
+                sel *= edge_table[baserel_left_idx*n_rels+baserel_right_idx].sel;
             }
+            baserel_left_edges = BMS64_UNSET(baserel_left_edges, baserel_right_idx+1);
         }
+        left_id = BMS64_UNSET(left_id, baserel_left_idx+1);
     }
     
     double rows = sel * left_rel.rows * right_rel.rows;

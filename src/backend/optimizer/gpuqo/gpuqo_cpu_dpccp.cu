@@ -49,11 +49,10 @@ std::list<RelationID>* get_all_subsets(RelationID set){
 
 RelationID get_neighbours(RelationID set, BaseRelation* base_rels, int n_rels){
     RelationID neigs = BMS64_EMPTY;
-    for (int i=1; i <= n_rels; i++){
-        RelationID base_rel = BMS64_NTH(i);
-        if (BMS64_INTERSECTS(base_rel, set)){
-            neigs = BMS64_UNION(neigs, base_rels[i-1].edges);
-        }
+    while (set != BMS64_EMPTY){
+        int baserel_idx = BMS64_LOWEST_POS(set)-2;
+        neigs = BMS64_UNION(neigs, base_rels[baserel_idx].edges);
+        set = BMS64_UNSET(set, baserel_idx+1);
     }
     return BMS64_DIFFERENCE(neigs, set);
 }
@@ -87,16 +86,18 @@ void enumerate_csg(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], 
 void enumerate_cmp(RelationID S, BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], emit_f emit_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm){
     RelationID X = BMS64_UNION(BMS64_SET_ALL_LOWER(S), S);
     RelationID N = BMS64_DIFFERENCE(get_neighbours(S, base_rels, n_rels), X);
-    for (int i=n_rels; i>=1; i--){
-        RelationID v = BMS64_NTH(i);
-        if (BMS64_INTERSECTS(v, N)){
-            emit_function(S, v, base_rels, n_rels, edge_table, memo, extra, algorithm);
+    RelationID temp = N;
+    while (temp != BMS64_EMPTY){
+        int idx = BMS64_HIGHEST_POS(temp)-1;
+        RelationID v = BMS64_NTH(idx);
+        emit_function(S, v, base_rels, n_rels, edge_table, memo, extra, algorithm);
 
-            RelationID newX = BMS64_UNION(X, 
-                                BMS64_INTERSECTION(BMS64_SET_ALL_LOWER(v), N));
-            enumerate_csg_rec(v, newX, S,
-                base_rels, n_rels, edge_table, emit_function, memo, extra, algorithm);
-        }
+        RelationID newX = BMS64_UNION(X, 
+                            BMS64_INTERSECTION(BMS64_SET_ALL_LOWER(v), N));
+        enumerate_csg_rec(v, newX, S,
+            base_rels, n_rels, edge_table, emit_function, memo, extra, algorithm);
+        
+        temp = BMS64_DIFFERENCE(temp, v);
     }
 }
 
