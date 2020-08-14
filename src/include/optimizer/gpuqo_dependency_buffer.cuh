@@ -23,7 +23,7 @@ struct JoinRelationDPE : JoinRelation{
 };
 
 typedef std::deque< std::pair<JoinRelationDPE*, JoinRelationDPE*> >  join_list_t;
-typedef std::pair<JoinRelationDPE*, join_list_t> depbuf_entry_t;
+typedef std::pair<JoinRelationDPE*, join_list_t*> depbuf_entry_t;
 typedef std::deque<depbuf_entry_t> depbuf_queue_t;
 typedef std::unordered_map<RelationID, depbuf_entry_t*> depbuf_lookup_t;
 

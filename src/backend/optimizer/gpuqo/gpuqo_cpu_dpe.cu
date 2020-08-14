@@ -64,7 +64,7 @@ void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels,
     depbuf_entry_t job;
     while ((job = depbuf->pop()).first != NULL){
         JoinRelationDPE *memo_join_rel = job.first;
-        for (auto iter = job.second.begin(); iter != job.second.end(); ++iter){
+        for (auto iter = job.second->begin(); iter != job.second->end(); ++iter){
             JoinRelationDPE *left_rel = iter->first;
             JoinRelationDPE *right_rel = iter->second;
 
@@ -84,6 +84,7 @@ void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels,
 
             delete join_rel;
         }
+        delete job.second;
     }
 }
 
