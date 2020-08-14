@@ -41,9 +41,35 @@ void build_query_tree(JoinRelation *jr, memo_t &memo, QueryTree **qt)
     build_query_tree(jr->right_relation_ptr, memo, &((*qt)->right));
 }
 
+/* build_join_relation
+ *
+ *	 Builds a join relation from left and right relations. Do not compute cost.
+ */
+template<typename T>
+T* build_join_relation(T &left_rel,T &right_rel){
+    // give possibility to user to interrupt
+    // This function is called by all CPU functions so putting it here catches
+    // all of them
+    CHECK_FOR_INTERRUPTS();
+
+    T* join_rel = new T;
+
+    join_rel->id = BMS64_UNION(left_rel.id, right_rel.id);
+    join_rel->left_relation_id = left_rel.id;
+    join_rel->left_relation_ptr = &left_rel;
+    join_rel->right_relation_id = right_rel.id;
+    join_rel->right_relation_ptr = &right_rel;
+    join_rel->edges = BMS64_UNION(left_rel.edges, right_rel.edges);
+
+    return join_rel;
+}
+
+// explicitly instantiate template implementations
+// by doing so I avoid defining the template in the header file
+template JoinRelation *build_join_relation<JoinRelation>(JoinRelation &, JoinRelation &);
 /* make_join_relation
  *
- *	 Builds a join relation from left and right relations.
+ *	 Builds and fills a join relation from left and right relations.
  */
 template<typename T>
 T* make_join_relation(T &left_rel,T &right_rel,
@@ -55,14 +81,7 @@ T* make_join_relation(T &left_rel,T &right_rel,
     // all of them
     CHECK_FOR_INTERRUPTS();
 
-    JoinRelation* join_rel = (JoinRelation*) new T;
-
-    join_rel->id = BMS64_UNION(left_rel.id, right_rel.id);
-    join_rel->left_relation_id = left_rel.id;
-    join_rel->left_relation_ptr = &left_rel;
-    join_rel->right_relation_id = right_rel.id;
-    join_rel->right_relation_ptr = &right_rel;
-    join_rel->edges = BMS64_UNION(left_rel.edges, right_rel.edges);
+    T* join_rel = build_join_relation<T>(left_rel, right_rel);
 
     join_rel->rows = estimate_join_rows(
         *join_rel, left_rel, right_rel,

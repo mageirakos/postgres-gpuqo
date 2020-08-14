@@ -57,6 +57,9 @@ typedef struct DPCPUAlgorithm{
 extern void build_query_tree(JoinRelation *jr, memo_t &memo, QueryTree **qt);
 
 template<typename T>
+T* build_join_relation(T &left_rel,T &right_rel);
+
+template<typename T>
 T* make_join_relation(T &left_rel,T &right_rel,
                                  BaseRelation* base_rels, int n_rels,
                                  EdgeInfo* edge_table);
