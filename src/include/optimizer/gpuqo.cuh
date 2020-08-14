@@ -15,19 +15,20 @@
 #include "optimizer/gpuqo_uninitalloc.cuh"
 
 struct JoinRelation{
+	RelationID id;
+	RelationID left_relation_id;
 	union{
 		uint64_t left_relation_idx;
-		RelationID left_relation_id;
+		struct JoinRelation* left_relation_ptr;
 	};
+	RelationID right_relation_id;
 	union{
 		uint64_t right_relation_idx;
-		RelationID right_relation_id;
+		struct JoinRelation* right_relation_ptr;
 	};
 	double rows;
 	double cost;
 	EdgeMask edges;
-	// I could store more information but I'm striving to keep it as small as 
-	// possible
 
 public:
 	__host__ __device__

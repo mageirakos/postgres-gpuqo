@@ -16,14 +16,11 @@
 #include "optimizer/gpuqo.cuh"
 
 extern __host__ __device__
-bool is_disjoint(RelationID &left_id, RelationID &right_id);
+bool is_disjoint(JoinRelation &left_rel, JoinRelation &right_rel);
 
 extern __host__ __device__
-bool are_connected(RelationID &left_id, JoinRelation &left_rel,
-                    RelationID &right_id, JoinRelation &right_rel,
-                    BaseRelation* base_rels, int n_rels, 
-                    EdgeInfo* edge_table
-);
+bool are_connected(JoinRelation &left_rel, JoinRelation &right_rel,
+                    BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table);
 
 struct filterJoinedDisconnected : public thrust::unary_function<thrust::tuple<RelationID, JoinRelation>, bool>
 {

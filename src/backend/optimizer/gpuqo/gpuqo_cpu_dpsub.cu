@@ -46,9 +46,7 @@ void gpuqo_cpu_dpsub_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo ed
                     JoinRelation *right_rel = right->second;
                     int level = BMS64_SIZE(join_id);
 
-                    join_function(level, false,
-                        right_id, *right_rel,
-                        left_id, *left_rel, 
+                    join_function(level, false, *right_rel, *left_rel, 
                         base_rels, n_rels, edge_table, memo, extra, algorithm
                     );
                 }
@@ -59,25 +57,21 @@ void gpuqo_cpu_dpsub_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo ed
     }
 }
 
-bool gpuqo_cpu_dpsub_check_join(int level,
-                            RelationID left_id, JoinRelation &left_rel,
-                            RelationID right_id, JoinRelation &right_rel,
-                            BaseRelation* base_rels, int n_rels, 
-                            EdgeInfo* edge_table, memo_t &memo, void* extra){
+bool gpuqo_cpu_dpsub_check_join(int level, JoinRelation &left_rel,
+                            JoinRelation &right_rel, BaseRelation* base_rels, 
+                            int n_rels, EdgeInfo* edge_table, memo_t &memo, 
+                            void* extra){
 
     // I do not need to check connectedness of the single joinrels since 
     // if they were not connected, they wouldn't have been generated and 
     // I would not have been able to find them in the memo
-    return (is_disjoint(left_id, right_id) 
-        && are_connected(left_id, left_rel, 
-                        right_id, right_rel,
+    return (is_disjoint(left_rel, right_rel) 
+        && are_connected(left_rel, right_rel,
                         base_rels, n_rels, edge_table));
 }
 
-void gpuqo_cpu_dpsub_post_join(int level, bool newrel,
-                            RelationID join_id, JoinRelation &join_rel,
-                            RelationID left_id, JoinRelation &left_rel,
-                            RelationID right_id, JoinRelation &right_rel,
+void gpuqo_cpu_dpsub_post_join(int level, bool newrel, JoinRelation &join_rel, 
+                            JoinRelation &left_rel, JoinRelation &right_rel,
                             BaseRelation* base_rels, int n_rels, 
                             EdgeInfo* edge_table, memo_t &memo, void* extra){
     // nothing to do

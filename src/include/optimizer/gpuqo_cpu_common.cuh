@@ -25,26 +25,21 @@
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
 
-typedef std::vector< std::list< std::pair<RelationID, JoinRelation*> > > vector_list_t;
+typedef std::vector< std::list<JoinRelation*> > vector_list_t;
 typedef std::unordered_map<RelationID, JoinRelation*> memo_t;
 
 struct DPCPUAlgorithm;
 
-typedef void (*join_f)(int level, bool try_swap, 
-					RelationID left_id, JoinRelation &left_rel,
-					RelationID right_id, JoinRelation &right_rel,
-					BaseRelation* base_rels, int n_rels,
-					EdgeInfo* edge_table, memo_t &memo, void* extra,
-					struct DPCPUAlgorithm algorithm);
-typedef bool (*check_join_f)(int level, 
-					RelationID left_id, JoinRelation &left_rel,
-					RelationID right_id, JoinRelation &right_rel,
-					BaseRelation* base_rels, int n_rels, 
-					EdgeInfo* edge_table, memo_t &memo, void* extra);
-typedef void (*post_join_f)(int level,  bool new_rel,
-					RelationID join_id, JoinRelation &join_rel,
-					RelationID left_id, JoinRelation &left_rel,
-					RelationID right_id, JoinRelation &right_rel,
+typedef void (*join_f)(int level, bool try_swap, JoinRelation &left_rel,
+					JoinRelation &right_rel, BaseRelation* base_rels, 
+					int n_rels, EdgeInfo* edge_table, memo_t &memo, 
+					void* extra, struct DPCPUAlgorithm algorithm);
+typedef bool (*check_join_f)(int level, JoinRelation &left_rel,
+ 					JoinRelation &right_rel, BaseRelation* base_rels, 
+					int n_rels, EdgeInfo* edge_table, memo_t &memo, 
+					void* extra);
+typedef void (*post_join_f)(int level,  bool new_rel, JoinRelation &join_rel,
+					JoinRelation &left_rel, JoinRelation &right_rel,
 					BaseRelation* base_rels, int n_rels, 
 					EdgeInfo* edge_table, memo_t &memo, void* extra);
 typedef void (*enumerate_f)(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], join_f join_function, memo_t &memo, void* extra, struct DPCPUAlgorithm algorithm);

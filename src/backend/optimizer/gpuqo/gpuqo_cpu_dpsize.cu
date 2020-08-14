@@ -34,7 +34,7 @@ void gpuqo_cpu_dpsize_init(BaseRelation base_rels[], int n_rels, EdgeInfo edge_t
     struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) *extra;
 
     for(auto iter = memo.begin(); iter != memo.end(); ++iter){
-        mExtra->rels_per_level[1].push_back(*iter);
+        mExtra->rels_per_level[1].push_back(iter->second);
     }
 }
 
@@ -48,14 +48,7 @@ void gpuqo_cpu_dpsize_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo e
                     big_i != mExtra->rels_per_level[big_s].end(); ++big_i){
                 for (auto small_i = mExtra->rels_per_level[small_s].begin(); 
                         small_i != mExtra->rels_per_level[small_s].end(); ++small_i){
-                    RelationID left_id = big_i->first;
-                    JoinRelation *left_rel = big_i->second;
-                    RelationID right_id = small_i->first;
-                    JoinRelation *right_rel = small_i->second;
-                    
-                    join_function(join_s, true,
-                        right_id, *right_rel,
-                        left_id, *left_rel, 
+                    join_function(join_s, true, **big_i, **small_i, 
                         base_rels, n_rels, edge_table, memo, extra, algorithm
                     );
                 }
@@ -65,27 +58,21 @@ void gpuqo_cpu_dpsize_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo e
 
 }
 
-bool gpuqo_cpu_dpsize_check_join(int level,
-                            RelationID left_id, JoinRelation &left_rel,
-                            RelationID right_id, JoinRelation &right_rel,
-                            BaseRelation* base_rels, int n_rels, 
-                            EdgeInfo* edge_table, memo_t &memo, void* extra){
+bool gpuqo_cpu_dpsize_check_join(int level, JoinRelation &left_rel,             
+                            JoinRelation &right_rel, BaseRelation* base_rels, int n_rels,  EdgeInfo* edge_table, memo_t &memo,
+                            void* extra){
 
-    return (is_disjoint(left_id, right_id) 
-        && are_connected(left_id, left_rel, 
-                        right_id, right_rel,
-                        base_rels, n_rels, edge_table));
+    return (is_disjoint(left_rel, right_rel) 
+        && are_connected(left_rel, right_rel, base_rels, n_rels, edge_table));
 }
 
-void gpuqo_cpu_dpsize_post_join(int level, bool newrel,
-                            RelationID join_id, JoinRelation &join_rel,
-                            RelationID left_id, JoinRelation &left_rel,
-                            RelationID right_id, JoinRelation &right_rel,
+void gpuqo_cpu_dpsize_post_join(int level, bool newrel, JoinRelation &join_rel, 
+                            JoinRelation &left_rel, JoinRelation &right_rel,
                             BaseRelation* base_rels, int n_rels, 
                             EdgeInfo* edge_table, memo_t &memo, void* extra){
     struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) extra;
     if (newrel)
-        mExtra->rels_per_level[level].push_back(std::make_pair(join_id, &join_rel));
+        mExtra->rels_per_level[level].push_back(&join_rel);
 }
 
 void gpuqo_cpu_dpsize_teardown(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, void* extra){

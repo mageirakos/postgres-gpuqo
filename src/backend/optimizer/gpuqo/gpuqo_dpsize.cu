@@ -97,14 +97,15 @@ public:
         );
 #endif
         
-        RelationID left_id = memo_keys[jr.left_relation_idx];
-        RelationID right_id = memo_keys[jr.right_relation_idx];
         JoinRelation left_rel = memo_vals[jr.left_relation_idx];
         JoinRelation right_rel = memo_vals[jr.right_relation_idx];
         
         jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
+        jr.left_relation_id = left_rel.id;
+        jr.right_relation_id = right_rel.id;
 
-        relid = BMS64_UNION(left_id, right_id);
+        relid = BMS64_UNION(left_rel.id, right_rel.id);
+        jr.id = relid;
 
         return thrust::tuple<RelationID, JoinRelation>(relid, jr);
     }
@@ -116,10 +117,9 @@ void buildQueryTree(uint64_t idx,
                     QueryTree **qt)
 {
     JoinRelation jr = gpu_memo_vals[idx];
-    RelationID relid = gpu_memo_keys[idx];
 
     (*qt) = (QueryTree*) malloc(sizeof(QueryTree));
-    (*qt)->id = relid;
+    (*qt)->id = jr.id;
     (*qt)->left = NULL;
     (*qt)->right = NULL;
     (*qt)->rows = jr.rows;
@@ -168,8 +168,11 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
         gpu_memo_keys[i] = base_rels[i].id;
 
         JoinRelation t;
+        t.id = base_rels[i].id;
         t.left_relation_idx = 0; 
+        t.left_relation_id = 0; 
         t.right_relation_idx = 0; 
+        t.right_relation_id = 0; 
         t.cost = 0.2*base_rels[i].rows; 
         t.rows = base_rels[i].rows; 
         t.edges = base_rels[i].edges;

@@ -16,19 +16,15 @@
 #include "optimizer/gpuqo.cuh"
 
 extern __host__ __device__
-double compute_join_cost(JoinRelation &join_rel, 
-                    RelationID &left_id, JoinRelation &left_rel,
-                    RelationID &right_id, JoinRelation &right_rel,
-                    BaseRelation* base_rels, int n_rels,
-                    EdgeInfo* edge_table
+double compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+                    JoinRelation &right_rel, BaseRelation* base_rels, 
+                    int n_rels, EdgeInfo* edge_table
 );
 
 extern __host__ __device__
-double estimate_join_rows(JoinRelation &join_rel, 
-                    RelationID &left_id, JoinRelation &left_rel,
-                    RelationID &right_id, JoinRelation &right_rel,
-                    BaseRelation* base_rels, int n_rels,
-                    EdgeInfo* edge_table
+double estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
+                    JoinRelation &right_rel, BaseRelation* base_rels, 
+                    int n_rels, EdgeInfo* edge_table
 );
 
 struct joinCost : public thrust::unary_function<JoinRelation,JoinRelation>

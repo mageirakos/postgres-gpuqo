@@ -19,17 +19,16 @@
  #include "optimizer/gpuqo_filter.cuh"
 
 __host__ __device__
-bool is_disjoint(RelationID &left_id, RelationID &right_id)
+bool is_disjoint(JoinRelation &left_rel, JoinRelation &right_rel)
 {
-    return !BMS64_INTERSECTS(left_id, right_id);
+    return !BMS64_INTERSECTS(left_rel.id, right_rel.id);
 }
 
 __host__ __device__
-bool are_connected(RelationID &left_id, JoinRelation &left_rel,
-                    RelationID &right_id, JoinRelation &right_rel,
+bool are_connected(JoinRelation &left_rel, JoinRelation &right_rel,
                     BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table)
 {
-    return (left_rel.edges & right_id) != 0ULL;
+    return (left_rel.edges & right_rel.id) != 0ULL;
 }
  
 
@@ -46,14 +45,12 @@ bool filterJoinedDisconnected::operator()(thrust::tuple<RelationID, JoinRelation
     );
 #endif
 
-    RelationID left_id = memo_keys[jr.left_relation_idx];
-    RelationID right_id = memo_keys[jr.right_relation_idx];
     JoinRelation left_rel = memo_vals[jr.left_relation_idx];
     JoinRelation right_rel = memo_vals[jr.right_relation_idx];
 
-    if (!is_disjoint(left_id, right_id)) // not disjoint
+    if (!is_disjoint(left_rel, right_rel)) // not disjoint
         return true;
     else{
-        return !are_connected(left_id, left_rel, right_id, right_rel, base_rels.get(), n_rels, edge_table.get());
+        return !are_connected(left_rel, right_rel, base_rels.get(), n_rels, edge_table.get());
     }
 }
