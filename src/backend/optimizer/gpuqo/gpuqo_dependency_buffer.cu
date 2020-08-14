@@ -34,7 +34,7 @@ void DependencyBuffer::push(JoinRelationDPE *join_rel,
         
         depbuf_entry_t temp = std::make_pair(
             join_rel, 
-            depbuf_list_t()
+            join_list_t()
         );
 
         if (left_rel->num_entry.load(std::memory_order_consume) == 0 
