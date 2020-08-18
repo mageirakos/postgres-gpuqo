@@ -145,10 +145,10 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
 
     DPEExtra* mExtra = (DPEExtra*) extra.impl;
 
-    if (mExtra->job_count < gpuqo_dpe_pairs_per_depbuf){
-        mExtra->depbufs.depbuf_next->push(join_rel, &left_rel, &right_rel);
-        mExtra->job_count++;
-    } else {
+    mExtra->depbufs.depbuf_next->push(join_rel, &left_rel, &right_rel);
+    mExtra->job_count++;
+
+    if (mExtra->job_count >= gpuqo_dpe_pairs_per_depbuf){
         wait_and_swap_depbuf(mExtra, base_rels, n_rels, edge_table);
         mExtra->job_count = 0;
     }
