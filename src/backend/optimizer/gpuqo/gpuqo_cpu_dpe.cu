@@ -64,6 +64,9 @@ void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels,
     depbuf_entry_t job;
     while ((job = depbuf->pop()).first != NULL){
         JoinRelationDPE *memo_join_rel = job.first;
+#ifdef GOUQO_DEBUG        
+        printf("Processing %llu\n", memo_join_rel->id);
+#endif          
         for (auto iter = job.second->begin(); iter != job.second->end(); ++iter){
             JoinRelationDPE *left_rel = iter->first;
             JoinRelationDPE *right_rel = iter->second;
@@ -137,6 +140,7 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
 
 #ifdef GPUQO_DEBUG
     Assert(!join_rel->referenced);
+    printf("Inserting %llu\n", relid);
 #endif
 
     DPEExtra* mExtra = (DPEExtra*) extra.impl;
