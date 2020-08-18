@@ -27,6 +27,7 @@ typedef unsigned long long Bitmapset64;
 #define BMS64_SET(a, n) BMS64_UNION((a), BMS64_NTH(n))
 #define BMS64_UNSET(a, n) BMS64_DIFFERENCE((a), BMS64_NTH(n))
 #define BMS64_IS_SET(a, n) BMS64_INTERSECTS((a), BMS64_NTH(n))
+#define BMS64_EXPAND_TO_MASK(val, mask) _pdep_u64(val, mask)
 
 #ifdef __CUDA_ARCH__
 #define BMS64_SIZE(s) __popcll(s)
@@ -36,6 +37,21 @@ typedef unsigned long long Bitmapset64;
 #define BMS64_SIZE(s) __builtin_popcount(s)
 #define BMS64_LOWEST_POS(s) __builtin_ffsll(s)
 #define BMS64_HIGHEST_POS(s) (64-__builtin_clzll(s))
+#endif
+
+#ifndef __BMI2__
+#ifdef __CUDA_ARCH__
+__device__ __host__
+#endif
+inline uint64_t _pdep_u64(uint64_t val, uint64_t mask){
+    uint64_t res = 0ULL;
+    for (uint64_t bb = 1; mask; bb += bb) {
+        if (val & bb)
+            res |= mask & -mask;
+        mask &= mask - 1;
+  }
+  return res;
+}
 #endif
 	
 #endif							/* GPUQO_BITMAPSET_H */
