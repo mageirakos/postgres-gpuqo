@@ -64,6 +64,9 @@ T* build_join_relation(T &left_rel,T &right_rel){
     join_rel->edges = BMS64_UNION(left_rel.edges, right_rel.edges);
     join_rel->cost = std::numeric_limits<double>::max();
     join_rel->rows = std::numeric_limits<double>::max();
+#ifdef GPUQO_DEBUG
+    join_rel->referenced = false;
+#endif
 
     return join_rel;
 }
@@ -86,6 +89,11 @@ T* make_join_relation(T &left_rel,T &right_rel,
     // This function is called by all CPU functions so putting it here catches
     // all of them
     CHECK_FOR_INTERRUPTS();
+
+#ifdef GPUQO_DEBUG
+    left_rel.referenced = true;
+    right_rel.referenced = true;
+#endif
 
     T* join_rel = build_join_relation<T>(left_rel, right_rel);
 
@@ -118,7 +126,10 @@ bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel,
 
     auto find_iter = memo.find(join_rel->id);
     if (find_iter != memo.end()){
-        JoinRelation* old_jr = find_iter->second;
+        JoinRelation* old_jr = find_iter->second;  
+#ifdef GPUQO_DEBUG
+        Assert(!old_jr->referenced);
+#endif
         if (join_rel->cost < old_jr->cost){
             *old_jr = *join_rel;
         }

@@ -29,6 +29,9 @@ struct JoinRelation{
 	double rows;
 	double cost;
 	EdgeMask edges;
+#ifdef GPUQO_DEBUG
+	bool referenced;
+#endif
 
 public:
 	__host__ __device__

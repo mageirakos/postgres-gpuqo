@@ -135,6 +135,10 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
         out = true;
     }
 
+#ifdef GPUQO_DEBUG
+    Assert(!join_rel->referenced);
+#endif
+
     DPEExtra* mExtra = (DPEExtra*) extra.impl;
 
     if (mExtra->job_count < gpuqo_dpe_pairs_per_depbuf){
