@@ -131,12 +131,12 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
     foreach(lc, root->eq_classes){
         EquivalenceClass *ec = (EquivalenceClass *) lfirst(lc);
         if (bms_overlap(rel->relids, ec->ec_relids)){
-            baserel.edges |= convertBitmapset(ec->ec_relids);
+            baserel.edges = BMS64_UNION(baserel.edges, convertBitmapset(ec->ec_relids));
         }
     }
 
     // remove itself if present
-    baserel.edges &= ~baserel.id;
+    baserel.edges = BMS64_DIFFERENCE(baserel.edges, baserel.id);
 
     return baserel;
 }
@@ -156,7 +156,7 @@ void makeEdgeTable(PlannerInfo *root, List *initial_rels, BaseRelation* base_rel
         foreach(lc_inner, initial_rels){
             RelOptInfo* rel_inner = (RelOptInfo*) lfirst(lc_inner);
             
-            if (base_rels[i].edges & convertBitmapset(rel_inner->relids)){
+            if (BMS64_INTERSECTS(base_rels[i].edges, convertBitmapset(rel_inner->relids))){
                 double sel;
                 SpecialJoinInfo sjinfo;
                 
