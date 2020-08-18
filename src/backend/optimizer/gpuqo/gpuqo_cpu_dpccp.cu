@@ -81,7 +81,7 @@ void enumerate_csg(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], 
 
         emit_function(subset, BMS64_EMPTY, base_rels, n_rels, edge_table, memo, extra, algorithm);
 
-        enumerate_csg_rec(subset, BMS64_SET_ALL_LOWER(subset), BMS64_EMPTY,
+        enumerate_csg_rec(subset, BMS64_SET_ALL_LOWER_INC(subset), BMS64_EMPTY,
             base_rels, n_rels, edge_table, emit_function, memo, extra, algorithm);
 
     }
@@ -100,7 +100,7 @@ void enumerate_cmp(RelationID S, BaseRelation base_rels[], int n_rels, EdgeInfo 
         emit_function(S, v, base_rels, n_rels, edge_table, memo, extra, algorithm);
 
         RelationID newX = BMS64_UNION(X, 
-                            BMS64_INTERSECTION(BMS64_SET_ALL_LOWER(v), N));
+                            BMS64_INTERSECTION(BMS64_SET_ALL_LOWER_INC(v), N));
         enumerate_csg_rec(v, newX, S,
             base_rels, n_rels, edge_table, emit_function, memo, extra, algorithm);
         

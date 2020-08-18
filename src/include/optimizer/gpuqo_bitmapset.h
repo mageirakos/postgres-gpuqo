@@ -19,6 +19,7 @@ typedef unsigned long long Bitmapset64;
 #define BMS64_CMP(a) (~(a))
 #define BMS64_LOWEST(a) ((a) & (-(a)))
 #define BMS64_SET_ALL_LOWER(a) (a != BMS64_EMPTY ? BMS64_LOWEST(a)-1 : BMS64_EMPTY)
+#define BMS64_SET_ALL_LOWER_INC(a) BMS64_UNION((a), BMS64_SET_ALL_LOWER(a))
 #define BMS64_UNION(a, b) ((a) | (b))
 #define BMS64_INTERSECTION(a, b) ((a) & (b))
 #define BMS64_INTERSECTS(a, b) (BMS64_INTERSECTION((a), (b)) != BMS64_EMPTY)
