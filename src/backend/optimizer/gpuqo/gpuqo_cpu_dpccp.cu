@@ -59,6 +59,9 @@ RelationID get_neighbours(RelationID set, BaseRelation* base_rels, int n_rels){
 }
 
 void enumerate_csg_rec(RelationID S, RelationID X, RelationID cmp, BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], emit_f emit_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
+#ifdef GPUQO_DEBUG
+    printf("enumerate_csg_rec(%llu, %llu, %llu)\n", S, X, cmp);
+#endif
     RelationID N = BMS64_DIFFERENCE(get_neighbours(S, base_rels, n_rels), X);
     std::list<RelationID> *subsets = get_all_subsets(N);
     for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
@@ -85,7 +88,10 @@ void enumerate_csg(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], 
 }
 
 void enumerate_cmp(RelationID S, BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], emit_f emit_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
-    RelationID X = BMS64_UNION(BMS64_SET_ALL_LOWER(S), S);
+#ifdef GPUQO_DEBUG
+    printf("enumerate_cmp(%llu)\n", S);
+#endif
+    RelationID X = BMS64_SET_ALL_LOWER_INC(S);
     RelationID N = BMS64_DIFFERENCE(get_neighbours(S, base_rels, n_rels), X);
     RelationID temp = N;
     while (temp != BMS64_EMPTY){
@@ -111,6 +117,10 @@ void gpuqo_cpu_dpccp_emit(RelationID left_id, RelationID right_id,
                         BaseRelation* base_rels, int n_rels, 
                         EdgeInfo* edge_table, memo_t &memo, extra_t extra,
                         struct DPCPUAlgorithm algorithm){
+#ifdef GPUQO_DEBUG
+    printf("gpuqo_cpu_dpccp_emit(%llu, %llu)\n", left_id, right_id);
+#endif
+
     struct GpuqoCPUDPCcpExtra* mExtra = (struct GpuqoCPUDPCcpExtra*) extra.alg;
 
     if (left_id != BMS64_EMPTY && right_id != BMS64_EMPTY){
