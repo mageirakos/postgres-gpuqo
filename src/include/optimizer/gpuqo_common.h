@@ -14,6 +14,7 @@
 
 typedef enum GpuqoAlgorithm {
 	GPUQO_DPSIZE = 0,
+	GPUQO_DPSUB,
 	GPUQO_CPU_DPSIZE,
 	GPUQO_CPU_DPSUB,
 	GPUQO_CPU_DPCCP,
@@ -26,6 +27,7 @@ extern int gpuqo_algorithm;
 extern int gpuqo_dpsize_min_scratchpad_size_mb;
 extern int gpuqo_dpsize_max_scratchpad_size_mb;
 extern int gpuqo_dpsize_max_memo_size_mb;
+extern int gpuqo_dpsub_n_parallel;
 extern int gpuqo_dpe_n_threads;
 extern int gpuqo_dpe_pairs_per_depbuf;
 

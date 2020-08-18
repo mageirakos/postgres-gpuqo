@@ -19,6 +19,7 @@ extern RelOptInfo *gpuqo(PlannerInfo *root,
 						int n_rels, List *initial_rels);
 
 extern QueryTree* gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
+extern QueryTree* gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
 extern QueryTree* gpuqo_cpu_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
 extern QueryTree* gpuqo_cpu_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
 extern QueryTree* gpuqo_cpu_dpccp(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);

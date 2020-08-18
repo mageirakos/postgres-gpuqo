@@ -460,6 +460,7 @@ const struct config_enum_entry ssl_protocol_versions_info[] = {
 
 const struct config_enum_entry gpuqo_algorithm_options[] = {
 	{"dpsize", GPUQO_DPSIZE, false},
+	{"dpsub", GPUQO_DPSUB, false},
 	{"cpu_dpsize", GPUQO_CPU_DPSIZE, false},
 	{"cpu_dpsub", GPUQO_CPU_DPSUB, false},
 	{"cpu_dpccp", GPUQO_CPU_DPCCP, false},
@@ -2095,6 +2096,16 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&gpuqo_dpsize_max_memo_size_mb,
 		2048, 1, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dpsub_n_parallel", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of join pairs to compute in parallel."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsub_n_parallel,
+		16384, 1, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{
