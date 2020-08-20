@@ -97,6 +97,14 @@ void DependencyBuffer::clear(){
     first_non_empty = n_rels*n_rels;
 }
 
+size_t DependencyBuffer::size(){
+    size_t s = 0;
+    for (int i = 0; i < n_rels*n_rels; i++){
+        s += queue_lookup_pairs[i].first.size();
+    }
+    return s;
+}
+
 DependencyBuffer::~DependencyBuffer(){
     delete queue_lookup_pairs;
     pthread_mutex_destroy(&mutex);

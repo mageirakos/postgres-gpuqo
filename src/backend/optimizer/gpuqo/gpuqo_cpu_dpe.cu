@@ -125,6 +125,7 @@ void wait_and_swap_depbuf(DPEExtra* extra, BaseRelation *base_rels,
     extra->depbufs.n_waiting = 0;
 
     // clear next depbuf
+    Assert(extra->depbufs.depbuf_next->size() == 0);
     extra->depbufs.depbuf_next->clear();
 
 #ifdef GPUQO_DEBUG

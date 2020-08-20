@@ -39,6 +39,7 @@ public:
     depbuf_entry_t pop();
     bool empty();
     void clear();
+    size_t size();
     ~DependencyBuffer();
 };
 	
