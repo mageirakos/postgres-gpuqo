@@ -85,11 +85,6 @@ T* make_join_relation(T &left_rel,T &right_rel,
                                  BaseRelation* base_rels, int n_rels,
                                  EdgeInfo* edge_table){
 
-    // give possibility to user to interrupt
-    // This function is called by all CPU functions so putting it here catches
-    // all of them
-    CHECK_FOR_INTERRUPTS();
-
 #ifdef GPUQO_DEBUG
     left_rel.referenced = true;
     right_rel.referenced = true;
