@@ -67,12 +67,19 @@ void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels,
     depbuf_entry_t job;
     while ((job = depbuf->pop()).first != NULL){
         JoinRelationDPE *memo_join_rel = job.first;
-#ifdef GOUQO_DEBUG        
-        printf("Processing %llu\n", memo_join_rel->id);
+#ifdef GPUQO_DEBUG        
+        printf("Processing %llu (%d): %d pairs\n", memo_join_rel->id, 
+                memo_join_rel->num_entry.load(), job.second->size());
 #endif          
         for (auto iter = job.second->begin(); iter != job.second->end(); ++iter){
             JoinRelationDPE *left_rel = iter->first;
             JoinRelationDPE *right_rel = iter->second;
+
+#ifdef GPUQO_DEBUG        
+            printf("  %llu -> %llu (%d) %llu (%d)\n", memo_join_rel->id,
+                    left_rel->id, left_rel->num_entry.load(), right_rel->id, 
+                    right_rel->num_entry.load());
+#endif
 
             while (left_rel->num_entry.load(std::memory_order_acquire) != 0) 
                 ; // busy wait for entries to be ready
@@ -159,6 +166,10 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
 
     mExtra->depbufs.depbuf_next->push(join_rel, &left_rel, &right_rel);
     mExtra->job_count++;
+
+#ifdef GPUQO_DEBUG
+    printf("Inserted %llu (%d)\n", relid, join_rel->num_entry.load());
+#endif
 
     if (mExtra->job_count >= gpuqo_dpe_pairs_per_depbuf
             && mExtra->depbufs.n_waiting >= gpuqo_dpe_n_threads-1){
