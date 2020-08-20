@@ -57,6 +57,9 @@ typedef struct DPEExtra{
     pthread_t* threads;
     DependencyBuffers depbufs;    
     ThreadArgs* thread_args;
+#ifdef GPUQO_PROFILE
+    uint64_t total_job_count;
+#endif
 } DPEExtra;
 
 void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels, 
@@ -117,6 +120,10 @@ void wait_and_swap_depbuf(DPEExtra* extra, BaseRelation *base_rels,
     // clear next depbuf
     extra->depbufs.depbuf_next->clear();
 
+#ifdef GPUQO_DEBUG
+    printf("There are %d jobs in the queue\n", extra->job_count);
+#endif
+
     pthread_mutex_unlock(&extra->depbufs.depbuf_mutex);
 }
 
@@ -144,6 +151,10 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
 #endif
 
     DPEExtra* mExtra = (DPEExtra*) extra.impl;
+
+#ifdef GPUQO_PROFILE
+    mExtra->total_job_count++;
+#endif 
 
     mExtra->depbufs.depbuf_next->push(join_rel, &left_rel, &right_rel);
     mExtra->job_count++;
@@ -193,7 +204,11 @@ void gpuqo_cpu_dpe_join(int level, bool try_swap,
 void* thread_function(void* _args){
     ThreadArgs *args = (ThreadArgs*) _args;
 
+    DECLARE_TIMING(wait);
+    DECLARE_TIMING(execute);
+
     while(true){
+        START_TIMING(wait);
         pthread_mutex_lock(&args->depbufs->depbuf_mutex);
         while(args->depbufs->depbuf_curr->empty() 
                 && !args->depbufs->finish){
@@ -205,13 +220,23 @@ void* thread_function(void* _args){
                             &args->depbufs->depbuf_mutex);
         }
         pthread_mutex_unlock(&args->depbufs->depbuf_mutex);
+        STOP_TIMING(wait);
 
         if (args->depbufs->finish)
-            return NULL;
+            break;
 
+        START_TIMING(execute);
         process_depbuf(args->depbufs->depbuf_curr, args->base_rels, 
             args->n_rels, args->edge_table);
+        STOP_TIMING(execute);
     }
+
+#ifdef GPUQO_PROFILE
+    printf("[%d] ", args->id);
+    PRINT_TOTAL_TIMING(wait);
+    printf("[%d] ", args->id);
+    PRINT_TOTAL_TIMING(execute);
+#endif
 
     return NULL;
 }
@@ -232,6 +257,9 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
     mExtra->threads = new pthread_t[gpuqo_dpe_n_threads-1];
     mExtra->thread_args = new ThreadArgs[gpuqo_dpe_n_threads-1];
     mExtra->job_count = 0;
+#ifdef GPUQO_PROFILE
+    mExtra->total_job_count = 0;
+#endif
     
     mExtra->depbufs.finish = false;
     mExtra->depbufs.depbuf_curr = new DependencyBuffer(n_rels);
@@ -309,6 +337,10 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
     }
 
     algorithm.teardown_function(base_rels, n_rels, edge_table, memo, extra);
+
+#ifdef GPUQO_PROFILE
+    printf("%llu pairs have been evaluated\n", mExtra->total_job_count);
+#endif
     
     pthread_cond_destroy(&mExtra->depbufs.avail_jobs);
     pthread_cond_destroy(&mExtra->depbufs.all_threads_waiting);
