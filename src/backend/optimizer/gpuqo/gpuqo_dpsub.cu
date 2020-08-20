@@ -180,7 +180,7 @@ void buildQueryTree(uint64_t idx,
     (*qt)->rows = jr.rows;
     (*qt)->cost = jr.cost;
 
-    if (jr.left_relation_idx == 0 && jr.right_relation_idx == 0)
+    if (jr.left_relation_id == 0 && jr.right_relation_id == 0)
         return;
 
     buildQueryTree(jr.left_relation_idx, gpu_memo_vals, &((*qt)->left));
