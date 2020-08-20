@@ -14,6 +14,28 @@
 #include "optimizer/gpuqo_common.h"
 #include "optimizer/gpuqo_uninitalloc.cuh"
 
+// I did not want to include the full c.h for fear of conflicts so I just 
+// include the definitions (to get USE_ASSERT_CHECKING) and just define the
+// Assert macro as in c.h
+#include "pg_config.h"
+#ifndef USE_ASSERT_CHECKING
+#define Assert(condition)	((void)true)
+#else
+#include <assert.h>
+#define Assert(p) assert(p)
+#endif
+
+// I do the same for the CHECK_FOR_INTERRUPTS macro
+#include "signal.h"
+extern "C" void ProcessInterrupts(void);
+extern "C" volatile sig_atomic_t InterruptPending;
+
+#define CHECK_FOR_INTERRUPTS() \
+do { \
+	if (InterruptPending) \
+		ProcessInterrupts(); \
+} while(0)
+
 struct JoinRelation{
 	RelationID id;
 	RelationID left_relation_id;
@@ -29,7 +51,8 @@ struct JoinRelation{
 	double rows;
 	double cost;
 	EdgeMask edges;
-#ifdef GPUQO_DEBUG
+	
+#ifdef USE_ASSERT_CHECKING
 	bool referenced;
 #endif
 
@@ -69,26 +92,5 @@ extern std::ostream & operator<<(std::ostream &os, const JoinRelation& jr);
 
 typedef thrust::device_vector<RelationID, uninitialized_allocator<RelationID> > uninit_device_vector_relid;
 typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation> > uninit_device_vector_joinrel;
-
-// I did not want to include the full c.h for fear of conflicts so I just 
-// include the definitions (to get USE_ASSERT_CHECKING) and just define the
-// Assert macro as in c.h
-#include "pg_config.h"
-#ifndef USE_ASSERT_CHECKING
-#define Assert(condition)	((void)true)
-#else
-#include <assert.h>
-#define Assert(p) assert(p)
-#endif
-
-#include "signal.h"
-extern "C" void ProcessInterrupts(void);
-extern "C" volatile sig_atomic_t InterruptPending;
-
-#define CHECK_FOR_INTERRUPTS() \
-do { \
-	if (InterruptPending) \
-		ProcessInterrupts(); \
-} while(0)
 
 #endif							/* GPUQO_CUH */

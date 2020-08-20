@@ -145,9 +145,10 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
         out = true;
     }
 
-#ifdef GPUQO_DEBUG
+#ifdef USE_ASSERT_CHECKING
+    left_rel.referenced = true;
+    right_rel.referenced = true;
     Assert(!join_rel->referenced);
-    printf("Inserting %llu\n", relid);
 #endif
 
     DPEExtra* mExtra = (DPEExtra*) extra.impl;
