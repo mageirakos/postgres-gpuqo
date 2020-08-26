@@ -144,6 +144,7 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
 void makeEdgeTable(PlannerInfo *root, List *initial_rels, BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table){
     ListCell* lc_inner;
     ListCell* lc_outer;
+    ListCell* lc_inner_path;
     EdgeInfo edge_info;
     RelOptInfo* joinrel;
     List	   *restrictlist = NULL;
@@ -186,8 +187,23 @@ void makeEdgeTable(PlannerInfo *root, List *initial_rels, BaseRelation* base_rel
                 // rows is clamped so I might underestimate the selectivity
                 sel = joinrel->rows / (rel_inner->rows*rel_outer->rows);
                 edge_info.sel = sel < 1 ? sel : 1;
+
+                edge_info.has_index = false;
+                foreach(lc_inner_path, joinrel->pathlist){
+                    Path* path = (Path*) lfirst(lc_inner_path);
+                    if (path->pathtype == T_NestLoop){
+                        NestPath *nestpath = (NestPath*) path;
+                        Path* innerpath = nestpath->innerjoinpath;
+                        if (innerpath->pathtype == T_IndexScan){
+                            edge_info.has_index = true;
+                            break;
+                        }
+                    }
+
+                }
             } else {
                 edge_info.sel = 1; // cross-join selectivity
+                edge_info.has_index = false;
             }
             edge_table[i*n_rels+j] = edge_info;
             j++;

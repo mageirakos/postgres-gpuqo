@@ -51,6 +51,7 @@ typedef struct QueryTree{
 
 typedef struct EdgeInfo{
 	double sel;
+	bool has_index;
 } EdgeInfo;
 
 #endif							/* GPUQO_COMMON_H */
