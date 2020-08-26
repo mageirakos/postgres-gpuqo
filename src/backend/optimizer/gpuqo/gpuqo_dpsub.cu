@@ -31,6 +31,9 @@
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
 
+// relsize depends on algorithm
+#define RELSIZE (sizeof(JoinRelation))
+
 // User-configured option
 int gpuqo_dpsub_n_parallel;
 

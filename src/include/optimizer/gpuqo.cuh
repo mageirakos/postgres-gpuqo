@@ -48,7 +48,6 @@ do { \
 #define KB 1024ULL
 #define MB (KB*1024)
 #define GB (MB*1024)
-#define RELSIZE (sizeof(JoinRelation))
 
 // ceiled integer division
 #define ceil_div(a,b) (((a)+(b)-1)/(b)) 
