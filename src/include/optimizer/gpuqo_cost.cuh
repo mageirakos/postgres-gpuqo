@@ -16,6 +16,9 @@
 #include "optimizer/gpuqo.cuh"
 
 #define BASEREL_COEFF   0.2
+#define HASHJOIN_COEFF  1
+#define INDEXSCAN_COEFF 2
+#define SORT_COEFF      2
 
 extern __host__ __device__
 double baserel_cost(BaseRelation &base_rel);
