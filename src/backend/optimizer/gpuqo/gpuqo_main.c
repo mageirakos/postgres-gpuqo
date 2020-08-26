@@ -24,6 +24,7 @@ int gpuqo_algorithm;
 BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
 Bitmapset64 convertBitmapset(Bitmapset* set);
 void printQueryTree(QueryTree* qt, int indent);
+void printEdges(BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table);
 RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels);
 void makeEdgeTable(PlannerInfo *root, List *initial_rels, BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table);
 
@@ -58,6 +59,20 @@ void printQueryTree(QueryTree* qt, int indent){
 
     printQueryTree(qt->left, indent + 2);
     printQueryTree(qt->right, indent + 2);
+}
+
+void printEdges(BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table){
+    for (int i = 0; i < n_rels; i++){
+        RelationID edges = base_rels[i].edges;
+        printf("%d:", i+1);
+        while (edges != BMS64_EMPTY){
+            int idx = BMS64_LOWEST_POS(edges)-1;
+            EdgeInfo* edge = &edge_table[i*n_rels+idx-1];
+            printf(" %d(%.4f,%s)", idx, edge->sel, edge->has_index ? "I": "");
+            edges = BMS64_UNSET(edges, idx);
+        }
+        printf("\n");
+    }
 }
 
 RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels){
@@ -130,6 +145,10 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
     baserel.edges = 0;
     foreach(lc, root->eq_classes){
         EquivalenceClass *ec = (EquivalenceClass *) lfirst(lc);
+
+        if (list_length(ec->ec_members) <= 1)
+			continue;
+
         if (bms_overlap(rel->relids, ec->ec_relids)){
             baserel.edges = BMS64_UNION(baserel.edges, convertBitmapset(ec->ec_relids));
         }
@@ -241,6 +260,10 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
         base_rels[i++] = makeBaseRelation(rel, root);
     }
     makeEdgeTable(root, initial_rels, base_rels, n_rels, edge_table);
+
+#ifdef OPTIMIZER_DEBUG
+    printEdges(base_rels, n_rels, edge_table);
+#endif
 
     switch (gpuqo_algorithm)
     {
