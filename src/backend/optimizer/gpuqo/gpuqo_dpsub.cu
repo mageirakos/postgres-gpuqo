@@ -242,7 +242,7 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
         t.left_relation_id = 0; 
         t.right_relation_idx = 0; 
         t.right_relation_id = 0; 
-        t.cost = 0.2*base_rels[i].rows; 
+        t.cost = baserel_cost(base_rels[i]); 
         t.rows = base_rels[i].rows; 
         t.edges = base_rels[i].edges;
         gpu_memo_vals[base_rels[i].id] = t;

@@ -18,6 +18,13 @@
 #include "optimizer/gpuqo_debug.cuh"
 #include "optimizer/gpuqo_cost.cuh"
 
+
+__host__ __device__
+double baserel_cost(BaseRelation &base_rel){
+    return BASEREL_COEFF * base_rel.tuples;
+}
+
+
 __host__ __device__
 double 
 compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,

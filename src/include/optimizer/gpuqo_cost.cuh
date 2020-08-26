@@ -15,6 +15,11 @@
 #include "optimizer/gpuqo_common.h"
 #include "optimizer/gpuqo.cuh"
 
+#define BASEREL_COEFF   0.2
+
+extern __host__ __device__
+double baserel_cost(BaseRelation &base_rel);
+
 extern __host__ __device__
 double compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, BaseRelation* base_rels, 

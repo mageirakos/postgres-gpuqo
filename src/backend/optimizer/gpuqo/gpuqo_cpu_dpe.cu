@@ -305,7 +305,7 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
         jr->left_relation_ptr = NULL; 
         jr->right_relation_id = 0; 
         jr->right_relation_ptr = NULL; 
-        jr->cost = 0.2*base_rels[i].rows; 
+        jr->cost = baserel_cost(base_rels[i]); 
         jr->rows = base_rels[i].rows; 
         jr->edges = base_rels[i].edges;
         jr->num_entry.store(0, std::memory_order_consume);
