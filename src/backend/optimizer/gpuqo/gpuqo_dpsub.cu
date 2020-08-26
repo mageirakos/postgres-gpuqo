@@ -31,19 +31,8 @@
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
 
-// TODO move these definitions to common file
-
-#define KB 1024ULL
-#define MB (KB*1024)
-#define GB (MB*1024)
-#define RELSIZE (sizeof(JoinRelation))
-
+// User-configured option
 int gpuqo_dpsub_n_parallel;
-extern int gpuqo_dpsize_max_memo_size_mb;
-
-#define INFD __longlong_as_double(0x7ff0000000000000ULL)
-
-#define ceil_div(a,b) (((a)+(b)-1)/(b)) 
 
 /* unrankEvaluateDPSub
  *

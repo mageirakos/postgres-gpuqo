@@ -36,6 +36,25 @@ do { \
 		ProcessInterrupts(); \
 } while(0)
 
+// double infinity constant
+#include <limits>
+#ifdef __CUDA_ARCH__
+#define INFD __longlong_as_double(0x7ff0000000000000ULL)
+#else
+#define INFD std::numeric_limits<double>::infinity()
+#endif
+
+// constants for table sizes
+#define KB 1024ULL
+#define MB (KB*1024)
+#define GB (MB*1024)
+#define RELSIZE (sizeof(JoinRelation))
+
+// ceiled integer division
+#define ceil_div(a,b) (((a)+(b)-1)/(b)) 
+
+// structure representing join of two relations used by CUDA and CPU code 
+// of GPUQO
 struct JoinRelation{
 	RelationID id;
 	RelationID left_relation_id;
