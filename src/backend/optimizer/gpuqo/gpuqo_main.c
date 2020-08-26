@@ -208,17 +208,17 @@ void makeEdgeTable(PlannerInfo *root, List *initial_rels, BaseRelation* base_rel
                 edge_info.sel = sel < 1 ? sel : 1;
 
                 edge_info.has_index = false;
-                foreach(lc_inner_path, joinrel->pathlist){
+                foreach(lc_inner_path, rel_inner->pathlist){
                     Path* path = (Path*) lfirst(lc_inner_path);
-                    if (path->pathtype == T_NestLoop){
-                        NestPath *nestpath = (NestPath*) path;
-                        Path* innerpath = nestpath->innerjoinpath;
-                        if (innerpath->pathtype == T_IndexScan){
+                    if (path->pathtype == T_IndexScan){
+                        if (bms_num_members(PATH_REQ_OUTER(path)) == 1 
+                                && bms_overlap(PATH_REQ_OUTER(path),
+                                    rel_outer->relids
+                                )){
                             edge_info.has_index = true;
                             break;
                         }
                     }
-
                 }
             } else {
                 edge_info.sel = 1; // cross-join selectivity
