@@ -40,29 +40,25 @@
  *	 unrank algorithm for DPsub GPU variant with embedded evaluation and 
  *   partial pruning.
  */
+template<typename BinaryFunction>
 struct unrankEvaluateDPSub : public thrust::unary_function< uint64_t,thrust::tuple<RelationID, JoinRelation> >
 {
-    thrust::device_ptr<JoinRelation> memo_vals;
-    thrust::device_ptr<BaseRelation> base_rels;
-    thrust::device_ptr<EdgeInfo> edge_table;
     thrust::device_ptr<uint64_t> binoms;
     int sq;
     int qss;
     uint64_t offset;
     int n_pairs;
+    BinaryFunction enum_functor;
 public:
     unrankEvaluateDPSub(
-        thrust::device_ptr<JoinRelation> _memo_vals,
-        thrust::device_ptr<BaseRelation> _base_rels,
+        BinaryFunction _enum_functor,
         int _sq,
-        thrust::device_ptr<EdgeInfo> _edge_table,
         thrust::device_ptr<uint64_t> _binoms,
         int _qss,
         uint64_t _offset,
         int _n_pairs
-    ) : memo_vals(_memo_vals), base_rels(_base_rels), sq(_sq), 
-        edge_table(_edge_table), binoms(_binoms), qss(_qss), offset(_offset),
-        n_pairs(_n_pairs)
+    ) : enum_functor(_enum_functor), sq(_sq), binoms(_binoms), 
+        qss(_qss), offset(_offset), n_pairs(_n_pairs)
     {}
  
     __device__
@@ -78,27 +74,13 @@ public:
 #endif
 
         RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
+        RelationID relid = s<<1;
 
 #ifdef GPUQO_DEBUG 
         printf("[%llu] s=%llu\n", tid, s);
 #endif
-        
-        JoinRelation jr_out;
-        jr_out.id = BMS64_EMPTY;
-        jr_out.cost = INFD;
-        RelationID relid = s<<1;
-        RelationID l = BMS64_EXPAND_TO_MASK(cid, relid);
-        RelationID r;
 
-        for (int i = 0; i < n_pairs; i++){
-            r = BMS64_DIFFERENCE(relid, l);
-            
-            try_join(relid, jr_out, l, r, 
-                    memo_vals.get(), base_rels.get(), sq, edge_table.get());
-
-            l = BMS64_NEXT_SUBSET(l, relid);
-        }
-
+        JoinRelation jr_out = enum_functor(relid, cid);
         return thrust::tuple<RelationID, JoinRelation>(relid, jr_out);
     }
 };
@@ -139,11 +121,15 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
                 params.gpu_scratchpad_keys.begin()+n_threads,
                 params.gpu_scratchpad_vals.begin()+n_threads
             )),
-            unrankEvaluateDPSub(
-                params.gpu_memo_vals.data(),
-                params.gpu_base_rels.data(),
+            unrankEvaluateDPSub<dpsubEnumerateAllSubs>(
+                dpsubEnumerateAllSubs(
+                    params.gpu_memo_vals.data(),
+                    params.gpu_base_rels.data(),
+                    params.n_rels,
+                    params.gpu_edge_table.data(),
+                    n_joins_per_thread
+                ),
                 params.n_rels,
-                params.gpu_edge_table.data(),
                 params.gpu_binoms.data(),
                 iter,
                 id_offset,

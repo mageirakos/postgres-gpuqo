@@ -44,10 +44,34 @@ typedef struct dpsub_iter_param_t{
 
 typedef thrust::pair<uninit_device_vector_relid::iterator, uninit_device_vector_joinrel::iterator> scatter_iter_t;
 
+typedef thrust::binary_function<RelationID, uint64_t, JoinRelation> pairs_enum_func_t;
+
 int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params);
 int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params);
 
 void dpsub_prune_scatter(int n_joins_per_thread, int n_threads, dpsub_iter_param_t &params);
+
+struct dpsubEnumerateAllSubs : public pairs_enum_func_t 
+{
+    thrust::device_ptr<JoinRelation> memo_vals;
+    thrust::device_ptr<BaseRelation> base_rels;
+    thrust::device_ptr<EdgeInfo> edge_table;
+    int sq;
+    int n_pairs;
+public:
+    dpsubEnumerateAllSubs(
+        thrust::device_ptr<JoinRelation> _memo_vals,
+        thrust::device_ptr<BaseRelation> _base_rels,
+        int _sq,
+        thrust::device_ptr<EdgeInfo> _edge_table,
+        int _n_pairs
+    ) : memo_vals(_memo_vals), base_rels(_base_rels), sq(_sq), 
+        edge_table(_edge_table), n_pairs(_n_pairs)
+    {}
+
+    __device__
+    JoinRelation operator()(RelationID relid, uint64_t cid);
+};
 
 EXTERN_PROTOTYPE_TIMING(unrank);
 EXTERN_PROTOTYPE_TIMING(filter);

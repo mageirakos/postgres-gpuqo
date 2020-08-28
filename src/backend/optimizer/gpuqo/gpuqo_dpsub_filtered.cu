@@ -79,28 +79,25 @@ public:
   *
   *	 evaluation algorithm for DPsub GPU variant with partial pruning
   */
+template<typename BinaryFunction>
 struct evaluateFilteredDPSub : public thrust::unary_function< uint64_t, thrust::tuple<RelationID, JoinRelation> >
 {
-    thrust::device_ptr<JoinRelation> memo_vals;
     thrust::device_ptr<RelationID> pending_keys;
-    thrust::device_ptr<BaseRelation> base_rels;
-    thrust::device_ptr<EdgeInfo> edge_table;
     int sq;
     int qss;
     uint64_t n_pending_sets;
     int n_pairs;
+    BinaryFunction enum_functor;
 public:
     evaluateFilteredDPSub(
-        thrust::device_ptr<JoinRelation> _memo_vals,
         thrust::device_ptr<RelationID> _pending_keys,
-        thrust::device_ptr<BaseRelation> _base_rels,
+        BinaryFunction _enum_functor,
         int _sq,
-        thrust::device_ptr<EdgeInfo> _edge_table,
         int _qss,
         uint64_t _n_pending_sets,
         int _n_pairs
-    ) : memo_vals(_memo_vals), pending_keys(_pending_keys), 
-        base_rels(_base_rels), sq(_sq), edge_table(_edge_table), 
+    ) : pending_keys(_pending_keys), 
+        enum_functor(_enum_functor), sq(_sq), 
         qss(_qss), n_pending_sets(_n_pending_sets), n_pairs(_n_pairs)
     {}
 
@@ -117,29 +114,14 @@ public:
         printf("[%llu] splits_per_qs=%llu, rid=%llu, cid=[%llu,%llu), relid=%llu\n", tid, splits_per_qs, rid, cid, cid+n_pairs, relid);
 #endif
         
-        JoinRelation jr_out;
-        jr_out.id = BMS64_EMPTY;
-        jr_out.cost = INFD;
-        RelationID l = BMS64_EXPAND_TO_MASK(cid, relid);
-        RelationID r;
-    
-        for (int i = 0; i < n_pairs; i++){
-            r = BMS64_DIFFERENCE(relid, l);
-            
-            try_join(relid, jr_out, l, r, 
-                    memo_vals.get(), base_rels.get(), sq, edge_table.get());
-    
-            l = BMS64_NEXT_SUBSET(l, relid);
-        }
-    
-        return thrust::make_tuple<RelationID, JoinRelation>(relid, jr_out);
+    JoinRelation jr_out = enum_functor(relid, cid);
+    return thrust::make_tuple<RelationID, JoinRelation>(relid, jr_out);
     }
 };
 
 int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){   
     int n_iters = 0;
     uint64_t set_offset = 0;
-    uint64_t valid_sets = 0;
     uint64_t n_pending_sets = 0;
     while (set_offset < params.n_sets){
         uint64_t n_remaining_sets = params.n_sets - set_offset;
@@ -243,12 +225,16 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                     params.gpu_scratchpad_keys.begin()+n_threads,
                     params.gpu_scratchpad_vals.begin()+n_threads
                 )),
-                evaluateFilteredDPSub(
-                    params.gpu_memo_vals.data(),
+                evaluateFilteredDPSub<dpsubEnumerateAllSubs>(
                     params.gpu_pending_keys.data(),
-                    params.gpu_base_rels.data(),
+                    dpsubEnumerateAllSubs(
+                        params.gpu_memo_vals.data(),
+                        params.gpu_base_rels.data(),
+                        params.n_rels,
+                        params.gpu_edge_table.data(),
+                        n_joins_per_thread
+                    ),
                     params.n_rels,
-                    params.gpu_edge_table.data(),
                     iter,
                     n_pending_sets,
                     n_joins_per_thread

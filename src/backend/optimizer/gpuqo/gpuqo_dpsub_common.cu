@@ -120,6 +120,27 @@ void try_join(RelationID relid, JoinRelation &jr_out,
     }
 }
 
+__device__
+JoinRelation dpsubEnumerateAllSubs::operator()(RelationID relid, uint64_t cid)
+{
+    JoinRelation jr_out;
+    jr_out.id = BMS64_EMPTY;
+    jr_out.cost = INFD;
+    RelationID l = BMS64_EXPAND_TO_MASK(cid, relid);
+    RelationID r;
+
+    for (int i = 0; i < n_pairs; i++){
+        r = BMS64_DIFFERENCE(relid, l);
+        
+        try_join(relid, jr_out, l, r, 
+                memo_vals.get(), base_rels.get(), sq, edge_table.get());
+
+        l = BMS64_NEXT_SUBSET(l, relid);
+    }
+
+    return jr_out;
+}
+
 void dpsub_prune_scatter(int n_joins_per_thread, int n_threads, dpsub_iter_param_t &params){
     // give possibility to user to interrupt
     CHECK_FOR_INTERRUPTS();

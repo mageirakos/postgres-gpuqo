@@ -23,6 +23,7 @@ typedef unsigned long long Bitmapset64;
 #define BMS64_UNION(a, b) ((a) | (b))
 #define BMS64_INTERSECTION(a, b) ((a) & (b))
 #define BMS64_INTERSECTS(a, b) (BMS64_INTERSECTION((a), (b)) != BMS64_EMPTY)
+#define BMS64_IS_SUBSET(a, b) (BMS64_INTERSECTION((a), (b)) == (a))
 #define BMS64_DIFFERENCE(a, b) BMS64_INTERSECTION((a), BMS64_CMP(b))
 #define BMS64_NEXT_SUBSET(subset, set) ((set) & ((subset)-(set)))
 #define BMS64_SET(a, n) BMS64_UNION((a), BMS64_NTH(n))
@@ -39,6 +40,8 @@ typedef unsigned long long Bitmapset64;
 #define BMS64_LOWEST_POS(s) __builtin_ffsll(s)
 #define BMS64_HIGHEST_POS(s) (64-__builtin_clzll(s))
 #endif
+
+#define BMS64_HIGHEST(a) (BMS64_NTH(BMS64_HIGHEST_POS(a)-1))
 
 #ifndef __BMI2__
 #ifdef __CUDA_ARCH__
