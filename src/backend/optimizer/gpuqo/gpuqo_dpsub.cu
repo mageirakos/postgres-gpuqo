@@ -32,6 +32,7 @@
 #include "optimizer/gpuqo_filter.cuh"
 #include "optimizer/gpuqo_binomial.cuh"
 #include "optimizer/gpuqo_query_tree.cuh"
+#include "optimizer/gpuqo_dpsub.cuh"
 
 // relsize depends on algorithm
 #define RELSIZE (sizeof(JoinRelation))
@@ -39,147 +40,116 @@
 // User-configured option
 int gpuqo_dpsub_n_parallel;
 
-/* unrankEvaluateDPSub
- *
- *	 unrank algorithm for DPsub GPU variant with embedded evaluation and 
- *   partial pruning.
- */
-struct unrankEvaluateDPSub : public thrust::unary_function< uint64_t,thrust::tuple<RelationID, JoinRelation> >
-{
-    thrust::device_ptr<JoinRelation> memo_vals;
-    thrust::device_ptr<BaseRelation> base_rels;
-    thrust::device_ptr<EdgeInfo> edge_table;
-    thrust::device_ptr<uint64_t> binoms;
-    int sq;
-    int qss;
-    uint64_t offset;
-    int n_pairs;
-public:
-    unrankEvaluateDPSub(
-        thrust::device_ptr<JoinRelation> _memo_vals,
-        thrust::device_ptr<BaseRelation> _base_rels,
-        int _sq,
-        thrust::device_ptr<EdgeInfo> _edge_table,
-        thrust::device_ptr<uint64_t> _binoms,
-        int _qss,
-        uint64_t _offset,
-        int _n_pairs
-    ) : memo_vals(_memo_vals), base_rels(_base_rels), sq(_sq), 
-        edge_table(_edge_table), binoms(_binoms), qss(_qss), offset(_offset),
-        n_pairs(_n_pairs)
-    {}
+__device__
+RelationID dpsub_unrank_sid(uint64_t sid, uint64_t qss, uint64_t sq, uint64_t* binoms){
+    RelationID s = BMS64_EMPTY;
+    int t = 0;
+    int qss_tmp = qss, sq_tmp = sq;
 
-    __device__
-    thrust::tuple<RelationID, JoinRelation> operator()(uint64_t tid) 
-    {
-        uint64_t splits_per_qs = ceil_div((1<<qss) - 2, n_pairs);
-        uint64_t real_id = tid + offset;
-        uint64_t sid = real_id / splits_per_qs;
-        uint64_t cid = (real_id % splits_per_qs)*n_pairs+1;
-
-#ifdef GPUQO_DEBUG 
-        printf("[%llu] splits_per_qs=%llu, sid=%llu, cid=[%llu,%llu)\n", tid, splits_per_qs, sid, cid, cid+n_pairs);
-#endif
-
-        RelationID s = BMS64_EMPTY;
-        int t = 0;
-        int qss_tmp = qss, sq_tmp = sq;
-
-        while (sq_tmp > 0 && qss_tmp > 0){
-            uint64_t o = BINOM(binoms, sq, sq_tmp-1, qss_tmp-1);
-            if (sid < o){
-                s = BMS64_UNION(s, BMS64_NTH(t));
-                qss_tmp--;
-            } else {
-                sid -= o;
-            }
-            t++;
-            sq_tmp--;
+    while (sq_tmp > 0 && qss_tmp > 0){
+        uint64_t o = BINOM(binoms, sq, sq_tmp-1, qss_tmp-1);
+        if (sid < o){
+            s = BMS64_UNION(s, BMS64_NTH(t));
+            qss_tmp--;
+        } else {
+            sid -= o;
         }
+        t++;
+        sq_tmp--;
+    }
 
-#ifdef GPUQO_DEBUG 
-        printf("[%llu] s=%llu\n", tid, s);
+    return s;
+}
+
+__device__
+void try_join(RelationID relid, JoinRelation &jr_out, 
+            RelationID l, RelationID r, JoinRelation* memo_vals,
+            BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table) {
+    if (l == BMS64_EMPTY || r == BMS64_EMPTY){
+        return;
+    }
+
+#ifdef GPUQO_DEBUG
+    printf("try_join(%llu, %llu, %llu)\n", relid, l, r);
 #endif
+
+    JoinRelation jr;
+    jr.id = relid;
+    jr.left_relation_id = l;
+    jr.left_relation_idx = l;
+    jr.right_relation_id = r;
+    jr.right_relation_idx = r;
+    
+    JoinRelation left_rel = memo_vals[jr.left_relation_idx];
+    JoinRelation right_rel = memo_vals[jr.right_relation_idx];
+
+    // make sure those subsets were valid in a previous iteration
+    if (left_rel.id == l && right_rel.id == r){
+        jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
         
-        JoinRelation jr_out;
-        jr_out.id = BMS64_EMPTY;
-        jr_out.cost = INFD;
-        RelationID relid = s<<1;
-        RelationID l = BMS64_EXPAND_TO_MASK(cid, relid);
-        RelationID r;
-        for (int i = 0; i < n_pairs; i++){
-            r = BMS64_DIFFERENCE(relid, l);
-            
-            if (l == BMS64_EMPTY || r == BMS64_EMPTY)
-                break;
-
-            JoinRelation jr;
-            jr.id = relid;
-            jr.left_relation_id = l;
-            jr.left_relation_idx = l;
-            jr.right_relation_id = r;
-            jr.right_relation_idx = r;
-            
-            JoinRelation left_rel = memo_vals[jr.left_relation_idx];
-            JoinRelation right_rel = memo_vals[jr.right_relation_idx];
-
-            // make sure those subsets were valid in a previous iteration
-            if (left_rel.id == l && right_rel.id == r){
-                jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
-                
-                if (are_connected(left_rel, right_rel, base_rels.get(), sq, edge_table.get())){
+        if (are_connected(left_rel, right_rel, base_rels, n_rels, edge_table)){
 
 #ifdef GPUQO_DEBUG 
-                printf("[%llu] Joining %llu and %llu\n", tid, l, r);
+        printf("[%llu] Joining %llu and %llu\n", relid, l, r);
 #endif
 
-                    jr.rows = estimate_join_rows(jr, left_rel, right_rel,
-                                        base_rels.get(), sq, edge_table.get());
+            jr.rows = estimate_join_rows(jr, left_rel, right_rel,
+                                base_rels, n_rels, edge_table);
 
-                    jr.cost = compute_join_cost(jr, left_rel, right_rel,
-                                        base_rels.get(), sq, edge_table.get());
+            jr.cost = compute_join_cost(jr, left_rel, right_rel,
+                                base_rels, n_rels, edge_table);
 
-                    if (jr.cost < jr_out.cost){
-                        jr_out = jr;
-                    }
-                } else {
-#ifdef GPUQO_DEBUG 
-                    printf("[%llu] Cannot join %llu and %llu\n", tid, l, r);
-#endif
-                }
-            } else {
-#ifdef GPUQO_DEBUG 
-                printf("[%llu] Invalid subsets %llu and %llu\n", tid, l, r);
-                continue;
-#endif
+            if (jr.cost < jr_out.cost){
+                jr_out = jr;
             }
-
-            l = BMS64_NEXT_SUBSET(l, relid);
+        } else {
+#ifdef GPUQO_DEBUG 
+            printf("[%llu] Cannot join %llu and %llu\n", relid, l, r);
+#endif
         }
-
-        return thrust::tuple<RelationID, JoinRelation>(relid, jr_out);
+    } else {
+#ifdef GPUQO_DEBUG 
+        printf("[%llu] Invalid subsets %llu and %llu\n", relid, l, r);
+#endif
     }
-};
+}
 
 
+__device__
+thrust::tuple<RelationID, JoinRelation> unrankEvaluateDPSub::operator()(uint64_t tid) 
+{
+    uint64_t splits_per_qs = ceil_div((1<<qss) - 2, n_pairs);
+    uint64_t real_id = tid + offset;
+    uint64_t sid = real_id / splits_per_qs;
+    uint64_t cid = (real_id % splits_per_qs)*n_pairs+1;
 
+#ifdef GPUQO_DEBUG 
+    printf("[%llu] splits_per_qs=%llu, sid=%llu, cid=[%llu,%llu)\n", tid, splits_per_qs, sid, cid, cid+n_pairs);
+#endif
 
-void precompute_binoms(thrust::host_vector<uint64_t> &binoms, int N){
-    for (int n = 0; n <= N; n++){
-        for (int k = 0; k <= N; k++){
-            int idx = n*(N+1)+k;
-            if (k > n){
-                // invalid
-                binoms[idx] = 0;
-            } else if (k == 0 || k == n){
-                // base case
-                binoms[idx] = 1;
-            } else {
-                binoms[idx] = binoms[(n-1)*(N+1)+(k-1)] + binoms[(n-1)*(N+1)+k];
-            }
-        }
+    RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
 
+#ifdef GPUQO_DEBUG 
+    printf("[%llu] s=%llu\n", tid, s);
+#endif
+    
+    JoinRelation jr_out;
+    jr_out.id = BMS64_EMPTY;
+    jr_out.cost = INFD;
+    RelationID relid = s<<1;
+    RelationID l = BMS64_EXPAND_TO_MASK(cid, relid);
+    RelationID r;
+
+    for (int i = 0; i < n_pairs; i++){
+        r = BMS64_DIFFERENCE(relid, l);
+        
+        try_join(relid, jr_out, l, r, 
+                memo_vals.get(), base_rels.get(), sq, edge_table.get());
+
+        l = BMS64_NEXT_SUBSET(l, relid);
     }
+
+    return thrust::tuple<RelationID, JoinRelation>(relid, jr_out);
 }
 
 /* gpuqo_dpsub
