@@ -1101,6 +1101,16 @@ static struct config_bool ConfigureNamesBool[] =
 		true,
 		NULL, NULL, NULL
 	},
+	{
+		{"gpuqo_dpsub_csg", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Enables CSG enumeration of the join pairs in DPsub."),
+			gettext_noop("Only connected subgraphs can enumerated as left join relation."),
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsub_csg_enable,
+		true,
+		NULL, NULL, NULL
+	},
 #endif
 	{
 		/* Not for general use --- used by SET SESSION AUTHORIZATION */
@@ -2146,6 +2156,16 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&gpuqo_dpsub_filter_keys_overprovisioning,
 		100, 1, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dpsub_csg_threshold", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of joins per thread above which the CSG enumeration is performed (only connected subgraphs are enumerated instead of all subsets). Set to 0 to always use CSG enumeration."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsub_csg_threshold,
+		128, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{

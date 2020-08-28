@@ -106,7 +106,7 @@ public:
     {
         uint64_t splits_per_qs = ceil_div((1<<qss) - 2, n_pairs);
         uint64_t rid = n_pending_sets - 1 - (tid / splits_per_qs);
-        uint64_t cid = (tid % splits_per_qs)*n_pairs+1;
+        uint64_t cid = tid % splits_per_qs;
     
         RelationID relid = pending_keys[rid];
 
@@ -119,6 +119,7 @@ public:
     }
 };
 
+template<typename enum_functor>
 int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){   
     int n_iters = 0;
     uint64_t set_offset = 0;
@@ -225,9 +226,9 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                     params.gpu_scratchpad_keys.begin()+n_threads,
                     params.gpu_scratchpad_vals.begin()+n_threads
                 )),
-                evaluateFilteredDPSub<dpsubEnumerateAllSubs>(
+                evaluateFilteredDPSub<enum_functor>(
                     params.gpu_pending_keys.data(),
-                    dpsubEnumerateAllSubs(
+                    enum_functor(
                         params.gpu_memo_vals.data(),
                         params.gpu_base_rels.data(),
                         params.n_rels,
@@ -258,3 +259,6 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
 
     return n_iters;
 }
+
+template int dpsub_filtered_iteration<dpsubEnumerateAllSubs>(int iter, dpsub_iter_param_t &params);
+template int dpsub_filtered_iteration<dpsubEnumerateCsg>(int iter, dpsub_iter_param_t &params);

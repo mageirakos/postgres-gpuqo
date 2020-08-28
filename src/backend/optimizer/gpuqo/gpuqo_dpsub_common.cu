@@ -126,7 +126,7 @@ JoinRelation dpsubEnumerateAllSubs::operator()(RelationID relid, uint64_t cid)
     JoinRelation jr_out;
     jr_out.id = BMS64_EMPTY;
     jr_out.cost = INFD;
-    RelationID l = BMS64_EXPAND_TO_MASK(cid, relid);
+    RelationID l = BMS64_EXPAND_TO_MASK((cid)*n_pairs+1, relid);
     RelationID r;
 
     for (int i = 0; i < n_pairs; i++){
@@ -283,16 +283,22 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 
             uint64_t n_iters;
             uint64_t filter_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_filter_threshold;
-            if (gpuqo_dpsub_filter_enable && params.tot > filter_threshold){
+            uint64_t csg_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_csg_threshold;
+            if (gpuqo_dpsub_csg_enable && params.tot > csg_threshold){
+#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
+                printf("\nStarting filtered-csg iteration %d: %llu combinations\n", i, params.tot);
+#endif
+                n_iters = dpsub_filtered_iteration<dpsubEnumerateCsg>(i, params);
+            } else if (gpuqo_dpsub_filter_enable && params.tot > filter_threshold){
 #if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
                 printf("\nStarting filtered iteration %d: %llu combinations\n", i, params.tot);
 #endif
-                n_iters = dpsub_filtered_iteration(i, params);
+                n_iters = dpsub_filtered_iteration<dpsubEnumerateAllSubs>(i, params);
             } else {
 #if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
                 printf("\nStarting unfiltered iteration %d: %llu combinations\n", i, params.tot);
 #endif
-                n_iters = dpsub_unfiltered_iteration(i, params);
+                n_iters = dpsub_unfiltered_iteration<dpsubEnumerateAllSubs>(i, params);
             }
 
 #ifdef GPUQO_DEBUG

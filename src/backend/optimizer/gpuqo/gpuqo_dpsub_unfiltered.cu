@@ -67,7 +67,7 @@ public:
         uint64_t splits_per_qs = ceil_div((1<<qss) - 2, n_pairs);
         uint64_t real_id = tid + offset;
         uint64_t sid = real_id / splits_per_qs;
-        uint64_t cid = (real_id % splits_per_qs)*n_pairs+1;
+        uint64_t cid = real_id % splits_per_qs;
 
 #ifdef GPUQO_DEBUG 
         printf("[%llu] splits_per_qs=%llu, sid=%llu, cid=[%llu,%llu)\n", tid, splits_per_qs, sid, cid, cid+n_pairs);
@@ -85,6 +85,7 @@ public:
     }
 };
 
+template<typename enum_functor>
 int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
     uint64_t n_joins_per_thread;
     uint64_t n_sets_per_iteration;
@@ -121,8 +122,8 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
                 params.gpu_scratchpad_keys.begin()+n_threads,
                 params.gpu_scratchpad_vals.begin()+n_threads
             )),
-            unrankEvaluateDPSub<dpsubEnumerateAllSubs>(
-                dpsubEnumerateAllSubs(
+            unrankEvaluateDPSub<enum_functor>(
+                enum_functor(
                     params.gpu_memo_vals.data(),
                     params.gpu_base_rels.data(),
                     params.n_rels,
@@ -153,3 +154,6 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
 
     return n_iters;
 }
+
+template int dpsub_unfiltered_iteration<dpsubEnumerateAllSubs>(int iter, dpsub_iter_param_t &params);
+template int dpsub_unfiltered_iteration<dpsubEnumerateCsg>(int iter, dpsub_iter_param_t &params);

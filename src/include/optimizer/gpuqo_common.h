@@ -32,6 +32,8 @@ extern bool gpuqo_dpsub_filter_enable;
 extern int gpuqo_dpsub_filter_threshold;
 extern int gpuqo_dpsub_filter_cpu_enum_threshold;
 extern int gpuqo_dpsub_filter_keys_overprovisioning;
+extern bool gpuqo_dpsub_csg_enable;
+extern int gpuqo_dpsub_csg_threshold;
 extern int gpuqo_dpe_n_threads;
 extern int gpuqo_dpe_pairs_per_depbuf;
 

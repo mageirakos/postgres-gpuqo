@@ -408,6 +408,8 @@
 #gpuqo_dpsub_filter_threshold = 16
 #gpuqo_dpsub_filter_cpu_enum_threshold = 1024
 #gpuqo_dpsub_filter_keys_overprovisioning = 100
+#gpuqo_dpsub_csg = on
+#gpuqo_dpsub_csg_threshold = 128
 #gpuqo_dpe_n_threads = 4
 #gpuqo_dpe_pairs_per_depbuf = 128
 
