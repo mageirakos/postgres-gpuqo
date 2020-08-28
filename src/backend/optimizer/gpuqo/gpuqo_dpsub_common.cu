@@ -46,7 +46,7 @@ PROTOTYPE_TIMING(scatter);
 // User-configured option
 int gpuqo_dpsub_n_parallel;
 
-__device__
+__host__ __device__
 RelationID dpsub_unrank_sid(uint64_t sid, uint64_t qss, uint64_t sq, uint64_t* binoms){
     RelationID s = BMS64_EMPTY;
     int t = 0;
@@ -205,7 +205,7 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
     params.gpu_memo_vals = thrust::device_vector<JoinRelation>(memo_size);
 
     QueryTree* out = NULL;
-    RelationID out_relid = BMS64_EMPTY;
+    params.out_relid = BMS64_EMPTY;
 
     for(int i=0; i<n_rels; i++){
         JoinRelation t;
@@ -219,7 +219,7 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
         t.edges = base_rels[i].edges;
         params.gpu_memo_vals[base_rels[i].id] = t;
 
-        out_relid = BMS64_UNION(out_relid, base_rels[i].id);
+        params.out_relid = BMS64_UNION(params.out_relid, base_rels[i].id);
     }
 
     int binoms_size = (n_rels+1)*(n_rels+1);
@@ -228,6 +228,7 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
     params.gpu_binoms = params.binoms;
 
     // scratchpad size is increased on demand, starting from a minimum capacity
+    params.gpu_pending_keys = uninit_device_vector_relid(PENDING_KEYS_SIZE);
     params.gpu_scratchpad_keys = uninit_device_vector_relid(gpuqo_dpsub_n_parallel);
     params.gpu_scratchpad_vals = uninit_device_vector_joinrel(gpuqo_dpsub_n_parallel);
     params.gpu_reduced_keys = uninit_device_vector_relid(gpuqo_dpsub_n_parallel);
@@ -258,8 +259,20 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
             params.n_sets = BINOM(params.binoms, n_rels, n_rels, i);
             params.n_joins_per_set = (1<<i) - 2;
             params.tot = params.n_sets * params.n_joins_per_set;
-            
-            uint64_t n_iters = dpsub_unfiltered_iteration(i, params);
+
+            uint64_t n_iters;
+            uint64_t filter_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_filter_threshold;
+            if (gpuqo_dpsub_filter_enable && params.tot > filter_threshold){
+#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
+                printf("\nStarting filtered iteration %d: %llu combinations\n", i, params.tot);
+#endif
+                n_iters = dpsub_filtered_iteration(i, params);
+            } else {
+#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
+                printf("\nStarting unfiltered iteration %d: %llu combinations\n", i, params.tot);
+#endif
+                n_iters = dpsub_unfiltered_iteration(i, params);
+            }
 
 #ifdef GPUQO_DEBUG
             printf("It took %d iterations\n", n_iters);
@@ -273,7 +286,7 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 
         START_TIMING(build_qt);
             
-        buildQueryTree(out_relid, params.gpu_memo_vals, &out);
+        buildQueryTree(params.out_relid, params.gpu_memo_vals, &out);
     
         STOP_TIMING(build_qt);
     

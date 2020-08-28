@@ -1091,6 +1091,16 @@ static struct config_bool ConfigureNamesBool[] =
 		true,
 		NULL, NULL, NULL
 	},
+	{
+		{"gpuqo_dpsub_filter", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Enables filtering of the DPsub join relations before evaluation."),
+			gettext_noop("Join relations are first checked for connectedness before tring all possible subsets generating them."),
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsub_filter_enable,
+		true,
+		NULL, NULL, NULL
+	},
 #endif
 	{
 		/* Not for general use --- used by SET SESSION AUTHORIZATION */
@@ -2106,6 +2116,36 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&gpuqo_dpsub_n_parallel,
 		16384, 1, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dpsub_filter_threshold", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of joins per thread above which filtering is performed (it's convenient to try many pairs in parallel even if invalid instead of always filtering out invalid join relations). Set to 0 to always perform filtering."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsub_filter_threshold,
+		16, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dpsub_filter_cpu_enum_threshold", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of join relations below which validity is checked on CPU (it's not worth offloading to GPU when parallelism is too low. Set to 0 to always perform filtering on GPU."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsub_filter_cpu_enum_threshold,
+		1024, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dpsub_filter_keys_overprovisioning", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the maximum number of join relations that will be checked in parallel in the filtering phase as a multiple of gpuqo_dpsub_n_parallel (i.e. a value of 100 means to try up to 100*gpuqo_dpsub_n_parallel join relations at a time)."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsub_filter_keys_overprovisioning,
+		100, 1, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{

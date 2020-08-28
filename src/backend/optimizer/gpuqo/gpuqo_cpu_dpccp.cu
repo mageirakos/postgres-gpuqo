@@ -48,16 +48,6 @@ std::list<RelationID>* get_all_subsets(RelationID set){
     return out;
 }
 
-RelationID get_neighbours(RelationID set, BaseRelation* base_rels, int n_rels){
-    RelationID neigs = BMS64_EMPTY;
-    while (set != BMS64_EMPTY){
-        int baserel_idx = BMS64_LOWEST_POS(set)-2;
-        neigs = BMS64_UNION(neigs, base_rels[baserel_idx].edges);
-        set = BMS64_UNSET(set, baserel_idx+1);
-    }
-    return BMS64_DIFFERENCE(neigs, set);
-}
-
 void enumerate_csg_rec(RelationID S, RelationID X, RelationID cmp, BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], emit_f emit_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
 #ifdef GPUQO_DEBUG
     printf("enumerate_csg_rec(%llu, %llu, %llu)\n", S, X, cmp);

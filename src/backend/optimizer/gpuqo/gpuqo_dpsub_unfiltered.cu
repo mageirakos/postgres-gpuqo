@@ -114,10 +114,6 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
         n_sets_per_iteration = params.n_sets;
         n_joins_per_thread = ceil_div(params.n_joins_per_set, factor);
     }
-    
-#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
-    printf("\nStarting iteration %d: %llu combinations\n", iter, params.tot);
-#endif
 
     uint64_t id_offset = 0;
     uint64_t offset = 0;

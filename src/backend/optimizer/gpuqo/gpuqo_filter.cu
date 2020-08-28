@@ -30,8 +30,39 @@ bool are_connected(JoinRelation &left_rel, JoinRelation &right_rel,
 {
     return (left_rel.edges & right_rel.id) != 0ULL;
 }
- 
 
+__host__ __device__
+RelationID get_neighbours(RelationID set, BaseRelation* base_rels, int n_rels){
+    RelationID neigs = BMS64_EMPTY;
+    while (set != BMS64_EMPTY){
+        int baserel_idx = BMS64_LOWEST_POS(set)-2;
+        neigs = BMS64_UNION(neigs, base_rels[baserel_idx].edges);
+        set = BMS64_UNSET(set, baserel_idx+1);
+    }
+    return BMS64_DIFFERENCE(neigs, set);
+}
+
+__host__ __device__
+bool is_connected(RelationID relid,
+                    BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table)
+{
+    RelationID T = BMS64_LOWEST(relid);
+    RelationID N = T;
+    do {
+        // explore only from newly found nodes that are missing
+        N = BMS64_INTERSECTION(
+            BMS64_DIFFERENCE(relid, T), 
+            get_neighbours(N, base_rels, n_rels)
+        );
+        // add new nodes to set
+        T = BMS64_UNION(T, N);
+    } while (T != relid && N != BMS64_EMPTY);
+    // either all nodes have been found or no new connected node exists
+
+    // if I managed to visit all nodes, then subgraph is connected
+    return T == relid; 
+}
+ 
 __device__
 bool filterJoinedDisconnected::operator()(thrust::tuple<RelationID, JoinRelation> t) 
 {
@@ -53,4 +84,11 @@ bool filterJoinedDisconnected::operator()(thrust::tuple<RelationID, JoinRelation
     else{
         return !are_connected(left_rel, right_rel, base_rels.get(), n_rels, edge_table.get());
     }
+}
+
+__device__
+bool filterDisconnectedRelations::operator()(RelationID relid) 
+{
+    return !is_connected(relid, 
+            base_rels.get(), n_rels, edge_table.get());
 }
