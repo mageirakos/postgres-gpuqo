@@ -30,6 +30,7 @@
 #include "optimizer/gpuqo_debug.cuh"
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
+#include "optimizer/gpuqo_binomial.cuh"
 #include "optimizer/gpuqo_query_tree.cuh"
 
 // relsize depends on algorithm
@@ -85,7 +86,7 @@ public:
         int qss_tmp = qss, sq_tmp = sq;
 
         while (sq_tmp > 0 && qss_tmp > 0){
-            uint64_t o = binoms[(sq_tmp-1) * (sq+1) + (qss_tmp-1)];
+            uint64_t o = BINOM(binoms, sq, sq_tmp-1, qss_tmp-1);
             if (sid < o){
                 s = BMS64_UNION(s, BMS64_NTH(t));
                 qss_tmp--;
@@ -260,7 +261,7 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
             
             // calculate number of combinations of relations that make up 
             // a joinrel of size i
-            uint64_t n_sets = binoms[n_rels * (n_rels+1) + i];
+            uint64_t n_sets = BINOM(binoms, n_rels, n_rels, i);
             uint64_t n_joins_per_set = (1<<i) - 2;
             uint64_t tot = n_sets * n_joins_per_set;
             
