@@ -30,6 +30,7 @@
 #include "optimizer/gpuqo_debug.cuh"
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
+#include "optimizer/gpuqo_query_tree.cuh"
 
 // relsize depends on algorithm
 #define RELSIZE (sizeof(JoinRelation))
@@ -159,25 +160,8 @@ public:
     }
 };
 
-void buildQueryTree(uint64_t idx, 
-                    thrust::device_vector<JoinRelation> &gpu_memo_vals,
-                    QueryTree **qt)
-{
-    JoinRelation jr = gpu_memo_vals[idx];
 
-    (*qt) = (QueryTree*) malloc(sizeof(QueryTree));
-    (*qt)->id = jr.id;
-    (*qt)->left = NULL;
-    (*qt)->right = NULL;
-    (*qt)->rows = jr.rows;
-    (*qt)->cost = jr.cost;
 
-    if (jr.left_relation_id == 0 && jr.right_relation_id == 0)
-        return;
-
-    buildQueryTree(jr.left_relation_idx, gpu_memo_vals, &((*qt)->left));
-    buildQueryTree(jr.right_relation_idx, gpu_memo_vals, &((*qt)->right));
-}
 
 void precompute_binoms(thrust::host_vector<uint64_t> &binoms, int N){
     for (int n = 0; n <= N; n++){

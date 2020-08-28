@@ -30,6 +30,7 @@
 #include "optimizer/gpuqo_debug.cuh"
 #include "optimizer/gpuqo_cost.cuh"
 #include "optimizer/gpuqo_filter.cuh"
+#include "optimizer/gpuqo_query_tree.cuh"
 
 #define KB 1024ULL
 #define MB (KB*1024)
@@ -110,27 +111,6 @@ public:
         return thrust::tuple<RelationID, JoinRelation>(relid, jr);
     }
 };
-
-void buildQueryTree(uint64_t idx, 
-                    uninit_device_vector_relid &gpu_memo_keys,
-                    uninit_device_vector_joinrel &gpu_memo_vals,
-                    QueryTree **qt)
-{
-    JoinRelation jr = gpu_memo_vals[idx];
-
-    (*qt) = (QueryTree*) malloc(sizeof(QueryTree));
-    (*qt)->id = jr.id;
-    (*qt)->left = NULL;
-    (*qt)->right = NULL;
-    (*qt)->rows = jr.rows;
-    (*qt)->cost = jr.cost;
-
-    if (jr.left_relation_id == 0 && jr.right_relation_id == 0)
-        return;
-
-    buildQueryTree(jr.left_relation_idx, gpu_memo_keys, gpu_memo_vals, &((*qt)->left));
-    buildQueryTree(jr.right_relation_idx, gpu_memo_keys, gpu_memo_vals, &((*qt)->right));
-}
 
 /* gpuqo_dpsize
  *
@@ -485,7 +465,7 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 
         START_TIMING(build_qt);
             
-        buildQueryTree(partition_offsets[n_rels-1], gpu_memo_keys, gpu_memo_vals, &out);
+        buildQueryTree(partition_offsets[n_rels-1], gpu_memo_vals, &out);
     
         STOP_TIMING(build_qt);
     
