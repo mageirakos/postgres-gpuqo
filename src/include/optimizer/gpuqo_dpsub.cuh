@@ -20,38 +20,34 @@ void try_join(RelationID relid, JoinRelation &jr_out,
             RelationID l, RelationID r, JoinRelation* memo_vals,
             BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table);
 
-/* unrankEvaluateDPSub
- *
- *	 unrank algorithm for DPsub GPU variant with embedded evaluation and 
- *   partial pruning.
- */
-struct unrankEvaluateDPSub : public thrust::unary_function< uint64_t,thrust::tuple<RelationID, JoinRelation> >
-{
-    thrust::device_ptr<JoinRelation> memo_vals;
-    thrust::device_ptr<BaseRelation> base_rels;
-    thrust::device_ptr<EdgeInfo> edge_table;
-    thrust::device_ptr<uint64_t> binoms;
-    int sq;
-    int qss;
-    uint64_t offset;
-    int n_pairs;
-public:
-    unrankEvaluateDPSub(
-        thrust::device_ptr<JoinRelation> _memo_vals,
-        thrust::device_ptr<BaseRelation> _base_rels,
-        int _sq,
-        thrust::device_ptr<EdgeInfo> _edge_table,
-        thrust::device_ptr<uint64_t> _binoms,
-        int _qss,
-        uint64_t _offset,
-        int _n_pairs
-    ) : memo_vals(_memo_vals), base_rels(_base_rels), sq(_sq), 
-        edge_table(_edge_table), binoms(_binoms), qss(_qss), offset(_offset),
-        n_pairs(_n_pairs)
-    {}
+typedef struct dpsub_iter_param_t{
+    BaseRelation *base_rels;
+    int n_rels;
+    EdgeInfo *edge_table;
+    thrust::device_vector<BaseRelation> gpu_base_rels;
+    thrust::device_vector<EdgeInfo> gpu_edge_table;
+    thrust::device_vector<JoinRelation> gpu_memo_vals;
+    thrust::host_vector<uint64_t> binoms;
+    thrust::device_vector<uint64_t> gpu_binoms;
+    uninit_device_vector_relid gpu_scratchpad_keys;
+    uninit_device_vector_joinrel gpu_scratchpad_vals;
+    uninit_device_vector_relid gpu_reduced_keys;
+    uninit_device_vector_joinrel gpu_reduced_vals;
+    uint64_t n_sets;
+    uint64_t n_joins_per_set;
+    uint64_t tot;
+} dpsub_iter_param_t;
 
-    __device__
-    thrust::tuple<RelationID, JoinRelation> operator()(uint64_t tid);
-};
+typedef thrust::pair<uninit_device_vector_relid::iterator, uninit_device_vector_joinrel::iterator> scatter_iter_t;
 
-#endif							/* GPUQO_DPSUB_CUH
+int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params);
+
+void dpsub_prune_scatter(int n_joins_per_thread, int n_threads, dpsub_iter_param_t &params);
+
+EXTERN_PROTOTYPE_TIMING(unrank);
+EXTERN_PROTOTYPE_TIMING(filter);
+EXTERN_PROTOTYPE_TIMING(compute);
+EXTERN_PROTOTYPE_TIMING(prune);
+EXTERN_PROTOTYPE_TIMING(scatter);
+
+#endif							/* GPUQO_DPSUB_CUH */

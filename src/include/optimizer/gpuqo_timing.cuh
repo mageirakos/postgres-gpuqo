@@ -23,8 +23,12 @@ typedef std::chrono::steady_clock::time_point time_point;
 #define NOW() std::chrono::steady_clock::now()
 #define TIME_DIFF_MS(end, begin) std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() / 1000.0
 #ifdef GPUQO_PROFILE
-#define DECLARE_TIMING(s)  		time_point timeStart_##s; double timeDiff_##s; double timeTotal_##s = 0; int count_##s = 0; double timeCheckpoint_##s = 0; int countCheckpoint_##s = 0; bool is_nv_##s=false;
-#define DECLARE_NV_TIMING(s)  		time_point timeStart_##s; double timeDiff_##s; double timeTotal_##s = 0; int count_##s = 0; double timeCheckpoint_##s = 0; int countCheckpoint_##s = 0; bool is_nv_##s=true;
+#define EXTERN_PROTOTYPE_TIMING(s)  		extern time_point timeStart_##s; extern double timeDiff_##s; extern double timeTotal_##s; extern int count_##s; extern double timeCheckpoint_##s; extern int countCheckpoint_##s; extern bool is_nv_##s
+#define PROTOTYPE_TIMING(s)  		time_point timeStart_##s; double timeDiff_##s; double timeTotal_##s; int count_##s; double timeCheckpoint_##s; int countCheckpoint_##s; bool is_nv_##s
+#define INIT_TIMING(s)  		timeTotal_##s = 0; count_##s = 0; timeCheckpoint_##s = 0; countCheckpoint_##s = 0; is_nv_##s=false
+#define INIT_NV_TIMING(s)  		timeTotal_##s = 0; count_##s = 0; timeCheckpoint_##s = 0; countCheckpoint_##s = 0; is_nv_##s=true
+#define DECLARE_TIMING(s)  		PROTOTYPE_TIMING(s); INIT_TIMING(s)
+#define DECLARE_NV_TIMING(s)  		PROTOTYPE_TIMING(s); INIT_NV_TIMING(s)
 #define START_TIMING(s)    		timeStart_##s = NOW()
 #define STOP_TIMING(s)     		if (is_nv_##s) cudaThreadSynchronize(); timeDiff_##s = TIME_DIFF_MS(NOW(), timeStart_##s); timeTotal_##s += timeDiff_##s; count_##s++
 #define CLEAR_TIMING(s)         timeTotal_##s = 0; count_##s = 0; timeCheckpoint_##s=timeTotal_##s; countCheckpoint_##s = count_##s
@@ -33,6 +37,10 @@ typedef std::chrono::steady_clock::time_point time_point;
 #define PRINT_CHECKPOINT_TIMING(s)   std::cout << #s " took " << (double)(count_##s - countCheckpoint_##s ? timeTotal_##s - timeCheckpoint_##s : 0) << "ms in total over " << count_##s - countCheckpoint_##s << " runs" << std::endl; timeCheckpoint_##s=timeTotal_##s; countCheckpoint_##s = count_##s
 #define PRINT_AVERAGE_TIMING(s) std::cout << #s " took " << (timeTotal_##s) / ((double)count_##s) << "ms in average over " << count_##s << " runs" << std::endl; timeCheckpoint_##s=timeTotal_##s; countCheckpoint_##s = count_##s
 #else  /* ifdef GPUQO_PROFILE */
+#define EXTERN_PROTOTYPE_TIMING(s)
+#define PROTOTYPE_TIMING(s)
+#define INIT_TIMING(s)
+#define INIT_NV_TIMING(s)
 #define DECLARE_TIMING(s)
 #define DECLARE_NV_TIMING(s)
 #define START_TIMING(s)
