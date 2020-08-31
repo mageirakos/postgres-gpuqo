@@ -66,9 +66,7 @@ public:
         uint64_t sid = tid + offset;
         RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
         
-#ifdef GPUQO_DEBUG 
-        printf("[%llu] s=%llu\n", tid, s);
-#endif
+        LOG_DEBUG("[%llu] s=%llu\n", tid, s);
         
         RelationID relid = s<<1;
         return relid;
@@ -110,9 +108,7 @@ public:
     
         RelationID relid = pending_keys[rid];
 
-#ifdef GPUQO_DEBUG 
-        printf("[%llu] splits_per_qs=%llu, rid=%llu, cid=[%llu,%llu), relid=%llu\n", tid, splits_per_qs, rid, cid, cid+n_pairs, relid);
-#endif
+        LOG_DEBUG("[%llu] splits_per_qs=%llu, rid=%llu, cid=[%llu,%llu), relid=%llu\n", tid, splits_per_qs, rid, cid, cid+n_pairs, relid);
         
         JoinRelation jr_out = enum_functor(relid, cid);
         return thrust::make_tuple<RelationID, JoinRelation>(relid, jr_out);
@@ -207,13 +203,11 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
         }     
         uint64_t threads_per_set = ceil_div(params.n_joins_per_set, n_joins_per_thread);   
 
-#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
-        printf("n_joins_per_thread=%llu, n_sets_per_iteration=%llu, threads_per_set=%llu\n",
+        LOG_PROFILE("n_joins_per_thread=%llu, n_sets_per_iteration=%llu, threads_per_set=%llu\n",
             n_joins_per_thread,
             n_sets_per_iteration,
             threads_per_set
         );
-#endif
 
         // do not empty all pending sets if there are some sets still to 
         // evaluate, since I will do them in the next iteration
@@ -251,11 +245,9 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
             );
             STOP_TIMING(compute);
 
-#ifdef GPUQO_DEBUG
-            printf("After tabulate\n");
-            printVector(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
-            printVector(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
-#endif
+            LOG_DEBUG("After tabulate\n");
+            DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
+            DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
 
             dpsub_prune_scatter(n_joins_per_thread, n_threads, params);
 

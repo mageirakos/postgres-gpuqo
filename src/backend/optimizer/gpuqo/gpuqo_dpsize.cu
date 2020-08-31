@@ -90,13 +90,11 @@ public:
         jr.left_relation_idx = partition_offsets[lp] + l;
         jr.right_relation_idx = partition_offsets[rp] + r;
 
-#ifdef GPUQO_DEBUG
-        printf("%llu: %llu %llu\n", 
+        LOG_DEBUG("%llu: %llu %llu\n", 
             cid, 
             jr.left_relation_idx,
             jr.right_relation_idx
         );
-#endif
         
         JoinRelation left_rel = memo_vals[jr.left_relation_idx];
         JoinRelation right_rel = memo_vals[jr.right_relation_idx];
@@ -172,10 +170,8 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 
     STOP_TIMING(init);
 
-#ifdef GPUQO_DEBUG
-    printVector(gpu_memo_keys.begin(), gpu_memo_keys.begin() + n_rels);
-    printVector(gpu_memo_vals.begin(), gpu_memo_vals.begin() + n_rels);    
-#endif
+    DUMP_VECTOR(gpu_memo_keys.begin(), gpu_memo_keys.begin() + n_rels);
+    DUMP_VECTOR(gpu_memo_vals.begin(), gpu_memo_vals.begin() + n_rels);    
 
     START_TIMING(execute);
     try{ // catch any exception in thrust
@@ -199,9 +195,7 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
                 n_combinations += partition_sizes[j-1] * partition_sizes[i-j-1];
             }
 
-#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
-            printf("\nStarting iteration %d: %d combinations\n", i, n_combinations);
-#endif
+            LOG_PROFILE("\nStarting iteration %d: %d combinations\n", i, n_combinations);
 
             // If < max_scratchpad_capacity I may need to increase it
             if (n_combinations < max_scratchpad_capacity){
@@ -310,17 +304,16 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
                     );
                     STOP_TIMING(unrank);
 
-#ifdef GPUQO_DEBUG
-                    printf("After tabulate\n");
-                    printVector(
+                    LOG_DEBUG("After tabulate\n");
+                    DUMP_VECTOR(
                         gpu_scratchpad_keys.begin()+temp_size, 
                         gpu_scratchpad_keys.begin()+(temp_size+chunk_size)
                     );
-                    printVector(
+                    DUMP_VECTOR(
                         gpu_scratchpad_vals.begin()+temp_size, 
                         gpu_scratchpad_vals.begin()+(temp_size+chunk_size)
                     );
-#endif
+
                     // give possibility to user to interrupt
                     CHECK_FOR_INTERRUPTS();
 
@@ -346,17 +339,16 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 
                     STOP_TIMING(filter);
 
-#ifdef GPUQO_DEBUG
-                    printf("After remove_if\n");
-                    printVector(
+                    LOG_DEBUG("After remove_if\n");
+                    DUMP_VECTOR(
                         gpu_scratchpad_keys.begin()+temp_size, 
                         newEnd.get_iterator_tuple().get<0>()
                     );
-                    printVector(
+                    DUMP_VECTOR(
                         gpu_scratchpad_vals.begin()+temp_size, 
                         newEnd.get_iterator_tuple().get<1>()
                     );
-#endif
+
                     // get how many rels remain after filter and add it to 
                     // temp_size
                     temp_size += thrust::distance(
@@ -388,11 +380,10 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
     
                 STOP_TIMING(sort);
     
-#ifdef GPUQO_DEBUG
-                printf("After sort_by_key\n");
-                printVector(gpu_scratchpad_keys.begin(), gpu_scratchpad_keys.begin() + temp_size);
-                printVector(gpu_scratchpad_vals.begin(), gpu_scratchpad_vals.begin() + temp_size);
-#endif
+                LOG_DEBUG("After sort_by_key\n");
+                DUMP_VECTOR(gpu_scratchpad_keys.begin(), gpu_scratchpad_keys.begin() + temp_size);
+                DUMP_VECTOR(gpu_scratchpad_vals.begin(), gpu_scratchpad_vals.begin() + temp_size);
+
                 // give possibility to user to interrupt
                 CHECK_FOR_INTERRUPTS();
     
@@ -420,11 +411,9 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
     
                 STOP_TIMING(compute_prune);
     
-#ifdef GPUQO_DEBUG
-                printf("After reduce_by_key\n");
-                printVector(gpu_memo_keys.begin(), out_iters.first);
-                printVector(gpu_memo_vals.begin(), out_iters.second);
-#endif
+                LOG_DEBUG("After reduce_by_key\n");
+                DUMP_VECTOR(gpu_memo_keys.begin(), out_iters.first);
+                DUMP_VECTOR(gpu_memo_vals.begin(), out_iters.second);
     
                 START_TIMING(update_offsets);
     
@@ -442,17 +431,14 @@ gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
     
                 STOP_TIMING(update_offsets);
     
-#ifdef GPUQO_DEBUG
-                printf("After partition_*\n");
-                printVector(partition_sizes.begin(), partition_sizes.end());
-                printVector(partition_offsets.begin(), partition_offsets.end());
-#endif
+                LOG_DEBUG("After partition_*\n");
+                DUMP_VECTOR(partition_sizes.begin(), partition_sizes.end());
+                DUMP_VECTOR(partition_offsets.begin(), partition_offsets.end());
+                
                 pruning_iter++;
             } // pruning loop: while(offset<n_combinations)
 
-#ifdef GPUQO_DEBUG
-            printf("It took %d pruning iterations", pruning_iter);
-#endif
+            LOG_DEBUG("It took %d pruning iterations", pruning_iter);
             
             PRINT_CHECKPOINT_TIMING(iter_init);
             PRINT_CHECKPOINT_TIMING(copy_pruned);

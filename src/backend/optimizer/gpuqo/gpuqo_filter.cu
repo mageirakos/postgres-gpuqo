@@ -69,12 +69,10 @@ bool filterJoinedDisconnected::operator()(thrust::tuple<RelationID, JoinRelation
     RelationID relid = t.get<0>();
     JoinRelation jr = t.get<1>();
 
-#ifdef GPUQO_DEBUG
-    printf("%llu %llu\n", 
+    LOG_DEBUG("%llu %llu\n", 
         jr.left_relation_idx,
         jr.right_relation_idx
     );
-#endif
 
     JoinRelation left_rel = memo_vals[jr.left_relation_idx];
     JoinRelation right_rel = memo_vals[jr.right_relation_idx];

@@ -74,9 +74,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
         RelationID X = top.get<2>();
         RelationID N = top.get<3>();
 
-#ifdef GPUQO_DEBUG
-        printf("[%llu: %llu, %llu] loop_stack: S=%llu, subset=%llu, X=%llu, N=%llu\n", T, I, E, S, subset, X, N);
-#endif
+        LOG_DEBUG("[%llu: %llu, %llu] loop_stack: S=%llu, subset=%llu, X=%llu, N=%llu\n", T, I, E, S, subset, X, N);
 
         subset = BMS64_NEXT_SUBSET(subset, N);
 
@@ -133,10 +131,9 @@ JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint64_t cid)
     jr_out.cost = INFD;
 
     if (cid < dpccp_splits){
-#ifdef GPUQO_DEBUG
-        printf("[%llu, %llu] splits_per_qs=%llu, dpccp_splits=%llu, cmp_cid=%llu\n", 
+        LOG_DEBUG("[%llu, %llu] splits_per_qs=%llu, dpccp_splits=%llu, cmp_cid=%llu\n", 
             relid, cid, splits_per_qs, dpccp_splits, cmp_cid);
-#endif
+
         Assert(BMS64_UNION(cid, cmp_cid) == dpccp_splits-1);
         Assert(!BMS64_INTERSECTS(cid, cmp_cid));
 

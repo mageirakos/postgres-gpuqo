@@ -18,7 +18,7 @@
 #include "optimizer/gpuqo_timing.cuh"
 #include "optimizer/gpuqo_debug.cuh"
 
-#define N_TO_SHOW 8
+#define N_TO_SHOW 16
 
 __host__
 std::ostream & operator<<(std::ostream &os, const JoinRelation& jr)

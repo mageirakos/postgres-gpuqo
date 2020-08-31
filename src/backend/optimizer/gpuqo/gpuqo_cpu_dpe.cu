@@ -67,19 +67,15 @@ void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels,
     depbuf_entry_t job;
     while ((job = depbuf->pop()).first != NULL){
         JoinRelationDPE *memo_join_rel = job.first;
-#ifdef GPUQO_DEBUG        
-        printf("Processing %llu (%d): %d pairs\n", memo_join_rel->id, 
+        LOG_DEBUG("Processing %llu (%d);: %d pairs\n", memo_join_rel->id, 
                 memo_join_rel->num_entry.load(), job.second->size());
-#endif          
         for (auto iter = job.second->begin(); iter != job.second->end(); ++iter){
             JoinRelationDPE *left_rel = iter->first;
             JoinRelationDPE *right_rel = iter->second;
 
-#ifdef GPUQO_DEBUG        
-            printf("  %llu -> %llu (%d) %llu (%d)\n", memo_join_rel->id,
+            LOG_DEBUG("  %llu -> %llu (%d) %llu (%d);\n", memo_join_rel->id,
                     left_rel->id, left_rel->num_entry.load(), right_rel->id, 
                     right_rel->num_entry.load());
-#endif
 
             while (left_rel->num_entry.load(std::memory_order_acquire) != 0) 
                 ; // busy wait for entries to be ready
@@ -128,9 +124,7 @@ void wait_and_swap_depbuf(DPEExtra* extra, BaseRelation *base_rels,
     Assert(extra->depbufs.depbuf_next->size() == 0);
     extra->depbufs.depbuf_next->clear();
 
-#ifdef GPUQO_DEBUG
-    printf("There are %d jobs in the queue\n", extra->job_count);
-#endif
+    LOG_DEBUG("There are %d jobs in the queue\n", extra->job_count);
 
     pthread_mutex_unlock(&extra->depbufs.depbuf_mutex);
 }
@@ -168,9 +162,7 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
     mExtra->depbufs.depbuf_next->push(join_rel, &left_rel, &right_rel);
     mExtra->job_count++;
 
-#ifdef GPUQO_DEBUG
-    printf("Inserted %llu (%d)\n", relid, join_rel->num_entry.load());
-#endif
+    LOG_DEBUG("Inserted %llu (%d)\n", relid, join_rel->num_entry.load());
 
     if (mExtra->job_count >= gpuqo_dpe_pairs_per_depbuf
             && mExtra->depbufs.n_waiting >= gpuqo_dpe_n_threads-1){
@@ -244,12 +236,10 @@ void* thread_function(void* _args){
         STOP_TIMING(execute);
     }
 
-#ifdef GPUQO_PROFILE
-    printf("[%d] ", args->id);
+    LOG_PROFILE("[%d] ", args->id);
     PRINT_TOTAL_TIMING(wait);
-    printf("[%d] ", args->id);
+    LOG_PROFILE("[%d] ", args->id);
     PRINT_TOTAL_TIMING(execute);
-#endif
 
     return NULL;
 }

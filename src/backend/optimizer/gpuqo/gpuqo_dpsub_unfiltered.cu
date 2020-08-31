@@ -69,16 +69,12 @@ public:
         uint64_t sid = real_id / splits_per_qs;
         uint64_t cid = real_id % splits_per_qs;
 
-#ifdef GPUQO_DEBUG 
-        printf("[%llu] splits_per_qs=%llu, sid=%llu, cid=[%llu,%llu)\n", tid, splits_per_qs, sid, cid, cid+n_pairs);
-#endif
+        LOG_DEBUG("[%llu] splits_per_qs=%llu, sid=%llu, cid=[%llu,%llu)\n", tid, splits_per_qs, sid, cid, cid+n_pairs);
 
         RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
         RelationID relid = s<<1;
 
-#ifdef GPUQO_DEBUG 
-        printf("[%llu] s=%llu\n", tid, s);
-#endif
+        LOG_DEBUG("[%llu] s=%llu\n", tid, s);
 
         JoinRelation jr_out = enum_functor(relid, cid);
         return thrust::tuple<RelationID, JoinRelation>(relid, jr_out);
@@ -139,11 +135,9 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
         );
         STOP_TIMING(unrank);
 
-#ifdef GPUQO_DEBUG
-        printf("After tabulate\n");
-        printVector(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
-        printVector(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
-#endif
+        LOG_DEBUG("After tabulate\n");
+        DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
+        DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
 
         dpsub_prune_scatter(n_joins_per_thread, n_threads, params);
 

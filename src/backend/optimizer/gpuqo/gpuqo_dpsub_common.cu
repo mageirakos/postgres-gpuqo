@@ -75,9 +75,7 @@ void try_join(RelationID relid, JoinRelation &jr_out,
         return;
     }
 
-#ifdef GPUQO_DEBUG
-    printf("try_join(%llu, %llu, %llu)\n", relid, l, r);
-#endif
+    LOG_DEBUG("try_join(%llu, %llu, %llu)\n", relid, l, r);
 
     JoinRelation jr;
     jr.id = relid;
@@ -95,9 +93,7 @@ void try_join(RelationID relid, JoinRelation &jr_out,
         
         if (are_connected(left_rel, right_rel, base_rels, n_rels, edge_table)){
 
-#ifdef GPUQO_DEBUG 
-        printf("[%llu] Joining %llu and %llu\n", relid, l, r);
-#endif
+        LOG_DEBUG("[%llu] Joining %llu and %llu\n", relid, l, r);
 
             jr.rows = estimate_join_rows(jr, left_rel, right_rel,
                                 base_rels, n_rels, edge_table);
@@ -109,14 +105,10 @@ void try_join(RelationID relid, JoinRelation &jr_out,
                 jr_out = jr;
             }
         } else {
-#ifdef GPUQO_DEBUG 
-            printf("[%llu] Cannot join %llu and %llu\n", relid, l, r);
-#endif
+            LOG_DEBUG("[%llu] Cannot join %llu and %llu\n", relid, l, r);
         }
     } else {
-#ifdef GPUQO_DEBUG 
-        printf("[%llu] Invalid subsets %llu and %llu\n", relid, l, r);
-#endif
+        LOG_DEBUG("[%llu] Invalid subsets %llu and %llu\n", relid, l, r);
     }
 }
 
@@ -176,11 +168,9 @@ void dpsub_prune_scatter(int n_joins_per_thread, int n_threads, dpsub_iter_param
         );
     }
 
-#ifdef GPUQO_DEBUG
-    printf("After reduce_by_key\n");
-    printVector(scatter_from_iters.first, scatter_to_iters.first);
-    printVector(scatter_from_iters.second, scatter_to_iters.second);
-#endif
+    LOG_DEBUG("After reduce_by_key\n");
+    DUMP_VECTOR(scatter_from_iters.first, scatter_to_iters.first);
+    DUMP_VECTOR(scatter_from_iters.second, scatter_to_iters.second);
 
     START_TIMING(scatter);
     thrust::scatter(
@@ -257,9 +247,7 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
 
     STOP_TIMING(init);
 
-#ifdef GPUQO_DEBUG
-    printVector(params.gpu_binoms.begin(), params.gpu_binoms.end());    
-#endif
+    DUMP_VECTOR(params.gpu_binoms.begin(), params.gpu_binoms.end());    
 
     START_TIMING(execute);
     try{ // catch any exception in thrust
@@ -285,25 +273,20 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
             uint64_t filter_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_filter_threshold;
             uint64_t csg_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_csg_threshold;
             if (gpuqo_dpsub_csg_enable && params.tot > csg_threshold){
-#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
-                printf("\nStarting filtered-csg iteration %d: %llu combinations\n", i, params.tot);
-#endif
+                LOG_PROFILE("\nStarting filtered-csg iteration %d: %llu combinations\n", i, params.tot);
+                
                 n_iters = dpsub_filtered_iteration<dpsubEnumerateCsg>(i, params);
             } else if (gpuqo_dpsub_filter_enable && params.tot > filter_threshold){
-#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
-                printf("\nStarting filtered iteration %d: %llu combinations\n", i, params.tot);
-#endif
+                LOG_PROFILE("\nStarting filtered iteration %d: %llu combinations\n", i, params.tot);
+
                 n_iters = dpsub_filtered_iteration<dpsubEnumerateAllSubs>(i, params);
             } else {
-#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
-                printf("\nStarting unfiltered iteration %d: %llu combinations\n", i, params.tot);
-#endif
+                LOG_PROFILE("\nStarting unfiltered iteration %d: %llu combinations\n", i, params.tot);
+
                 n_iters = dpsub_unfiltered_iteration<dpsubEnumerateAllSubs>(i, params);
             }
 
-#ifdef GPUQO_DEBUG
-            printf("It took %d iterations\n", n_iters);
-#endif
+            LOG_DEBUG("It took %d iterations\n", n_iters);
             PRINT_CHECKPOINT_TIMING(unrank);
             PRINT_CHECKPOINT_TIMING(filter);
             PRINT_CHECKPOINT_TIMING(compute);
