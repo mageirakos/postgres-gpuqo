@@ -36,7 +36,6 @@
 bool gpuqo_dpsub_csg_enable;
 int gpuqo_dpsub_csg_threshold;
 
-typedef thrust::tuple<RelationID, RelationID> emit_stack_elem_t;
 typedef thrust::tuple<RelationID, RelationID, RelationID, RelationID> loop_stack_elem_t;
 
 template<int MAX_DEPTH>
@@ -44,9 +43,6 @@ __device__
 void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     JoinRelation &jr_out, JoinRelation* memo_vals,
                     BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table){
-    // S, X
-    emit_stack_elem_t emit_stack[MAX_DEPTH];
-    size_t emit_stack_size = 0;
     // S, subset, X, N
     loop_stack_elem_t loop_stack[MAX_DEPTH];
     size_t loop_stack_size = 0;
@@ -62,61 +58,61 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
         int idx = BMS64_HIGHEST_POS(temp)-1;
         RelationID v = BMS64_NTH(idx);
         
-        emit_stack[emit_stack_size++] = thrust::make_tuple(v,
-                                            BMS64_SET_ALL_LOWER_INC(v));
+        loop_stack[loop_stack_size++] = thrust::make_tuple(
+            BMS64_EMPTY,
+            BMS64_EMPTY,
+            BMS64_SET_ALL_LOWER_INC(v),
+            v
+        );
         temp = BMS64_DIFFERENCE(temp, v);
     }
 
-    while (emit_stack_size != 0 || loop_stack_size != 0){
-        if (emit_stack_size != 0){
-            emit_stack_elem_t top = emit_stack[--emit_stack_size];
-            RelationID S = top.get<0>();
-            RelationID X = top.get<1>();
+    while (loop_stack_size != 0){
+        loop_stack_elem_t top = loop_stack[--loop_stack_size];
+        RelationID S = top.get<0>();
+        RelationID subset = top.get<1>();
+        RelationID X = top.get<2>();
+        RelationID N = top.get<3>();
 
 #ifdef GPUQO_DEBUG
-            printf("[%llu: %llu, %llu] emit_stack: S=%llu, X=%llu\n", T, I, E, S, X);
+        printf("[%llu: %llu, %llu] loop_stack: S=%llu, subset=%llu, X=%llu, N=%llu\n", T, I, E, S, subset, X, N);
 #endif
-            
-            if (BMS64_IS_SUBSET(I, S)){
-                try_join(T, jr_out, S, BMS64_DIFFERENCE(T, S), 
-                    memo_vals, base_rels, n_rels, edge_table);
+
+        subset = BMS64_NEXT_SUBSET(subset, N);
+
+        RelationID emit_S = BMS64_UNION(S,subset);
+        RelationID emit_X = BMS64_UNION(X, N);
+
+        if (subset != BMS64_EMPTY){
+            loop_stack[loop_stack_size++] = thrust::make_tuple(
+                S, subset, X, N
+            );
+
+            if (BMS64_IS_SUBSET(I, emit_S)){
+                try_join(T, jr_out, emit_S, BMS64_DIFFERENCE(T, emit_S), 
+                        memo_vals, base_rels, n_rels, edge_table);
             }
 
-            RelationID N = BMS64_INTERSECTION(
-                BMS64_DIFFERENCE(get_neighbours(S, base_rels, n_rels), X),
+            RelationID new_N = BMS64_INTERSECTION(
+                BMS64_DIFFERENCE(
+                    get_neighbours(emit_S, base_rels, n_rels), 
+                    emit_X
+                ),
                 BMS64_DIFFERENCE(T, E)
             );
-            RelationID lowI = BMS64_LOWEST(BMS64_DIFFERENCE(I, S));
-        
+            
             // If possible, directly move to smaller I (it does not make 
             // sense to explore other rels in I first since it won't be 
             // possible to go back)
-            if (BMS64_INTERSECTS(lowI,N))
-                N = lowI;
+            RelationID lowI = BMS64_LOWEST(BMS64_DIFFERENCE(I, emit_S));
+            if (BMS64_INTERSECTS(lowI, new_N)){
+                new_N = lowI;
+            }
 
-            loop_stack[loop_stack_size++] = thrust::make_tuple(
-                S, BMS64_EMPTY, X, N
-            );
-        }
-
-        if (loop_stack_size != 0){
-            loop_stack_elem_t top = loop_stack[--loop_stack_size];
-            RelationID S = top.get<0>();
-            RelationID subset = top.get<1>();
-            RelationID X = top.get<2>();
-            RelationID N = top.get<3>();
-
-#ifdef GPUQO_DEBUG
-            printf("[%llu: %llu, %llu] loop_stack: S=%llu, subset=%llu, X=%llu, N=%llu\n", T, I, E, S, subset, X, N);
-#endif
-
-            subset = BMS64_NEXT_SUBSET(subset, N);
-            if (subset != BMS64_EMPTY){
+            // do not add useless elements to stack
+            if (new_N != BMS64_EMPTY){
                 loop_stack[loop_stack_size++] = thrust::make_tuple(
-                    S, subset, X, N
-                );
-                emit_stack[emit_stack_size++] = thrust::make_tuple(
-                    BMS64_UNION(S,subset), BMS64_UNION(X, N)
+                    emit_S, BMS64_EMPTY, emit_X, new_N
                 );
             }
         }
