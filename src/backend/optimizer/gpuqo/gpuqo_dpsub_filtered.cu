@@ -114,8 +114,8 @@ public:
         printf("[%llu] splits_per_qs=%llu, rid=%llu, cid=[%llu,%llu), relid=%llu\n", tid, splits_per_qs, rid, cid, cid+n_pairs, relid);
 #endif
         
-    JoinRelation jr_out = enum_functor(relid, cid);
-    return thrust::make_tuple<RelationID, JoinRelation>(relid, jr_out);
+        JoinRelation jr_out = enum_functor(relid, cid);
+        return thrust::make_tuple<RelationID, JoinRelation>(relid, jr_out);
     }
 };
 
@@ -204,7 +204,16 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
         } else{
             n_sets_per_iteration = n_pending_sets;
             n_joins_per_thread = ceil_div(params.n_joins_per_set, factor);
-        }        
+        }     
+        uint64_t threads_per_set = ceil_div(params.n_joins_per_set, n_joins_per_thread);   
+
+#if defined(GPUQO_DEBUG) || defined(GPUQO_PROFILE)
+        printf("n_joins_per_thread=%llu, n_sets_per_iteration=%llu, threads_per_set=%llu\n",
+            n_joins_per_thread,
+            n_sets_per_iteration,
+            threads_per_set
+        );
+#endif
 
         // do not empty all pending sets if there are some sets still to 
         // evaluate, since I will do them in the next iteration
@@ -212,7 +221,6 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
         while (n_pending_sets >= gpuqo_dpsub_n_parallel 
             || (n_pending_sets > 0 && n_remaining_sets == 0)
         ){
-            uint64_t threads_per_set = ceil_div(params.n_joins_per_set, n_joins_per_thread);
             uint64_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);
             uint64_t n_threads = n_eval_sets * threads_per_set;
             
