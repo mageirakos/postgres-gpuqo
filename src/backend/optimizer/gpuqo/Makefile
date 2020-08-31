@@ -24,9 +24,19 @@ NVCC := $(cuda_path)/bin/nvcc
 NVCCFLAGS = $(CPPFLAGS)
 
 ifeq ($(enable_debug),yes)
-NVCCFLAGS += -O0 -g
+NVCCFLAGS += -g -lineinfo
+endif
+
+ifneq (,$(findstring -O0,$(CFLAGS)))
+    NVCCFLAGS += -O0
+else ifneq (,$(findstring -O1,$(CFLAGS)))
+    NVCCFLAGS += -O1
+else ifneq (,$(findstring -O2,$(CFLAGS)))
+    NVCCFLAGS += -O2
+else ifneq (,$(findstring -O3,$(CFLAGS)))
+    NVCCFLAGS += -O3
 else
-NVCCFLAGS += -O2 
+	NVCCFLAGS += -O2
 endif
 
 ifeq ($(enable_gpuqo_profiling),yes)
