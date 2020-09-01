@@ -121,7 +121,7 @@ __device__
 JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint64_t cid)
 {
     uint64_t qss = BMS64_SIZE(relid);
-    uint64_t splits_per_qs = ceil_div((1<<qss), n_pairs);
+    uint64_t splits_per_qs = ceil_div((1<<qss-2), n_pairs);
     
     uint64_t dpccp_splits = BMS64_HIGHEST(splits_per_qs);
     uint64_t cmp_cid = dpccp_splits-1 - cid;
