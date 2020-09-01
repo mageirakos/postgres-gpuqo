@@ -34,10 +34,11 @@ bool are_connected(JoinRelation &left_rel, JoinRelation &right_rel,
 __host__ __device__
 RelationID get_neighbours(RelationID set, BaseRelation* base_rels, int n_rels){
     RelationID neigs = BMS64_EMPTY;
-    while (set != BMS64_EMPTY){
-        int baserel_idx = BMS64_LOWEST_POS(set)-2;
+    RelationID temp = set;
+    while (temp != BMS64_EMPTY){
+        int baserel_idx = BMS64_LOWEST_POS(temp)-2;
         neigs = BMS64_UNION(neigs, base_rels[baserel_idx].edges);
-        set = BMS64_UNSET(set, baserel_idx+1);
+        temp = BMS64_UNSET(temp, baserel_idx+1);
     }
     return BMS64_DIFFERENCE(neigs, set);
 }
