@@ -84,7 +84,7 @@ struct evaluateFilteredDPSub : public thrust::unary_function< uint64_t, thrust::
     int sq;
     int qss;
     uint64_t n_pending_sets;
-    int n_pairs;
+    int n_splits;
     BinaryFunction enum_functor;
 public:
     evaluateFilteredDPSub(
@@ -93,29 +93,29 @@ public:
         int _sq,
         int _qss,
         uint64_t _n_pending_sets,
-        int _n_pairs
+        int _n_splits
     ) : pending_keys(_pending_keys), 
         enum_functor(_enum_functor), sq(_sq), 
-        qss(_qss), n_pending_sets(_n_pending_sets), n_pairs(_n_pairs)
+        qss(_qss), n_pending_sets(_n_pending_sets), n_splits(_n_splits)
     {}
 
     __device__
     thrust::tuple<RelationID, JoinRelation>  operator()(uint64_t tid)
     {
-        uint64_t splits_per_qs = ceil_div((1<<qss) - 2, n_pairs);
-        uint64_t rid = n_pending_sets - 1 - (tid / splits_per_qs);
-        uint64_t cid = tid % splits_per_qs;
+        uint64_t rid = n_pending_sets - 1 - (tid / n_splits);
+        uint64_t cid = tid % n_splits;
     
         RelationID relid = pending_keys[rid];
 
-        LOG_DEBUG("[%llu] splits_per_qs=%llu, rid=%llu, cid=[%llu,%llu), relid=%llu\n", tid, splits_per_qs, rid, cid, cid+n_pairs, relid);
+        LOG_DEBUG("[%llu] n_splits=%d, rid=%llu, cid=[%llu,%llu), relid=%llu\n", 
+                tid, n_splits, rid, cid, 
+                cid+ceil_div((1<<qss) - 2, n_splits), relid);
         
         JoinRelation jr_out = enum_functor(relid, cid);
         return thrust::make_tuple<RelationID, JoinRelation>(relid, jr_out);
     }
 };
 
-template<typename enum_functor>
 int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){   
     int n_iters = 0;
     uint64_t set_offset = 0;
@@ -209,6 +209,15 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
             threads_per_set
         );
 
+        uint64_t csg_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_csg_threshold;
+        thrust::unary_function< uint64_t, thrust::tuple<RelationID, JoinRelation> > enum_functor;
+        bool use_csg = (gpuqo_dpsub_csg_enable && n_pending_sets * params.n_joins_per_set >= csg_threshold);
+
+        if (use_csg){
+            LOG_DEBUG("Using CSG enumeration\n");
+        } else{
+            LOG_DEBUG("Using all subsets enumeration\n");
+        }
         // do not empty all pending sets if there are some sets still to 
         // evaluate, since I will do them in the next iteration
         // If no sets remain, then I will empty all pending
@@ -217,39 +226,66 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
         ){
             uint64_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);
             uint64_t n_threads = n_eval_sets * threads_per_set;
-            
+
             START_TIMING(compute);
-            thrust::tabulate(
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    params.gpu_scratchpad_keys.begin(),
-                    params.gpu_scratchpad_vals.begin()
-                )),
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    params.gpu_scratchpad_keys.begin()+n_threads,
-                    params.gpu_scratchpad_vals.begin()+n_threads
-                )),
-                evaluateFilteredDPSub<enum_functor>(
-                    params.gpu_pending_keys.data(),
-                    enum_functor(
-                        params.gpu_memo_vals.data(),
-                        params.gpu_base_rels.data(),
+            if (use_csg) {
+                thrust::tabulate(
+                    thrust::make_zip_iterator(thrust::make_tuple(
+                        params.gpu_scratchpad_keys.begin(),
+                        params.gpu_scratchpad_vals.begin()
+                    )),
+                    thrust::make_zip_iterator(thrust::make_tuple(
+                        params.gpu_scratchpad_keys.begin()+n_threads,
+                        params.gpu_scratchpad_vals.begin()+n_threads
+                    )),
+                    evaluateFilteredDPSub<dpsubEnumerateCsg>(
+                        params.gpu_pending_keys.data(),
+                        dpsubEnumerateCsg(
+                            params.gpu_memo_vals.data(),
+                            params.gpu_base_rels.data(),
+                            params.n_rels,
+                            params.gpu_edge_table.data(),
+                            threads_per_set
+                        ),
                         params.n_rels,
-                        params.gpu_edge_table.data(),
-                        n_joins_per_thread
-                    ),
-                    params.n_rels,
-                    iter,
-                    n_pending_sets,
-                    n_joins_per_thread
-                ) 
-            );
+                        iter,
+                        n_pending_sets,
+                        threads_per_set
+                    )                
+                );
+            } else {
+                thrust::tabulate(
+                    thrust::make_zip_iterator(thrust::make_tuple(
+                        params.gpu_scratchpad_keys.begin(),
+                        params.gpu_scratchpad_vals.begin()
+                    )),
+                    thrust::make_zip_iterator(thrust::make_tuple(
+                        params.gpu_scratchpad_keys.begin()+n_threads,
+                        params.gpu_scratchpad_vals.begin()+n_threads
+                    )),
+                    evaluateFilteredDPSub<dpsubEnumerateAllSubs>(
+                        params.gpu_pending_keys.data(),
+                        dpsubEnumerateAllSubs(
+                            params.gpu_memo_vals.data(),
+                            params.gpu_base_rels.data(),
+                            params.n_rels,
+                            params.gpu_edge_table.data(),
+                            threads_per_set
+                        ),
+                        params.n_rels,
+                        iter,
+                        n_pending_sets,
+                        threads_per_set
+                    )             
+                );
+            }            
             STOP_TIMING(compute);
 
             LOG_DEBUG("After tabulate\n");
             DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
             DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
 
-            dpsub_prune_scatter(n_joins_per_thread, n_threads, params);
+            dpsub_prune_scatter(threads_per_set, n_threads, params);
 
             n_pending_sets -= n_eval_sets;
         }
@@ -260,5 +296,3 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
     return n_iters;
 }
 
-template int dpsub_filtered_iteration<dpsubEnumerateAllSubs>(int iter, dpsub_iter_param_t &params);
-template int dpsub_filtered_iteration<dpsubEnumerateCsg>(int iter, dpsub_iter_param_t &params);

@@ -119,11 +119,8 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
 
 __device__
 JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint64_t cid)
-{
-    uint64_t qss = BMS64_SIZE(relid);
-    uint64_t splits_per_qs = ceil_div((1<<qss-2), n_pairs);
-    
-    uint64_t dpccp_splits = BMS64_HIGHEST(splits_per_qs);
+{ 
+    uint64_t dpccp_splits = BMS64_HIGHEST(n_splits);
     uint64_t cmp_cid = dpccp_splits-1 - cid;
 
     JoinRelation jr_out;
@@ -131,8 +128,8 @@ JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint64_t cid)
     jr_out.cost = INFD;
 
     if (cid < dpccp_splits){
-        LOG_DEBUG("[%llu, %llu] splits_per_qs=%llu, dpccp_splits=%llu, cmp_cid=%llu\n", 
-            relid, cid, splits_per_qs, dpccp_splits, cmp_cid);
+        LOG_DEBUG("[%llu, %llu] n_splits=%d, dpccp_splits=%llu, cmp_cid=%llu\n", 
+            relid, cid, n_splits, dpccp_splits, cmp_cid);
 
         Assert(BMS64_UNION(cid, cmp_cid) == dpccp_splits-1);
         Assert(!BMS64_INTERSECTS(cid, cmp_cid));

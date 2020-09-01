@@ -118,6 +118,8 @@ JoinRelation dpsubEnumerateAllSubs::operator()(RelationID relid, uint64_t cid)
     JoinRelation jr_out;
     jr_out.id = BMS64_EMPTY;
     jr_out.cost = INFD;
+    int qss = BMS64_SIZE(relid);
+    uint64_t n_pairs = ceil_div((1<<qss)-2, n_splits);
     RelationID l = BMS64_EXPAND_TO_MASK((cid)*n_pairs+1, relid);
     RelationID r;
 
@@ -133,14 +135,14 @@ JoinRelation dpsubEnumerateAllSubs::operator()(RelationID relid, uint64_t cid)
     return jr_out;
 }
 
-void dpsub_prune_scatter(int n_joins_per_thread, int n_threads, dpsub_iter_param_t &params){
+void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t &params){
     // give possibility to user to interrupt
     CHECK_FOR_INTERRUPTS();
 
     scatter_iter_t scatter_from_iters;
     scatter_iter_t scatter_to_iters;
 
-    if (n_joins_per_thread < params.n_joins_per_set){
+    if (threads_per_set != 1){
         START_TIMING(prune);
         scatter_from_iters = thrust::make_pair(
             params.gpu_reduced_keys.begin(),
@@ -272,18 +274,15 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
             uint64_t n_iters;
             uint64_t filter_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_filter_threshold;
             uint64_t csg_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_csg_threshold;
-            if (gpuqo_dpsub_csg_enable && params.tot > csg_threshold){
-                LOG_PROFILE("\nStarting filtered-csg iteration %d: %llu combinations\n", i, params.tot);
-                
-                n_iters = dpsub_filtered_iteration<dpsubEnumerateCsg>(i, params);
-            } else if (gpuqo_dpsub_filter_enable && params.tot > filter_threshold){
+            if ((gpuqo_dpsub_filter_enable && params.tot > filter_threshold) 
+                    || (gpuqo_dpsub_csg_enable && params.tot > csg_threshold)){
                 LOG_PROFILE("\nStarting filtered iteration %d: %llu combinations\n", i, params.tot);
 
-                n_iters = dpsub_filtered_iteration<dpsubEnumerateAllSubs>(i, params);
+                n_iters = dpsub_filtered_iteration(i, params);
             } else {
                 LOG_PROFILE("\nStarting unfiltered iteration %d: %llu combinations\n", i, params.tot);
 
-                n_iters = dpsub_unfiltered_iteration<dpsubEnumerateAllSubs>(i, params);
+                n_iters = dpsub_unfiltered_iteration(i, params);
             }
 
             LOG_DEBUG("It took %d iterations\n", n_iters);

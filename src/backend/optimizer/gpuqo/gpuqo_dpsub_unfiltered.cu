@@ -47,7 +47,7 @@ struct unrankEvaluateDPSub : public thrust::unary_function< uint64_t,thrust::tup
     int sq;
     int qss;
     uint64_t offset;
-    int n_pairs;
+    int n_splits;
     BinaryFunction enum_functor;
 public:
     unrankEvaluateDPSub(
@@ -56,20 +56,20 @@ public:
         thrust::device_ptr<uint64_t> _binoms,
         int _qss,
         uint64_t _offset,
-        int _n_pairs
+        int _n_splits
     ) : enum_functor(_enum_functor), sq(_sq), binoms(_binoms), 
-        qss(_qss), offset(_offset), n_pairs(_n_pairs)
+        qss(_qss), offset(_offset), n_splits(_n_splits)
     {}
  
     __device__
     thrust::tuple<RelationID, JoinRelation> operator()(uint64_t tid)
     {
-        uint64_t splits_per_qs = ceil_div((1<<qss) - 2, n_pairs);
         uint64_t real_id = tid + offset;
-        uint64_t sid = real_id / splits_per_qs;
-        uint64_t cid = real_id % splits_per_qs;
+        uint64_t sid = real_id / n_splits;
+        uint64_t cid = real_id % n_splits;
 
-        LOG_DEBUG("[%llu] splits_per_qs=%llu, sid=%llu, cid=[%llu,%llu)\n", tid, splits_per_qs, sid, cid, cid+n_pairs);
+        LOG_DEBUG("[%llu] n_splits=%d, sid=%llu, cid=[%llu,%llu)\n", 
+                tid, n_splits, sid, cid, cid+ceil_div((1<<qss) - 2, n_splits));
 
         RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
         RelationID relid = s<<1;
@@ -81,7 +81,6 @@ public:
     }
 };
 
-template<typename enum_functor>
 int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
     uint64_t n_joins_per_thread;
     uint64_t n_sets_per_iteration;
@@ -118,19 +117,19 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
                 params.gpu_scratchpad_keys.begin()+n_threads,
                 params.gpu_scratchpad_vals.begin()+n_threads
             )),
-            unrankEvaluateDPSub<enum_functor>(
-                enum_functor(
+            unrankEvaluateDPSub<dpsubEnumerateAllSubs>(
+                dpsubEnumerateAllSubs(
                     params.gpu_memo_vals.data(),
                     params.gpu_base_rels.data(),
                     params.n_rels,
                     params.gpu_edge_table.data(),
-                    n_joins_per_thread
+                    threads_per_set
                 ),
                 params.n_rels,
                 params.gpu_binoms.data(),
                 iter,
                 id_offset,
-                n_joins_per_thread
+                threads_per_set
             ) 
         );
         STOP_TIMING(unrank);
@@ -139,7 +138,7 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
         DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
         DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
 
-        dpsub_prune_scatter(n_joins_per_thread, n_threads, params);
+        dpsub_prune_scatter(threads_per_set, n_threads, params);
 
         n_iters++;
         id_offset += n_threads;
@@ -148,6 +147,3 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
 
     return n_iters;
 }
-
-template int dpsub_unfiltered_iteration<dpsubEnumerateAllSubs>(int iter, dpsub_iter_param_t &params);
-template int dpsub_unfiltered_iteration<dpsubEnumerateCsg>(int iter, dpsub_iter_param_t &params);
