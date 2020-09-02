@@ -42,11 +42,3 @@ extern "C" void gpuqo_free(void* p){
         free(p);
     }
 }
-
-extern "C" void gpuqo_prefetch(GpuqoPlannerInfo* info){
-    if (using_gpu()){
-        cudaMemPrefetchAsync(info->base_rels, info->n_rels*sizeof(BaseRelation), 0, NULL);
-        cudaMemPrefetchAsync(info->edge_table, info->n_rels*info->n_rels*sizeof(EdgeInfo), 0, NULL);
-        cudaMemPrefetchAsync(info, sizeof(GpuqoPlannerInfo), 0, NULL);
-    }
-}

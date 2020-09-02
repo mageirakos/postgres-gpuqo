@@ -30,6 +30,5 @@ extern QueryTree* gpuqo_dpe_dpccp(GpuqoPlannerInfo* info);
 extern bool gpuqo_check_can_run(PlannerInfo* root);
 extern void* gpuqo_malloc(size_t size);
 extern void gpuqo_free(void* p);
-extern void gpuqo_prefetch(GpuqoPlannerInfo* info);
 
 #endif							/* GPUQO_H */

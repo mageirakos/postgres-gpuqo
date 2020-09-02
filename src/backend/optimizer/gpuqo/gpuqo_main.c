@@ -261,9 +261,6 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
         info->base_rels[i++] = makeBaseRelation(rel, root);
     }
     fillEdgeTable(root, initial_rels, info);
-    
-    // prefetch to GPU (noop if on CPU)
-    gpuqo_prefetch(info);
 
 #ifdef OPTIMIZER_DEBUG
     printEdges(info);

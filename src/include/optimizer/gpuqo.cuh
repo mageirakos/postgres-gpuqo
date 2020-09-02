@@ -113,6 +113,5 @@ typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation
 
 extern "C" void* gpuqo_malloc(size_t size);
 extern "C" void gpuqo_free(void* p);
-extern "C" void gpuqo_prefetch(GpuqoPlannerInfo* info);
 
 #endif							/* GPUQO_CUH */
