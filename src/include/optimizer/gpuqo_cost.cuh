@@ -25,32 +25,25 @@ double baserel_cost(BaseRelation &base_rel);
 
 extern __host__ __device__
 double compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
-                    JoinRelation &right_rel, BaseRelation* base_rels, 
-                    int n_rels, EdgeInfo* edge_table
+                    JoinRelation &right_rel, GpuqoPlannerInfo* info
 );
 
 extern __host__ __device__
 double estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
-                    JoinRelation &right_rel, BaseRelation* base_rels, 
-                    int n_rels, EdgeInfo* edge_table
+                    JoinRelation &right_rel, GpuqoPlannerInfo* info
 );
 
 struct joinCost : public thrust::unary_function<JoinRelation,JoinRelation>
 {
     thrust::device_ptr<RelationID> memo_keys;
     thrust::device_ptr<JoinRelation> memo_vals;
-    thrust::device_ptr<BaseRelation> base_rels;
-    thrust::device_ptr<EdgeInfo> edge_table;
-    int n_rels;
+    GpuqoPlannerInfo* info;
 public:
     joinCost(
         thrust::device_ptr<RelationID> _memo_keys,
         thrust::device_ptr<JoinRelation> _memo_vals,
-        thrust::device_ptr<BaseRelation> _base_rels,
-        int _n_rels,
-        thrust::device_ptr<EdgeInfo> _edge_table
-    ) : memo_keys(_memo_keys), memo_vals(_memo_vals), base_rels(_base_rels),
-        edge_table(_edge_table), n_rels(_n_rels)
+        GpuqoPlannerInfo* _info
+    ) : memo_keys(_memo_keys), memo_vals(_memo_vals), info(_info)
     {}
 
     __device__

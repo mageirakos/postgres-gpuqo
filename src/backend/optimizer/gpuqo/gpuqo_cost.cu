@@ -21,18 +21,18 @@
 
 __host__ __device__
 bool has_useful_index(JoinRelation &left_rel, JoinRelation &right_rel,
-                    BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table){
+                    GpuqoPlannerInfo* info){
     if (BMS64_SIZE(right_rel.id) != 1)  // inner must be base rel
         return false;
     // -1 since it's 1-indexed, 
     // another -1 since relation with id 0b10 is at index 0 and so on
     int baserel_right_idx = BMS64_LOWEST_POS(right_rel.id) - 2;
-    BaseRelation &baserel_right = base_rels[baserel_right_idx];
+    BaseRelation &baserel_right = info->base_rels[baserel_right_idx];
     RelationID baserel_right_edges = baserel_right.edges;
 
     while (baserel_right_edges != BMS64_EMPTY){
         int baserel_left_idx = BMS64_LOWEST_POS(baserel_right_edges) - 2;
-        if(edge_table[baserel_left_idx*n_rels+baserel_right_idx].has_index)
+        if(info->edge_table[baserel_left_idx*info->n_rels+baserel_right_idx].has_index)
             return true;
         baserel_right_edges = BMS64_UNSET(baserel_right_edges, baserel_left_idx+1);
     }
@@ -48,15 +48,13 @@ double baserel_cost(BaseRelation &base_rel){
 __host__ __device__
 double 
 compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
-                    JoinRelation &right_rel,
-                    BaseRelation* base_rels, int n_rels,
-                    EdgeInfo* edge_table)
+                    JoinRelation &right_rel, GpuqoPlannerInfo* info)
 {
     double hash_cost = HASHJOIN_COEFF * join_rel.rows + left_rel.cost + right_rel.cost;
     double nl_cost = left_rel.cost + left_rel.rows * right_rel.cost;
     double inl_cost;
 
-    if (has_useful_index(left_rel, right_rel, base_rels, n_rels, edge_table)){
+    if (has_useful_index(left_rel, right_rel, info)){
         inl_cost = left_rel.cost + INDEXSCAN_COEFF * left_rel.rows * max(join_rel.rows/left_rel.rows, 1.0);
     } else{
         inl_cost = INFD;
@@ -74,8 +72,7 @@ compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
 __host__ __device__
 double 
 estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
-                    JoinRelation &right_rel, BaseRelation* base_rels, 
-                    int n_rels, EdgeInfo* edge_table) 
+                    JoinRelation &right_rel, GpuqoPlannerInfo* info) 
 {
     double sel = 1.0;
     
@@ -89,13 +86,13 @@ estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
         // -1 since it's 1-indexed, 
         // another -1 since relation with id 0b10 is at index 0 and so on
         int baserel_left_idx = BMS64_LOWEST_POS(left_id) - 2;
-        BaseRelation &baserel_left = base_rels[baserel_left_idx];
+        BaseRelation &baserel_left = info->base_rels[baserel_left_idx];
         RelationID baserel_left_edges = baserel_left.edges;
 
         while (baserel_left_edges != BMS64_EMPTY){
             int baserel_right_idx = BMS64_LOWEST_POS(baserel_left_edges) - 2;
             if (BMS64_IS_SET(right_rel.id, baserel_right_idx+1)){
-                sel *= edge_table[baserel_left_idx*n_rels+baserel_right_idx].sel;
+                sel *= info->edge_table[baserel_left_idx*info->n_rels+baserel_right_idx].sel;
             }
             baserel_left_edges = BMS64_UNSET(baserel_left_edges, baserel_right_idx+1);
         }
@@ -114,11 +111,9 @@ JoinRelation joinCost::operator()(JoinRelation jr){
     JoinRelation left_rel = memo_vals[jr.left_relation_idx];
     JoinRelation right_rel = memo_vals[jr.right_relation_idx];
 
-    jr.rows = estimate_join_rows(jr, left_rel, right_rel,
-                                base_rels.get(), n_rels,edge_table.get());
+    jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
 
-    jr.cost = compute_join_cost(jr, left_rel, right_rel,
-                                base_rels.get(), n_rels, edge_table.get());
+    jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
 
     return jr;
 }

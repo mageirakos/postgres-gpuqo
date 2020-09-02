@@ -45,9 +45,7 @@ typedef struct DependencyBuffers{
 
 typedef struct ThreadArgs{
     int id;
-    BaseRelation *base_rels;
-    int n_rels;
-    EdgeInfo *edge_table;
+    GpuqoPlannerInfo* info;
     memo_t *memo;
     DependencyBuffers* depbufs;
 } ThreadArgs;
@@ -62,8 +60,7 @@ typedef struct DPEExtra{
 #endif
 } DPEExtra;
 
-void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels, 
-                    int n_rels, EdgeInfo *edge_table){
+void process_depbuf(DependencyBuffer* depbuf, GpuqoPlannerInfo* info){
     depbuf_entry_t job;
     while ((job = depbuf->pop()).first != NULL){
         JoinRelationDPE *memo_join_rel = job.first;
@@ -83,7 +80,7 @@ void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels,
                 ; // busy wait for entries to be ready
 
             JoinRelationDPE* join_rel = make_join_relation(
-                *left_rel, *right_rel, base_rels, n_rels, edge_table
+                *left_rel, *right_rel, info
             );
             
             if (join_rel->cost < memo_join_rel->cost){
@@ -97,10 +94,9 @@ void process_depbuf(DependencyBuffer* depbuf, BaseRelation *base_rels,
     }
 }
 
-void wait_and_swap_depbuf(DPEExtra* extra, BaseRelation *base_rels, 
-                            int n_rels, EdgeInfo *edge_table){
+void wait_and_swap_depbuf(DPEExtra* extra, GpuqoPlannerInfo* info){
     // lend an hand to worker threads
-    process_depbuf(extra->depbufs.depbuf_curr, base_rels, n_rels, edge_table);
+    process_depbuf(extra->depbufs.depbuf_curr, info);
 
     // swap depbufs
     pthread_mutex_lock(&extra->depbufs.depbuf_mutex);
@@ -131,8 +127,7 @@ void wait_and_swap_depbuf(DPEExtra* extra, BaseRelation *base_rels,
 
 bool submit_join(int level, JoinRelationDPE* &join_rel, 
             JoinRelationDPE &left_rel, JoinRelationDPE &right_rel,
-            BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table, 
-            memo_t &memo, extra_t extra){
+            GpuqoPlannerInfo* info, memo_t &memo, extra_t extra){
     bool out;
     RelationID relid = BMS64_UNION(left_rel.id, right_rel.id);
 
@@ -166,7 +161,7 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
 
     if (mExtra->job_count >= gpuqo_dpe_pairs_per_depbuf
             && mExtra->depbufs.n_waiting >= gpuqo_dpe_n_threads-1){
-        wait_and_swap_depbuf(mExtra, base_rels, n_rels, edge_table);
+        wait_and_swap_depbuf(mExtra, info);
         mExtra->job_count = 0;
     }
 
@@ -176,32 +171,26 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
 // instead of join it is more of a distribution of jobs
 void gpuqo_cpu_dpe_join(int level, bool try_swap,
                             JoinRelation &left_rel, JoinRelation &right_rel,
-                            BaseRelation* base_rels, int n_rels, 
-                            EdgeInfo* edge_table, memo_t &memo, extra_t extra, 
-                            struct DPCPUAlgorithm algorithm){
-    if (algorithm.check_join_function(level, left_rel, right_rel,
-                            base_rels, n_rels, edge_table, memo, extra)){
+                            GpuqoPlannerInfo* info, memo_t &memo, 
+                            extra_t extra, struct DPCPUAlgorithm algorithm){
+    if (algorithm.check_join_function(level, left_rel, right_rel, info, memo, extra)){
         JoinRelationDPE *join_rel1, *join_rel2;
         bool new_joinrel;
         new_joinrel = submit_join(level, join_rel1, 
                 (JoinRelationDPE&) left_rel, (JoinRelationDPE&) right_rel, 
-                base_rels, n_rels, edge_table, 
-                memo, extra
+                info, memo, extra
         );
         algorithm.post_join_function(level, new_joinrel, 
                             *((JoinRelation*)join_rel1), 
-                            left_rel,  right_rel, base_rels, n_rels,
-                            edge_table, memo, extra);
+                            left_rel,  right_rel, info, memo, extra);
         if (try_swap){
             new_joinrel = submit_join(level, join_rel2, 
                 (JoinRelationDPE&) left_rel, (JoinRelationDPE&) right_rel, 
-                base_rels, n_rels, edge_table, 
-                memo, extra
+                info, memo, extra
             );
             algorithm.post_join_function(level, new_joinrel, 
                                 *((JoinRelation*)join_rel2), 
-                                left_rel, right_rel, base_rels, n_rels,
-                                edge_table, memo, extra);
+                                left_rel, right_rel, info, memo, extra);
         }
     }
 }
@@ -231,8 +220,7 @@ void* thread_function(void* _args){
             break;
 
         START_TIMING(execute);
-        process_depbuf(args->depbufs->depbuf_curr, args->base_rels, 
-            args->n_rels, args->edge_table);
+        process_depbuf(args->depbufs->depbuf_curr, args->info);
         STOP_TIMING(execute);
     }
 
@@ -244,8 +232,7 @@ void* thread_function(void* _args){
     return NULL;
 }
 
-QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels, 
-                             EdgeInfo edge_table[], DPCPUAlgorithm algorithm){
+QueryTree* gpuqo_cpu_dpe(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm){
     
     DECLARE_TIMING(gpuqo_cpu_dpe);
     START_TIMING(gpuqo_cpu_dpe);
@@ -265,17 +252,15 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
 #endif
     
     mExtra->depbufs.finish = false;
-    mExtra->depbufs.depbuf_curr = new DependencyBuffer(n_rels);
-    mExtra->depbufs.depbuf_next = new DependencyBuffer(n_rels);
+    mExtra->depbufs.depbuf_curr = new DependencyBuffer(info->n_rels);
+    mExtra->depbufs.depbuf_next = new DependencyBuffer(info->n_rels);
     pthread_cond_init(&mExtra->depbufs.avail_jobs, NULL);
     pthread_cond_init(&mExtra->depbufs.all_threads_waiting, NULL);
     pthread_mutex_init(&mExtra->depbufs.depbuf_mutex, NULL);
 
     for (int i=0; i<gpuqo_dpe_n_threads-1; i++){
         mExtra->thread_args[i].id = i;
-        mExtra->thread_args[i].base_rels = base_rels;
-        mExtra->thread_args[i].n_rels = n_rels;
-        mExtra->thread_args[i].edge_table = edge_table;
+        mExtra->thread_args[i].info = info;
         mExtra->thread_args[i].memo = &memo;
         mExtra->thread_args[i].depbufs = &mExtra->depbufs;
         
@@ -288,28 +273,28 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
         }
     }
 
-    for(int i=0; i<n_rels; i++){
+    for(int i=0; i<info->n_rels; i++){
         JoinRelationDPE *jr = new JoinRelationDPE;
-        jr->id = base_rels[i].id; 
+        jr->id = info->base_rels[i].id; 
         jr->left_relation_id = 0; 
         jr->left_relation_ptr = NULL; 
         jr->right_relation_id = 0; 
         jr->right_relation_ptr = NULL; 
-        jr->cost = baserel_cost(base_rels[i]); 
-        jr->rows = base_rels[i].rows; 
-        jr->edges = base_rels[i].edges;
+        jr->cost = baserel_cost(info->base_rels[i]); 
+        jr->rows = info->base_rels[i].rows; 
+        jr->edges = info->base_rels[i].edges;
         jr->num_entry.store(0, std::memory_order_consume);
-        memo.insert(std::make_pair(base_rels[i].id, (JoinRelation*) jr));
+        memo.insert(std::make_pair(info->base_rels[i].id, (JoinRelation*) jr));
     }
 
-    algorithm.init_function(base_rels, n_rels, edge_table, memo, extra);
+    algorithm.init_function(info, memo, extra);
     
-    algorithm.enumerate_function(base_rels, n_rels, edge_table,gpuqo_cpu_dpe_join, memo, extra, algorithm);
+    algorithm.enumerate_function(info, gpuqo_cpu_dpe_join, memo, extra, algorithm);
 
     // finish depbuf_curr and set depbuf_next
-    wait_and_swap_depbuf(mExtra, base_rels, n_rels, edge_table);
+    wait_and_swap_depbuf(mExtra, info);
     // help finishing depbuf_next (which is now in depbuf_curr)
-    process_depbuf(mExtra->depbufs.depbuf_curr, base_rels, n_rels, edge_table);
+    process_depbuf(mExtra->depbufs.depbuf_curr, info);
 
     // stop worker threads
     pthread_mutex_lock(&mExtra->depbufs.depbuf_mutex);
@@ -326,8 +311,8 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
     }
 
     RelationID final_joinrel_id = 0ULL;
-    for (int i = 0; i < n_rels; i++)
-        final_joinrel_id = BMS64_UNION(final_joinrel_id, base_rels[i].id);
+    for (int i = 0; i < info->n_rels; i++)
+        final_joinrel_id = BMS64_UNION(final_joinrel_id, info->base_rels[i].id);
 
     
     auto final_joinrel_pair = memo.find(final_joinrel_id);
@@ -339,7 +324,7 @@ QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels,
         delete iter->second;
     }
 
-    algorithm.teardown_function(base_rels, n_rels, edge_table, memo, extra);
+    algorithm.teardown_function(info, memo, extra);
 
 #ifdef GPUQO_PROFILE
     printf("%llu pairs have been evaluated\n", mExtra->total_job_count);

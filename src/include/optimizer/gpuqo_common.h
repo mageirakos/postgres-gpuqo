@@ -60,4 +60,10 @@ typedef struct EdgeInfo{
 	bool has_index;
 } EdgeInfo;
 
+typedef struct GpuqoPlannerInfo{
+	int n_rels;
+	BaseRelation *base_rels;
+	EdgeInfo *edge_table;
+} GpuqoPlannerInfo;
+
 #endif							/* GPUQO_COMMON_H */

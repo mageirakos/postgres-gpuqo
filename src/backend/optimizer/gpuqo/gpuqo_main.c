@@ -24,9 +24,9 @@ int gpuqo_algorithm;
 BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
 Bitmapset64 convertBitmapset(Bitmapset* set);
 void printQueryTree(QueryTree* qt, int indent);
-void printEdges(BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table);
+void printEdges(GpuqoPlannerInfo* info);
 RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels);
-void makeEdgeTable(PlannerInfo *root, List *initial_rels, BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table);
+void fillEdgeTable(PlannerInfo *root, List *initial_rels, GpuqoPlannerInfo* info);
 
 /*
  * gpuqo_check_can_run
@@ -61,13 +61,13 @@ void printQueryTree(QueryTree* qt, int indent){
     printQueryTree(qt->right, indent + 2);
 }
 
-void printEdges(BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table){
-    for (int i = 0; i < n_rels; i++){
-        RelationID edges = base_rels[i].edges;
+void printEdges(GpuqoPlannerInfo* info){
+    for (int i = 0; i < info->n_rels; i++){
+        RelationID edges = info->base_rels[i].edges;
         printf("%d:", i+1);
         while (edges != BMS64_EMPTY){
             int idx = BMS64_LOWEST_POS(edges)-1;
-            EdgeInfo* edge = &edge_table[i*n_rels+idx-1];
+            EdgeInfo* edge = &info->edge_table[i*info->n_rels+idx-1];
             printf(" %d(%.4f,%s)", idx, edge->sel, edge->has_index ? "I": "");
             edges = BMS64_UNSET(edges, idx);
         }
@@ -160,7 +160,7 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
     return baserel;
 }
 
-void makeEdgeTable(PlannerInfo *root, List *initial_rels, BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table){
+void fillEdgeTable(PlannerInfo *root, List *initial_rels, GpuqoPlannerInfo* info){
     ListCell* lc_inner;
     ListCell* lc_outer;
     ListCell* lc_inner_path;
@@ -176,7 +176,7 @@ void makeEdgeTable(PlannerInfo *root, List *initial_rels, BaseRelation* base_rel
         foreach(lc_inner, initial_rels){
             RelOptInfo* rel_inner = (RelOptInfo*) lfirst(lc_inner);
             
-            if (BMS64_INTERSECTS(base_rels[i].edges, convertBitmapset(rel_inner->relids))){
+            if (BMS64_INTERSECTS(info->base_rels[i].edges, convertBitmapset(rel_inner->relids))){
                 double sel;
                 SpecialJoinInfo sjinfo;
                 
@@ -224,7 +224,7 @@ void makeEdgeTable(PlannerInfo *root, List *initial_rels, BaseRelation* base_rel
                 edge_info.sel = 1; // cross-join selectivity
                 edge_info.has_index = false;
             }
-            edge_table[i*n_rels+j] = edge_info;
+            info->edge_table[i*info->n_rels+j] = edge_info;
             j++;
         }
         i++;
@@ -243,53 +243,57 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     ListCell* lc;
     int i;
     RelOptInfo* rel;
-    BaseRelation* base_rels;
-    EdgeInfo* edge_table;
+    GpuqoPlannerInfo* info;
     QueryTree* query_tree;
-	
+
 #ifdef OPTIMIZER_DEBUG
     printf("Hello, here is gpuqo!\n");
 #endif
 
-    base_rels = (BaseRelation*) malloc(n_rels * sizeof(BaseRelation));
-    edge_table = (EdgeInfo*) malloc(n_rels * n_rels * sizeof(EdgeInfo));
+    info = (GpuqoPlannerInfo*) gpuqo_malloc(sizeof(GpuqoPlannerInfo));
+    info->base_rels = (BaseRelation*) gpuqo_malloc(n_rels * sizeof(BaseRelation));
+    info->n_rels = n_rels;
+    info->edge_table = (EdgeInfo*) gpuqo_malloc(n_rels * n_rels * sizeof(EdgeInfo));
 
     i = 0;
     foreach(lc, initial_rels){
         rel = (RelOptInfo *) lfirst(lc);
-        base_rels[i++] = makeBaseRelation(rel, root);
+        info->base_rels[i++] = makeBaseRelation(rel, root);
     }
-    makeEdgeTable(root, initial_rels, base_rels, n_rels, edge_table);
+    fillEdgeTable(root, initial_rels, info);
+    
+    // prefetch to GPU (noop if on CPU)
+    gpuqo_prefetch(info);
 
 #ifdef OPTIMIZER_DEBUG
-    printEdges(base_rels, n_rels, edge_table);
+    printEdges(info);
 #endif
 
     switch (gpuqo_algorithm)
     {
     case GPUQO_DPSIZE:
-        query_tree = gpuqo_dpsize(base_rels, n_rels, edge_table);
+        query_tree = gpuqo_dpsize(info);
         break;
     case GPUQO_DPSUB:
-        query_tree = gpuqo_dpsub(base_rels, n_rels, edge_table);
+        query_tree = gpuqo_dpsub(info);
         break;
     case GPUQO_CPU_DPSIZE:
-        query_tree = gpuqo_cpu_dpsize(base_rels, n_rels, edge_table);
+        query_tree = gpuqo_cpu_dpsize(info);
         break;
     case GPUQO_CPU_DPSUB:
-        query_tree = gpuqo_cpu_dpsub(base_rels, n_rels, edge_table);
+        query_tree = gpuqo_cpu_dpsub(info);
         break;
     case GPUQO_CPU_DPCCP:
-        query_tree = gpuqo_cpu_dpccp(base_rels, n_rels, edge_table);
+        query_tree = gpuqo_cpu_dpccp(info);
         break;
     case GPUQO_DPE_DPSIZE:
-        query_tree = gpuqo_dpe_dpsize(base_rels, n_rels, edge_table);
+        query_tree = gpuqo_dpe_dpsize(info);
         break;
     case GPUQO_DPE_DPSUB:
-        query_tree = gpuqo_dpe_dpsub(base_rels, n_rels, edge_table);
+        query_tree = gpuqo_dpe_dpsub(info);
         break;
     case GPUQO_DPE_DPCCP:
-        query_tree = gpuqo_dpe_dpccp(base_rels, n_rels, edge_table);
+        query_tree = gpuqo_dpe_dpccp(info);
         break;
     default: 
         // impossible branch but without it the compiler complains
@@ -297,10 +301,10 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
         break;
     }
     
-
-    free(base_rels);
-    free(edge_table);
-
+    gpuqo_free(info->base_rels);
+    gpuqo_free(info->edge_table);
+    gpuqo_free(info);
+    
 #ifdef OPTIMIZER_DEBUG
     printQueryTree(query_tree, 2);
 #endif

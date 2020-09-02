@@ -82,9 +82,7 @@ template JoinRelationDPE *build_join_relation<JoinRelationDPE>(JoinRelationDPE &
  *	 Builds and fills a join relation from left and right relations.
  */
 template<typename T>
-T* make_join_relation(T &left_rel,T &right_rel,
-                                 BaseRelation* base_rels, int n_rels,
-                                 EdgeInfo* edge_table){
+T* make_join_relation(T &left_rel,T &right_rel, GpuqoPlannerInfo* info){
 
 #ifdef USE_ASSERT_CHECKING
     left_rel.referenced = true;
@@ -93,32 +91,22 @@ T* make_join_relation(T &left_rel,T &right_rel,
 
     T* join_rel = build_join_relation<T>(left_rel, right_rel);
 
-    join_rel->rows = estimate_join_rows(
-        *join_rel, left_rel, right_rel,
-        base_rels, n_rels, edge_table
-    );
+    join_rel->rows = estimate_join_rows(*join_rel, left_rel, right_rel, info);
 
-    join_rel->cost = compute_join_cost(
-        *join_rel, left_rel, right_rel,
-        base_rels, n_rels, edge_table
-    );
+    join_rel->cost = compute_join_cost(*join_rel, left_rel, right_rel, info);
 
     return join_rel;
 }
 
 // explicitly instantiate template implementations
 // by doing so I avoid defining the template in the header file
-template JoinRelation *make_join_relation<JoinRelation>(JoinRelation &, JoinRelation &, BaseRelation *, int, EdgeInfo *);
-template JoinRelationDPE *make_join_relation<JoinRelationDPE>(JoinRelationDPE &, JoinRelationDPE &, BaseRelation *, int, EdgeInfo *);
+template JoinRelation *make_join_relation<JoinRelation>(JoinRelation &, JoinRelation &, GpuqoPlannerInfo*);
+template JoinRelationDPE *make_join_relation<JoinRelationDPE>(JoinRelationDPE &, JoinRelationDPE &, GpuqoPlannerInfo*);
 
 template<typename T>
 bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel, 
-            BaseRelation* base_rels, int n_rels, 
-            EdgeInfo* edge_table, memo_t &memo, extra_t extra){
-    join_rel = make_join_relation<T>(
-        left_rel, right_rel,
-        base_rels, n_rels, edge_table
-    );
+            GpuqoPlannerInfo* info, memo_t &memo, extra_t extra){
+    join_rel = make_join_relation<T>(left_rel, right_rel, info);
 
     auto find_iter = memo.find(join_rel->id);
     if (find_iter != memo.end()){
@@ -140,5 +128,5 @@ bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel,
 
 // explicitly instantiate template implementations
 // by doing so I avoid defining the template in the header file
-template bool do_join<JoinRelation>(int, JoinRelation *&, JoinRelation &, JoinRelation &, BaseRelation *, int, EdgeInfo *, memo_t &, extra_t);
-template bool do_join<JoinRelationDPE>(int, JoinRelationDPE *&, JoinRelationDPE &, JoinRelationDPE &, BaseRelation *, int, EdgeInfo *, memo_t &, extra_t);
+template bool do_join<JoinRelation>(int, JoinRelation *&, JoinRelation &, JoinRelation &, GpuqoPlannerInfo*, memo_t &, extra_t);
+template bool do_join<JoinRelationDPE>(int, JoinRelationDPE *&, JoinRelationDPE &, JoinRelationDPE &, GpuqoPlannerInfo*, memo_t &, extra_t);

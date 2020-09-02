@@ -111,4 +111,8 @@ extern std::ostream & operator<<(std::ostream &os, const JoinRelation& jr);
 typedef thrust::device_vector<RelationID, uninitialized_allocator<RelationID> > uninit_device_vector_relid;
 typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation> > uninit_device_vector_joinrel;
 
+extern "C" void* gpuqo_malloc(size_t size);
+extern "C" void gpuqo_free(void* p);
+extern "C" void gpuqo_prefetch(GpuqoPlannerInfo* info);
+
 #endif							/* GPUQO_CUH */

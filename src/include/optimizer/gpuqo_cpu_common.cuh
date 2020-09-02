@@ -39,20 +39,18 @@ typedef struct extra_t{
 struct DPCPUAlgorithm;
 
 typedef void (*join_f)(int level, bool try_swap, JoinRelation &left_rel,
-					JoinRelation &right_rel, BaseRelation* base_rels, 
-					int n_rels, EdgeInfo* edge_table, memo_t &memo, 
-					extra_t extra, struct DPCPUAlgorithm algorithm);
+					JoinRelation &right_rel, GpuqoPlannerInfo* info, 
+					memo_t &memo, extra_t extra, 
+					struct DPCPUAlgorithm algorithm);
 typedef bool (*check_join_f)(int level, JoinRelation &left_rel,
- 					JoinRelation &right_rel, BaseRelation* base_rels, 
-					int n_rels, EdgeInfo* edge_table, memo_t &memo, 
-					extra_t extra);
+ 					JoinRelation &right_rel, GpuqoPlannerInfo* info, 
+					memo_t &memo, extra_t extra);
 typedef void (*post_join_f)(int level,  bool new_rel, JoinRelation &join_rel,
 					JoinRelation &left_rel, JoinRelation &right_rel,
-					BaseRelation* base_rels, int n_rels, 
-					EdgeInfo* edge_table, memo_t &memo, extra_t extra);
-typedef void (*enumerate_f)(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm);
-typedef void (*init_f)(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, extra_t &extra);
-typedef void (*teardown_f)(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, extra_t extra);
+					GpuqoPlannerInfo* info, memo_t &memo, extra_t extra);
+typedef void (*enumerate_f)(GpuqoPlannerInfo* info, join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm);
+typedef void (*init_f)(GpuqoPlannerInfo* info, memo_t &memo, extra_t &extra);
+typedef void (*teardown_f)(GpuqoPlannerInfo* info, memo_t &memo, extra_t extra);
 
 typedef struct DPCPUAlgorithm{
 	init_f init_function;
@@ -68,13 +66,10 @@ template<typename T>
 T* build_join_relation(T &left_rel,T &right_rel);
 
 template<typename T>
-T* make_join_relation(T &left_rel,T &right_rel,
-                                 BaseRelation* base_rels, int n_rels,
-                                 EdgeInfo* edge_table);
+T* make_join_relation(T &left_rel,T &right_rel, GpuqoPlannerInfo* info);
 
 template<typename T>
 bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel, 
-            BaseRelation* base_rels, int n_rels, 
-            EdgeInfo* edge_table, memo_t &memo, extra_t extra);
+            GpuqoPlannerInfo* info, memo_t &memo, extra_t extra);
 
 #endif							/* GPUQO_CPU_COMMON_CUH */

@@ -70,7 +70,7 @@ RelationID dpsub_unrank_sid(uint64_t sid, uint64_t qss, uint64_t sq, uint64_t* b
 __device__
 void try_join(RelationID relid, JoinRelation &jr_out, 
             RelationID l, RelationID r, JoinRelation* memo_vals,
-            BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table) {
+            GpuqoPlannerInfo* info) {
     if (l == BMS64_EMPTY || r == BMS64_EMPTY){
         return;
     }
@@ -91,15 +91,13 @@ void try_join(RelationID relid, JoinRelation &jr_out,
     if (left_rel.id == l && right_rel.id == r){
         jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
         
-        if (are_connected(left_rel, right_rel, base_rels, n_rels, edge_table)){
+        if (are_connected(left_rel, right_rel, info)){
 
         LOG_DEBUG("[%llu] Joining %llu and %llu\n", relid, l, r);
 
-            jr.rows = estimate_join_rows(jr, left_rel, right_rel,
-                                base_rels, n_rels, edge_table);
+            jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
 
-            jr.cost = compute_join_cost(jr, left_rel, right_rel,
-                                base_rels, n_rels, edge_table);
+            jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
 
             if (jr.cost < jr_out.cost){
                 jr_out = jr;
@@ -126,8 +124,7 @@ JoinRelation dpsubEnumerateAllSubs::operator()(RelationID relid, uint64_t cid)
     for (int i = 0; i < n_pairs; i++){
         r = BMS64_DIFFERENCE(relid, l);
         
-        try_join(relid, jr_out, l, r, 
-                memo_vals.get(), base_rels.get(), sq, edge_table.get());
+        try_join(relid, jr_out, l, r, memo_vals.get(), info);
 
         l = BMS64_NEXT_SUBSET(l, relid);
     }
@@ -190,7 +187,7 @@ void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t 
  */
 extern "C"
 QueryTree*
-gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
+gpuqo_dpsub(GpuqoPlannerInfo* info)
 {
     DECLARE_TIMING(gpuqo_dpsub);
     DECLARE_NV_TIMING(init);
@@ -200,7 +197,7 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
     START_TIMING(init);
 
     uint64_t max_memo_size = gpuqo_dpsize_max_memo_size_mb * MB / RELSIZE;
-    uint64_t req_memo_size = 1ULL<<(n_rels+1);
+    uint64_t req_memo_size = 1ULL<<(info->n_rels+1);
     if (max_memo_size < req_memo_size){
         printf("Insufficient memo size\n");
         return NULL;
@@ -209,35 +206,30 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
     uint64_t memo_size = std::min(req_memo_size, max_memo_size);
 
     dpsub_iter_param_t params;
-    params.base_rels = base_rels;
-    params.n_rels = n_rels;
-    params.edge_table = edge_table;
-    
-    params.gpu_base_rels = thrust::device_vector<BaseRelation>(base_rels, base_rels + n_rels);
-    params.gpu_edge_table = thrust::device_vector<EdgeInfo>(edge_table, edge_table + n_rels*n_rels);
+    params.info = info;
     params.gpu_memo_vals = thrust::device_vector<JoinRelation>(memo_size);
 
     QueryTree* out = NULL;
     params.out_relid = BMS64_EMPTY;
 
-    for(int i=0; i<n_rels; i++){
+    for(int i=0; i<info->n_rels; i++){
         JoinRelation t;
-        t.id = base_rels[i].id;
+        t.id = info->base_rels[i].id;
         t.left_relation_idx = 0; 
         t.left_relation_id = 0; 
         t.right_relation_idx = 0; 
         t.right_relation_id = 0; 
-        t.cost = baserel_cost(base_rels[i]); 
-        t.rows = base_rels[i].rows; 
-        t.edges = base_rels[i].edges;
-        params.gpu_memo_vals[base_rels[i].id] = t;
+        t.cost = baserel_cost(info->base_rels[i]); 
+        t.rows = info->base_rels[i].rows; 
+        t.edges = info->base_rels[i].edges;
+        params.gpu_memo_vals[info->base_rels[i].id] = t;
 
-        params.out_relid = BMS64_UNION(params.out_relid, base_rels[i].id);
+        params.out_relid = BMS64_UNION(params.out_relid, info->base_rels[i].id);
     }
 
-    int binoms_size = (n_rels+1)*(n_rels+1);
+    int binoms_size = (info->n_rels+1)*(info->n_rels+1);
     params.binoms = thrust::host_vector<uint64_t>(binoms_size);
-    precompute_binoms(params.binoms, n_rels);
+    precompute_binoms(params.binoms, info->n_rels);
     params.gpu_binoms = params.binoms;
 
     // scratchpad size is increased on demand, starting from a minimum capacity
@@ -261,13 +253,13 @@ gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
         DECLARE_NV_TIMING(build_qt);
 
         // iterate over the size of the resulting joinrel
-        for(int i=2; i<=n_rels; i++){
+        for(int i=2; i<=info->n_rels; i++){
             // give possibility to user to interrupt
             CHECK_FOR_INTERRUPTS();
             
             // calculate number of combinations of relations that make up 
             // a joinrel of size i
-            params.n_sets = BINOM(params.binoms, n_rels, n_rels, i);
+            params.n_sets = BINOM(params.binoms, info->n_rels, info->n_rels, i);
             params.n_joins_per_set = (1<<i) - 2;
             params.tot = params.n_sets * params.n_joins_per_set;
 

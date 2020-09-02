@@ -42,7 +42,7 @@ template<int MAX_DEPTH>
 __device__
 void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     JoinRelation &jr_out, JoinRelation* memo_vals,
-                    BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table){
+                    GpuqoPlannerInfo* info){
     // S, subset, X, N
     loop_stack_elem_t loop_stack[MAX_DEPTH];
     size_t loop_stack_size = 0;
@@ -88,12 +88,12 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
 
             if (BMS64_IS_SUBSET(I, emit_S)){
                 try_join(T, jr_out, emit_S, BMS64_DIFFERENCE(T, emit_S), 
-                        memo_vals, base_rels, n_rels, edge_table);
+                        memo_vals, info);
             }
 
             RelationID new_N = BMS64_INTERSECTION(
                 BMS64_DIFFERENCE(
-                    get_neighbours(emit_S, base_rels, n_rels), 
+                    get_neighbours(emit_S, info), 
                     emit_X
                 ),
                 BMS64_DIFFERENCE(T, E)
@@ -137,8 +137,8 @@ JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint64_t cid)
         RelationID inc_set = BMS64_EXPAND_TO_MASK(cid, relid);
         RelationID exc_set = BMS64_EXPAND_TO_MASK(cmp_cid, relid);
         
-        enumerate_sub_csg<64>(relid, inc_set, exc_set, jr_out, 
-                memo_vals.get(), base_rels.get(), sq, edge_table.get());
+        enumerate_sub_csg<64>(relid, inc_set, exc_set, 
+                        jr_out, memo_vals.get(), info);
     }
     
     return jr_out;

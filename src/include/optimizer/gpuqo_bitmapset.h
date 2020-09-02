@@ -10,6 +10,8 @@
 #ifndef GPUQO_BITMAPSET_H
 #define GPUQO_BITMAPSET_H
 
+#include "stdint.h"
+
 // For the moment it's limited to 64 relations
 // I need to find a way to efficiently and dynamically increase this value
 typedef unsigned long long Bitmapset64;

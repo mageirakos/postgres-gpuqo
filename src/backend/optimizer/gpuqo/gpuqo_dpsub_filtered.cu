@@ -145,8 +145,8 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                 thrust::host_vector<RelationID> relids(n_tab_sets);
                 uint64_t n_valid_relids = 0;
                 for (uint64_t sid=0; sid < n_tab_sets; sid++){
-                    RelationID relid = dpsub_unrank_sid(sid, iter, params.n_rels, params.binoms.data()) << 1;
-                    if (is_connected(relid, params.base_rels, params.n_rels, params.edge_table)){
+                    RelationID relid = dpsub_unrank_sid(sid, iter, params.info->n_rels, params.binoms.data()) << 1;
+                    if (is_connected(relid, params.info)){
                         relids[n_valid_relids++] = relid; 
                     }
                 }
@@ -161,7 +161,7 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                     params.gpu_pending_keys.begin()+n_pending_sets,
                     params.gpu_pending_keys.begin()+(n_pending_sets+n_tab_sets),
                     unrankFilteredDPSub(
-                        params.n_rels,
+                        params.info->n_rels,
                         params.gpu_binoms.data(),
                         iter,
                         set_offset
@@ -173,11 +173,7 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                 auto keys_end_iter = thrust::remove_if(
                     params.gpu_pending_keys.begin()+n_pending_sets,
                     params.gpu_pending_keys.begin()+(n_pending_sets+n_tab_sets),
-                    filterDisconnectedRelations(
-                        params.gpu_base_rels.data(), 
-                        params.n_rels,
-                        params.gpu_edge_table.data()
-                    )
+                    filterDisconnectedRelations(params.info)
                 );
                 STOP_TIMING(filter);
 
@@ -210,7 +206,6 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
         );
 
         uint64_t csg_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_csg_threshold;
-        thrust::unary_function< uint64_t, thrust::tuple<RelationID, JoinRelation> > enum_functor;
         bool use_csg = (gpuqo_dpsub_csg_enable && n_pending_sets * params.n_joins_per_set >= csg_threshold);
 
         if (use_csg){
@@ -242,12 +237,10 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                         params.gpu_pending_keys.data(),
                         dpsubEnumerateCsg(
                             params.gpu_memo_vals.data(),
-                            params.gpu_base_rels.data(),
-                            params.n_rels,
-                            params.gpu_edge_table.data(),
+                            params.info,
                             threads_per_set
                         ),
-                        params.n_rels,
+                        params.info->n_rels,
                         iter,
                         n_pending_sets,
                         threads_per_set
@@ -267,12 +260,10 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                         params.gpu_pending_keys.data(),
                         dpsubEnumerateAllSubs(
                             params.gpu_memo_vals.data(),
-                            params.gpu_base_rels.data(),
-                            params.n_rels,
-                            params.gpu_edge_table.data(),
+                            params.info,
                             threads_per_set
                         ),
-                        params.n_rels,
+                        params.info->n_rels,
                         iter,
                         n_pending_sets,
                         threads_per_set

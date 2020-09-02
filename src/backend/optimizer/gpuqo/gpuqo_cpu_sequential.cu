@@ -26,32 +26,26 @@
 
 void gpuqo_cpu_sequential_join(int level, bool try_swap,
                             JoinRelation &left_rel, JoinRelation &right_rel,
-                            BaseRelation* base_rels, int n_rels, 
-                            EdgeInfo* edge_table, memo_t &memo, extra_t extra, 
-                            struct DPCPUAlgorithm algorithm){
+                            GpuqoPlannerInfo* info, memo_t &memo, 
+                            extra_t extra, struct DPCPUAlgorithm algorithm){
     if (algorithm.check_join_function(level, left_rel, right_rel,
-                            base_rels, n_rels, edge_table, memo, extra)){
+                            info, memo, extra)){
         JoinRelation *join_rel1, *join_rel2;
         bool new_joinrel;
         new_joinrel = do_join<JoinRelation>(level, join_rel1, 
-                            left_rel, right_rel, base_rels, n_rels, edge_table, 
-                            memo, extra);
+                            left_rel, right_rel, info, memo, extra);
         algorithm.post_join_function(level, new_joinrel, *join_rel1, 
-                            left_rel,  right_rel, base_rels, n_rels,
-                            edge_table, memo, extra);
+                            left_rel,  right_rel, info, memo, extra);
         if (try_swap){
             new_joinrel = do_join<JoinRelation>(level, join_rel2, right_rel, 
-                                left_rel, base_rels, n_rels, edge_table, memo,
-                                extra);
+                                left_rel, info, memo, extra);
             algorithm.post_join_function(level, new_joinrel, *join_rel2,
-                                left_rel, right_rel, base_rels, n_rels,
-                                edge_table, memo, extra);
+                                left_rel, right_rel, info, memo, extra);
         }
     }
 }
 
-QueryTree* gpuqo_cpu_sequential(BaseRelation base_rels[], int n_rels, 
-                             EdgeInfo edge_table[], DPCPUAlgorithm algorithm){
+QueryTree* gpuqo_cpu_sequential(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm){
     
     DECLARE_TIMING(gpuqo_cpu_sequential);
     START_TIMING(gpuqo_cpu_sequential);
@@ -60,26 +54,26 @@ QueryTree* gpuqo_cpu_sequential(BaseRelation base_rels[], int n_rels,
     memo_t memo;
     QueryTree* out = NULL;
 
-    for(int i=0; i<n_rels; i++){
+    for(int i=0; i<info->n_rels; i++){
         JoinRelation *jr = new JoinRelation;
-        jr->id = base_rels[i].id; 
+        jr->id = info->base_rels[i].id; 
         jr->left_relation_id = 0; 
         jr->left_relation_ptr = NULL; 
         jr->right_relation_id = 0; 
         jr->right_relation_ptr = NULL; 
-        jr->cost = baserel_cost(base_rels[i]); 
-        jr->rows = base_rels[i].rows; 
-        jr->edges = base_rels[i].edges;
-        memo.insert(std::make_pair(base_rels[i].id, jr));
+        jr->cost = baserel_cost(info->base_rels[i]); 
+        jr->rows = info->base_rels[i].rows; 
+        jr->edges = info->base_rels[i].edges;
+        memo.insert(std::make_pair(info->base_rels[i].id, jr));
     }
 
-    algorithm.init_function(base_rels, n_rels, edge_table, memo, extra);
+    algorithm.init_function(info, memo, extra);
     
-    algorithm.enumerate_function(base_rels, n_rels, edge_table,gpuqo_cpu_sequential_join, memo, extra, algorithm);
+    algorithm.enumerate_function(info, gpuqo_cpu_sequential_join, memo, extra, algorithm);
 
     RelationID final_joinrel_id = 0ULL;
-    for (int i = 0; i < n_rels; i++)
-        final_joinrel_id = BMS64_UNION(final_joinrel_id, base_rels[i].id);
+    for (int i = 0; i < info->n_rels; i++)
+        final_joinrel_id = BMS64_UNION(final_joinrel_id, info->base_rels[i].id);
 
     
     auto final_joinrel_pair = memo.find(final_joinrel_id);
@@ -91,7 +85,7 @@ QueryTree* gpuqo_cpu_sequential(BaseRelation base_rels[], int n_rels,
         delete iter->second;
     }
 
-    algorithm.teardown_function(base_rels, n_rels, edge_table, memo, extra);
+    algorithm.teardown_function(info, memo, extra);
 
     STOP_TIMING(gpuqo_cpu_sequential);
     PRINT_TIMING(gpuqo_cpu_sequential);

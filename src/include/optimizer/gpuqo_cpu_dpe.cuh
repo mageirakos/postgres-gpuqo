@@ -12,6 +12,6 @@
 
 #include "optimizer/gpuqo_cpu_common.cuh"
 
-extern QueryTree* gpuqo_cpu_dpe(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], DPCPUAlgorithm algorithm);
+extern QueryTree* gpuqo_cpu_dpe(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm);
 
 #endif							/* GPUQO_CPU_DPE_CUH */

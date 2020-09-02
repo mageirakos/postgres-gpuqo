@@ -120,12 +120,10 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
             unrankEvaluateDPSub<dpsubEnumerateAllSubs>(
                 dpsubEnumerateAllSubs(
                     params.gpu_memo_vals.data(),
-                    params.gpu_base_rels.data(),
-                    params.n_rels,
-                    params.gpu_edge_table.data(),
+                    params.info,
                     threads_per_set
                 ),
-                params.n_rels,
+                params.info->n_rels,
                 params.gpu_binoms.data(),
                 iter,
                 id_offset,

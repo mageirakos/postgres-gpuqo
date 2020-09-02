@@ -18,15 +18,18 @@
 extern RelOptInfo *gpuqo(PlannerInfo *root,
 						int n_rels, List *initial_rels);
 
-extern QueryTree* gpuqo_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
-extern QueryTree* gpuqo_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
-extern QueryTree* gpuqo_cpu_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
-extern QueryTree* gpuqo_cpu_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
-extern QueryTree* gpuqo_cpu_dpccp(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
-extern QueryTree* gpuqo_dpe_dpsize(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
-extern QueryTree* gpuqo_dpe_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
-extern QueryTree* gpuqo_dpe_dpccp(BaseRelation base_rels[], int n_rels, EdgeInfo* edge_table);
+extern QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_dpsub(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_cpu_dpsize(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_cpu_dpsub(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_cpu_dpccp(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_dpe_dpsize(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_dpe_dpsub(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_dpe_dpccp(GpuqoPlannerInfo* info);
 
 extern bool gpuqo_check_can_run(PlannerInfo* root);
+extern void* gpuqo_malloc(size_t size);
+extern void gpuqo_free(void* p);
+extern void gpuqo_prefetch(GpuqoPlannerInfo* info);
 
 #endif							/* GPUQO_H */

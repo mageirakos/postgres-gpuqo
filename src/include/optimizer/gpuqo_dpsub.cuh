@@ -20,15 +20,11 @@ RelationID dpsub_unrank_sid(uint64_t sid, uint64_t qss, uint64_t sq, uint64_t* b
 __device__
 void try_join(RelationID relid, JoinRelation &jr_out, 
             RelationID l, RelationID r, JoinRelation* memo_vals,
-            BaseRelation* base_rels, int n_rels, EdgeInfo* edge_table);
+            GpuqoPlannerInfo* info);
 
 typedef struct dpsub_iter_param_t{
-    BaseRelation *base_rels;
-    int n_rels;
-    EdgeInfo *edge_table;
+    GpuqoPlannerInfo* info;
     RelationID out_relid;
-    thrust::device_vector<BaseRelation> gpu_base_rels;
-    thrust::device_vector<EdgeInfo> gpu_edge_table;
     thrust::device_vector<JoinRelation> gpu_memo_vals;
     thrust::host_vector<uint64_t> binoms;
     thrust::device_vector<uint64_t> gpu_binoms;
@@ -54,19 +50,14 @@ void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t 
 struct dpsubEnumerateAllSubs : public pairs_enum_func_t 
 {
     thrust::device_ptr<JoinRelation> memo_vals;
-    thrust::device_ptr<BaseRelation> base_rels;
-    thrust::device_ptr<EdgeInfo> edge_table;
-    int sq;
+    GpuqoPlannerInfo* info;
     int n_splits;
 public:
     dpsubEnumerateAllSubs(
         thrust::device_ptr<JoinRelation> _memo_vals,
-        thrust::device_ptr<BaseRelation> _base_rels,
-        int _sq,
-        thrust::device_ptr<EdgeInfo> _edge_table,
+        GpuqoPlannerInfo* _info,
         int _n_splits
-    ) : memo_vals(_memo_vals), base_rels(_base_rels), sq(_sq), 
-        edge_table(_edge_table), n_splits(_n_splits)
+    ) : memo_vals(_memo_vals), info(_info), n_splits(_n_splits)
     {}
 
     __device__
@@ -76,19 +67,14 @@ public:
 struct dpsubEnumerateCsg : public pairs_enum_func_t 
 {
     thrust::device_ptr<JoinRelation> memo_vals;
-    thrust::device_ptr<BaseRelation> base_rels;
-    thrust::device_ptr<EdgeInfo> edge_table;
-    int sq;
+    GpuqoPlannerInfo* info;
     int n_splits;
 public:
     dpsubEnumerateCsg(
         thrust::device_ptr<JoinRelation> _memo_vals,
-        thrust::device_ptr<BaseRelation> _base_rels,
-        int _sq,
-        thrust::device_ptr<EdgeInfo> _edge_table,
+        GpuqoPlannerInfo* _info,
         int _n_splits
-    ) : memo_vals(_memo_vals), base_rels(_base_rels), sq(_sq), 
-        edge_table(_edge_table), n_splits(_n_splits)
+    ) : memo_vals(_memo_vals), info(_info), n_splits(_n_splits)
     {}
 
     __device__

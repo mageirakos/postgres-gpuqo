@@ -24,14 +24,14 @@
 #include "optimizer/gpuqo_cpu_sequential.cuh"
 #include "optimizer/gpuqo_cpu_dpe.cuh"
 
-void gpuqo_cpu_dpsub_init(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, extra_t &extra){
+void gpuqo_cpu_dpsub_init(GpuqoPlannerInfo* info, memo_t &memo, extra_t &extra){
     // nothing to do
 }
 
-void gpuqo_cpu_dpsub_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
+void gpuqo_cpu_dpsub_enumerate(GpuqoPlannerInfo* info, join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
 
     // first bit is zero
-    for (RelationID i=1; i < BMS64_NTH(n_rels); i++){
+    for (RelationID i=1; i < BMS64_NTH(info->n_rels); i++){
         RelationID join_id = i << 1; // first bit is 0 in Postgres
         RelationID left_id = BMS64_LOWEST(join_id);
         RelationID right_id;
@@ -47,8 +47,8 @@ void gpuqo_cpu_dpsub_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo ed
                     JoinRelation *right_rel = right->second;
                     int level = BMS64_SIZE(join_id);
 
-                    join_function(level, false, *right_rel, *left_rel, 
-                        base_rels, n_rels, edge_table, memo, extra, algorithm
+                    join_function(level, false, *right_rel, *left_rel, info,    
+                            memo, extra, algorithm
                     );
                 }
             }
@@ -59,26 +59,24 @@ void gpuqo_cpu_dpsub_enumerate(BaseRelation base_rels[], int n_rels, EdgeInfo ed
 }
 
 bool gpuqo_cpu_dpsub_check_join(int level, JoinRelation &left_rel,
-                            JoinRelation &right_rel, BaseRelation* base_rels, 
-                            int n_rels, EdgeInfo* edge_table, memo_t &memo, 
-                            extra_t extra){
+                            JoinRelation &right_rel, GpuqoPlannerInfo* info, 
+                            memo_t &memo, extra_t extra){
 
     // I do not need to check connectedness of the single joinrels since 
     // if they were not connected, they wouldn't have been generated and 
     // I would not have been able to find them in the memo
     return (is_disjoint(left_rel, right_rel) 
-        && are_connected(left_rel, right_rel,
-                        base_rels, n_rels, edge_table));
+        && are_connected(left_rel, right_rel, info));
 }
 
 void gpuqo_cpu_dpsub_post_join(int level, bool newrel, JoinRelation &join_rel, 
                             JoinRelation &left_rel, JoinRelation &right_rel,
-                            BaseRelation* base_rels, int n_rels, 
-                            EdgeInfo* edge_table, memo_t &memo, extra_t extra){
+                            GpuqoPlannerInfo* info, memo_t &memo, 
+                            extra_t extra){
     // nothing to do
 }
 
-void gpuqo_cpu_dpsub_teardown(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[], memo_t &memo, extra_t extra){
+void gpuqo_cpu_dpsub_teardown(GpuqoPlannerInfo* info, memo_t &memo, extra_t extra){
     // nothing to do
 }
 
@@ -97,9 +95,9 @@ DPCPUAlgorithm gpuqo_cpu_dpsub_alg = {
  */
 extern "C"
 QueryTree*
-gpuqo_cpu_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
+gpuqo_cpu_dpsub(GpuqoPlannerInfo* info)
 {
-    return gpuqo_cpu_sequential(base_rels, n_rels, edge_table, gpuqo_cpu_dpsub_alg);
+    return gpuqo_cpu_sequential(info, gpuqo_cpu_dpsub_alg);
 }
 
 
@@ -110,9 +108,9 @@ gpuqo_cpu_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
  */
 extern "C"
 QueryTree*
-gpuqo_dpe_dpsub(BaseRelation base_rels[], int n_rels, EdgeInfo edge_table[])
+gpuqo_dpe_dpsub(GpuqoPlannerInfo* info)
 {
-    return gpuqo_cpu_dpe(base_rels, n_rels, edge_table, gpuqo_cpu_dpsub_alg);
+    return gpuqo_cpu_dpe(info, gpuqo_cpu_dpsub_alg);
 }
 
 
