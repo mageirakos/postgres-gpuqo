@@ -1,0 +1,9 @@
+# python junk
+__pycache__
+
+# random plots
+figures
+
+# raw benchmark data
+join-order-benchmark
+synthetic-nfl
