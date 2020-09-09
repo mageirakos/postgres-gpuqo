@@ -107,11 +107,11 @@ public:
     
         RelationID relid = pending_keys[rid];
 
-        LOG_DEBUG("[%llu] n_splits=%d, rid=%llu, cid=[%llu,%llu), relid=%llu\n", 
-                tid, n_splits, rid, cid, 
-                cid+ceil_div((1<<qss) - 2, n_splits), relid);
+        LOG_DEBUG("[%llu] n_splits=%d, rid=%llu, cid=%llu, relid=%llu\n", 
+                tid, n_splits, rid, cid, relid);
         
         JoinRelation jr_out = enum_functor(relid, cid);
+        Assert(jr_out.id == BMS64_EMPTY || jr_out.id == relid);
         return thrust::make_tuple<RelationID, JoinRelation>(relid, jr_out);
     }
 };
@@ -189,30 +189,33 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
 
         uint64_t n_joins_per_thread;
         uint64_t n_sets_per_iteration;
+        uint64_t threads_per_set;
         uint64_t factor = gpuqo_dpsub_n_parallel / n_pending_sets;
-        if (factor < 1){ // n_sets > gpuqo_dpsub_n_parallel
-            n_joins_per_thread = params.n_joins_per_set;
-            n_sets_per_iteration = gpuqo_dpsub_n_parallel;
-        } else{
-            n_sets_per_iteration = n_pending_sets;
-            n_joins_per_thread = ceil_div(params.n_joins_per_set, factor);
-        }     
-        uint64_t threads_per_set = ceil_div(params.n_joins_per_set, n_joins_per_thread);   
 
-        LOG_PROFILE("n_joins_per_thread=%llu, n_sets_per_iteration=%llu, threads_per_set=%llu\n",
+        if (factor < 32 || params.n_joins_per_set <= 32){
+            threads_per_set = 32;
+        } else{
+            threads_per_set = BMS64_HIGHEST(min(factor, params.n_joins_per_set));
+        }
+        
+        n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
+        n_sets_per_iteration = min(gpuqo_dpsub_n_parallel / threads_per_set, n_pending_sets);
+
+        LOG_PROFILE("n_joins_per_thread=%llu, n_sets_per_iteration=%llu, threads_per_set=%llu, factor=%llu\n",
             n_joins_per_thread,
             n_sets_per_iteration,
-            threads_per_set
+            threads_per_set,
+            factor
         );
 
-        uint64_t csg_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_csg_threshold;
-        bool use_csg = (gpuqo_dpsub_csg_enable && n_pending_sets * params.n_joins_per_set >= csg_threshold);
+        bool use_csg = (gpuqo_dpsub_csg_enable && n_joins_per_thread >= gpuqo_dpsub_csg_threshold);
 
         if (use_csg){
-            LOG_DEBUG("Using CSG enumeration\n");
+            LOG_PROFILE("Using CSG enumeration\n");
         } else{
-            LOG_DEBUG("Using all subsets enumeration\n");
+            LOG_PROFILE("Using all subsets enumeration\n");
         }
+
         // do not empty all pending sets if there are some sets still to 
         // evaluate, since I will do them in the next iteration
         // If no sets remain, then I will empty all pending
@@ -286,4 +289,3 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
 
     return n_iters;
 }
-

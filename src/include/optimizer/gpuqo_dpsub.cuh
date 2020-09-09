@@ -14,12 +14,43 @@
 
 #define PENDING_KEYS_SIZE (gpuqo_dpsub_n_parallel*gpuqo_dpsub_filter_keys_overprovisioning)
 
+#define WARP_SIZE 32
+#define WARP_MASK 0xFFFFFFFF
+#define BLOCK_DIM 256
+
 __host__ __device__
 RelationID dpsub_unrank_sid(uint64_t sid, uint64_t qss, uint64_t sq, uint64_t* binoms);
 
+typedef struct join_stack_elem_t{
+    JoinRelation *left_rel;
+    JoinRelation *right_rel;
+    // int padding;
+} join_stack_elem_t;
+
+template <typename stack_elem_t>
+struct ccc_stack_t{
+    volatile stack_elem_t* ctxStack;
+    int stackTop;
+    int wOffset;
+    int lane_id;
+    unsigned lanemask_le;
+};
+
+typedef struct ccc_stack_t<join_stack_elem_t> join_stack_t;
+
+__device__
+bool check_join(JoinRelation &left_rel, JoinRelation &right_rel, 
+                GpuqoPlannerInfo* info);
+
+__device__
+void do_join(RelationID relid, JoinRelation &jr_out, 
+            JoinRelation &left_rel, JoinRelation &right_rel,
+            GpuqoPlannerInfo* info);
+
 __device__
 void try_join(RelationID relid, JoinRelation &jr_out, 
-            RelationID l, RelationID r, JoinRelation* memo_vals,
+            RelationID l, RelationID r, bool additional_predicate,
+            join_stack_t &stack, JoinRelation* memo_vals, 
             GpuqoPlannerInfo* info);
 
 typedef struct dpsub_iter_param_t{
@@ -86,5 +117,6 @@ EXTERN_PROTOTYPE_TIMING(filter);
 EXTERN_PROTOTYPE_TIMING(compute);
 EXTERN_PROTOTYPE_TIMING(prune);
 EXTERN_PROTOTYPE_TIMING(scatter);
+EXTERN_PROTOTYPE_TIMING(iteration);
 
 #endif							/* GPUQO_DPSUB_CUH */

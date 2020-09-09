@@ -42,6 +42,7 @@ PROTOTYPE_TIMING(filter);
 PROTOTYPE_TIMING(compute);
 PROTOTYPE_TIMING(prune);
 PROTOTYPE_TIMING(scatter);
+PROTOTYPE_TIMING(iteration);
 
 // User-configured option
 int gpuqo_dpsub_n_parallel;
@@ -68,45 +69,101 @@ RelationID dpsub_unrank_sid(uint64_t sid, uint64_t qss, uint64_t sq, uint64_t* b
 }
 
 __device__
-void try_join(RelationID relid, JoinRelation &jr_out, 
-            RelationID l, RelationID r, JoinRelation* memo_vals,
-            GpuqoPlannerInfo* info) {
-    if (l == BMS64_EMPTY || r == BMS64_EMPTY){
-        return;
-    }
+bool check_join(JoinRelation &left_rel, JoinRelation &right_rel, 
+                GpuqoPlannerInfo* info) {
+    // make sure those subsets were valid in a previous iteration
+    if (left_rel.id != BMS64_EMPTY && right_rel.id != BMS64_EMPTY){       
+        // enumerator must generate disjoint sets
+        Assert(is_disjoint(left_rel, right_rel));
 
-    LOG_DEBUG("try_join(%llu, %llu, %llu)\n", relid, l, r);
+        // enumerator must generate self-connected sets
+        Assert(is_connected(left_rel.id, info));
+        Assert(is_connected(right_rel.id, info));
+
+        if (are_connected(left_rel, right_rel, info)){
+            return true;
+        } else {
+            LOG_DEBUG("[%llu] Cannot join %llu and %llu\n", BMS64_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
+            return false;
+        }
+    } else {
+        LOG_DEBUG("[%llu] Invalid subsets %llu and %llu\n", BMS64_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
+        return false;
+    }
+}
+
+__device__
+void do_join(RelationID relid, JoinRelation &jr_out, 
+            JoinRelation &left_rel, JoinRelation &right_rel,
+            GpuqoPlannerInfo* info) {
+    LOG_DEBUG("[%llu] Joining %llu and %llu\n", 
+            relid, left_rel.id, right_rel.id);
 
     JoinRelation jr;
     jr.id = relid;
-    jr.left_relation_id = l;
-    jr.left_relation_idx = l;
-    jr.right_relation_id = r;
-    jr.right_relation_idx = r;
-    
-    JoinRelation left_rel = memo_vals[jr.left_relation_idx];
-    JoinRelation right_rel = memo_vals[jr.right_relation_idx];
+    jr.left_relation_id = left_rel.id;
+    jr.left_relation_idx = left_rel.id;
+    jr.right_relation_id = right_rel.id;
+    jr.right_relation_idx = right_rel.id;
+    jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
+    jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
+    jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
 
-    // make sure those subsets were valid in a previous iteration
-    if (left_rel.id == l && right_rel.id == r){
-        jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
-        
-        if (are_connected(left_rel, right_rel, info)){
+    if (jr.cost < jr_out.cost){
+        jr_out = jr;
+    }
+}
 
-        LOG_DEBUG("[%llu] Joining %llu and %llu\n", relid, l, r);
+__device__
+void try_join(RelationID relid, JoinRelation &jr_out, 
+            RelationID l, RelationID r, bool additional_predicate,
+            join_stack_t &stack, JoinRelation* memo_vals, 
+            GpuqoPlannerInfo* info) {
+    LOG_DEBUG("[%d, %d] try_join(%llu, %llu, %llu, %s)\n", 
+                blockIdx.x, threadIdx.x, relid, l, r,
+                additional_predicate ? "true" : "false");
 
-            jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
+    JoinRelation *left_rel = &memo_vals[l];
+    JoinRelation *right_rel = &memo_vals[r];
 
-            jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
+    Assert(__activemask() == WARP_MASK);
+    Assert(left_rel->id == BMS64_EMPTY || left_rel->id == l);
+    Assert(right_rel->id == BMS64_EMPTY || right_rel->id == r);
 
-            if (jr.cost < jr_out.cost){
-                jr_out = jr;
-            }
+    bool p = check_join(*left_rel, *right_rel, info) && additional_predicate;
+    unsigned pthBlt = __ballot_sync(WARP_MASK, !p);
+    int reducedNTaken = __popc(pthBlt);
+    if (stack.lane_id == 0){
+        LOG_DEBUG("[%d] pthBlt=%u, reducedNTaken=%d, stackTop=%d\n", stack.wOffset, pthBlt, reducedNTaken, stack.stackTop);
+    }
+    if (stack.stackTop >= reducedNTaken){
+        int wScan = __popc(pthBlt & stack.lanemask_le);
+        int pos = stack.wOffset + stack.stackTop - wScan;
+        if (!p){
+            left_rel = stack.ctxStack[pos].left_rel;
+            right_rel = stack.ctxStack[pos].right_rel;
+            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%llu, r=%llu\n", stack.wOffset, stack.lane_id, pos, left_rel->id, right_rel->id);
         } else {
-            LOG_DEBUG("[%llu] Cannot join %llu and %llu\n", relid, l, r);
+            LOG_DEBUG("[%d: %d] Using local values: l=%llu, r=%llu\n", stack.wOffset, stack.lane_id, left_rel->id, right_rel->id);
         }
-    } else {
-        LOG_DEBUG("[%llu] Invalid subsets %llu and %llu\n", relid, l, r);
+        stack.stackTop -= reducedNTaken;
+
+        Assert(BMS64_UNION(left_rel->id, right_rel->id) == relid);
+
+        do_join(relid, jr_out, *left_rel, *right_rel, info);
+
+    } else{
+        int wScan = __popc(~pthBlt & stack.lanemask_le);
+        int pos = stack.wOffset + stack.stackTop + wScan - 1;
+        if (p){
+            LOG_DEBUG("[%d: %d] Accumulating stack (%d): l=%llu, r=%llu\n", stack.wOffset, stack.lane_id, pos, left_rel->id, right_rel->id);
+            stack.ctxStack[pos].left_rel = left_rel;
+            stack.ctxStack[pos].right_rel = right_rel;
+        }
+        stack.stackTop += WARP_SIZE - reducedNTaken;
+    }
+    if (stack.lane_id == 0){
+        LOG_DEBUG("[%d] new stackTop=%d\n", stack.wOffset, stack.stackTop);
     }
 }
 
@@ -117,16 +174,48 @@ JoinRelation dpsubEnumerateAllSubs::operator()(RelationID relid, uint64_t cid)
     jr_out.id = BMS64_EMPTY;
     jr_out.cost = INFD;
     int qss = BMS64_SIZE(relid);
-    uint64_t n_pairs = ceil_div((1<<qss)-2, n_splits);
-    RelationID l = BMS64_EXPAND_TO_MASK((cid)*n_pairs+1, relid);
+    uint64_t n_possible_joins = 1ULL<<qss;
+    uint64_t n_pairs = ceil_div(n_possible_joins, n_splits);
+    uint64_t join_id = (cid)*n_pairs;
+    RelationID l = BMS64_EXPAND_TO_MASK(join_id, relid);
     RelationID r;
 
+    LOG_DEBUG("[%llu, %llu] n_splits=%d\n", relid, cid, n_splits);
+
+    Assert(blockDim.x == BLOCK_DIM);
+    volatile __shared__ join_stack_elem_t ctxStack[BLOCK_DIM];
+    join_stack_t stack;
+    stack.ctxStack = ctxStack;
+    stack.stackTop = 0;
+    stack.wOffset = threadIdx.x & (~(WARP_SIZE-1));
+    stack.lane_id = threadIdx.x & (WARP_SIZE-1);
+    stack.lanemask_le = (1 << (stack.lane_id+1)) - 1;
+
+    bool stop = false;
     for (int i = 0; i < n_pairs; i++){
-        r = BMS64_DIFFERENCE(relid, l);
+        stop = stop || (join_id+i != 0 && l == 0) || (join_id+i > n_possible_joins);
+
+        if (stop){
+            r=0; 
+            // makes try_join process an invalid pair, giving it the possibility
+            // to pop an element from the stack 
+        } else {
+            r = BMS64_DIFFERENCE(relid, l);
+        }
         
-        try_join(relid, jr_out, l, r, memo_vals.get(), info);
+        try_join(relid, jr_out, l, r, true, stack, memo_vals.get(), info);
 
         l = BMS64_NEXT_SUBSET(l, relid);
+    }
+
+    if (stack.lane_id < stack.stackTop){
+        int pos = stack.wOffset + stack.stackTop - stack.lane_id - 1;
+        JoinRelation *left_rel = stack.ctxStack[pos].left_rel;
+        JoinRelation *right_rel = stack.ctxStack[pos].right_rel;
+
+        LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%llu, r=%llu\n", stack.wOffset, stack.lane_id, pos, left_rel->id, right_rel->id);
+
+        do_join(relid, jr_out, *left_rel, *right_rel, info);
     }
 
     return jr_out;
@@ -250,6 +339,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
         INIT_NV_TIMING(compute);
         INIT_NV_TIMING(prune);
         INIT_NV_TIMING(scatter);
+        INIT_NV_TIMING(iteration);
         DECLARE_NV_TIMING(build_qt);
 
         // iterate over the size of the resulting joinrel
@@ -260,12 +350,14 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
             // calculate number of combinations of relations that make up 
             // a joinrel of size i
             params.n_sets = BINOM(params.binoms, info->n_rels, info->n_rels, i);
-            params.n_joins_per_set = (1<<i) - 2;
+            params.n_joins_per_set = ((1ULL)<<i);
             params.tot = params.n_sets * params.n_joins_per_set;
 
             uint64_t n_iters;
             uint64_t filter_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_filter_threshold;
             uint64_t csg_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_csg_threshold;
+
+            START_TIMING(iteration);
             if ((gpuqo_dpsub_filter_enable && params.tot > filter_threshold) 
                     || (gpuqo_dpsub_csg_enable && params.tot > csg_threshold)){
                 LOG_PROFILE("\nStarting filtered iteration %d: %llu combinations\n", i, params.tot);
@@ -276,6 +368,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
                 n_iters = dpsub_unfiltered_iteration(i, params);
             }
+            STOP_TIMING(iteration);
 
             LOG_DEBUG("It took %d iterations\n", n_iters);
             PRINT_CHECKPOINT_TIMING(unrank);
@@ -283,6 +376,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
             PRINT_CHECKPOINT_TIMING(compute);
             PRINT_CHECKPOINT_TIMING(prune);
             PRINT_CHECKPOINT_TIMING(scatter);
+            PRINT_TIMING(iteration);
         } // dpsub loop: for i = 2..n_rels
 
         START_TIMING(build_qt);

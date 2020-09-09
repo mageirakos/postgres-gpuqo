@@ -69,7 +69,7 @@ public:
         uint64_t cid = real_id % n_splits;
 
         LOG_DEBUG("[%llu] n_splits=%d, sid=%llu, cid=[%llu,%llu)\n", 
-                tid, n_splits, sid, cid, cid+ceil_div((1<<qss) - 2, n_splits));
+                tid, n_splits, sid, cid, cid+ceil_div((1ULL)<<qss, n_splits));
 
         RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
         RelationID relid = s<<1;
@@ -84,21 +84,30 @@ public:
 int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
     uint64_t n_joins_per_thread;
     uint64_t n_sets_per_iteration;
+    uint64_t threads_per_set;
     uint64_t factor = gpuqo_dpsub_n_parallel / params.n_sets;
-    if (factor < 1){ // n_sets > gpuqo_dpsub_n_parallel
-        n_joins_per_thread = params.n_joins_per_set;
-        n_sets_per_iteration = gpuqo_dpsub_n_parallel;
+
+    if (factor < 32 || params.n_joins_per_set <= 32){
+        threads_per_set = 32;
     } else{
-        n_sets_per_iteration = params.n_sets;
-        n_joins_per_thread = ceil_div(params.n_joins_per_set, factor);
+        threads_per_set = BMS64_HIGHEST(min(factor, params.n_joins_per_set));
     }
+    
+    n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
+    n_sets_per_iteration = min(gpuqo_dpsub_n_parallel / threads_per_set, params.n_sets);
+
+    LOG_PROFILE("n_joins_per_thread=%llu, n_sets_per_iteration=%llu, threads_per_set=%llu, factor=%llu\n",
+            n_joins_per_thread,
+            n_sets_per_iteration,
+            threads_per_set,
+            factor
+        );
 
     uint64_t id_offset = 0;
     uint64_t offset = 0;
     int n_iters = 0;
     while (offset < params.tot){
         uint64_t n_threads;
-        uint64_t threads_per_set = ceil_div(params.n_joins_per_set, n_joins_per_thread);
         uint64_t n_remaining_sets = (params.tot-offset)/params.n_joins_per_set;
         if (n_remaining_sets >= n_sets_per_iteration){
             n_threads = n_sets_per_iteration*threads_per_set;
