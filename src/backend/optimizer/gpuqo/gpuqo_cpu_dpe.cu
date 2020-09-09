@@ -326,9 +326,7 @@ QueryTree* gpuqo_cpu_dpe(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm){
 
     algorithm.teardown_function(info, memo, extra);
 
-#ifdef GPUQO_PROFILE
-    printf("%llu pairs have been evaluated\n", mExtra->total_job_count);
-#endif
+    LOG_PROFILE("%llu pairs have been evaluated\n", mExtra->total_job_count);
     
     pthread_cond_destroy(&mExtra->depbufs.avail_jobs);
     pthread_cond_destroy(&mExtra->depbufs.all_threads_waiting);
