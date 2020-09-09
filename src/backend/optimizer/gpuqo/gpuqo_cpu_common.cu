@@ -17,13 +17,13 @@
 
 #include "optimizer/gpuqo_common.h"
 
-#include "optimizer/gpuqo.cuh"
-#include "optimizer/gpuqo_timing.cuh"
-#include "optimizer/gpuqo_debug.cuh"
-#include "optimizer/gpuqo_cost.cuh"
-#include "optimizer/gpuqo_filter.cuh"
-#include "optimizer/gpuqo_cpu_common.cuh"
-#include "optimizer/gpuqo_dependency_buffer.cuh"
+#include "gpuqo.cuh"
+#include "gpuqo_timing.cuh"
+#include "gpuqo_debug.cuh"
+#include "gpuqo_cost.cuh"
+#include "gpuqo_filter.cuh"
+#include "gpuqo_cpu_common.cuh"
+#include "gpuqo_dependency_buffer.cuh"
 
 void build_query_tree(JoinRelation *jr, memo_t &memo, QueryTree **qt)
 {

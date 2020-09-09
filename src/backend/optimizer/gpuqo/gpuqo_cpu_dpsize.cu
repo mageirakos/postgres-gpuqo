@@ -16,13 +16,13 @@
 
 #include "optimizer/gpuqo_common.h"
 
-#include "optimizer/gpuqo.cuh"
-#include "optimizer/gpuqo_timing.cuh"
-#include "optimizer/gpuqo_debug.cuh"
-#include "optimizer/gpuqo_cost.cuh"
-#include "optimizer/gpuqo_filter.cuh"
-#include "optimizer/gpuqo_cpu_sequential.cuh"
-#include "optimizer/gpuqo_cpu_dpe.cuh"
+#include "gpuqo.cuh"
+#include "gpuqo_timing.cuh"
+#include "gpuqo_debug.cuh"
+#include "gpuqo_cost.cuh"
+#include "gpuqo_filter.cuh"
+#include "gpuqo_cpu_sequential.cuh"
+#include "gpuqo_cpu_dpe.cuh"
 
 struct GpuqoCPUDPSizeExtra{
     vector_list_t rels_per_level;

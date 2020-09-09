@@ -9,7 +9,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include <optimizer/gpuqo.cuh>
+#include "gpuqo.cuh"
 
 bool using_gpu(){
     switch (gpuqo_algorithm)

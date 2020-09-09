@@ -15,8 +15,7 @@
 #include <pthread.h>
 #include <atomic>
 
-#include "optimizer/gpuqo_common.h"
-#include "optimizer/gpuqo.cuh"
+#include "gpuqo.cuh"
 
 struct JoinRelationDPE : JoinRelation{
     std::atomic_int num_entry;

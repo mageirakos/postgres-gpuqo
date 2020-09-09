@@ -25,14 +25,14 @@
 
 #include "optimizer/gpuqo_common.h"
 
-#include "optimizer/gpuqo.cuh"
-#include "optimizer/gpuqo_timing.cuh"
-#include "optimizer/gpuqo_debug.cuh"
-#include "optimizer/gpuqo_cost.cuh"
-#include "optimizer/gpuqo_filter.cuh"
-#include "optimizer/gpuqo_binomial.cuh"
-#include "optimizer/gpuqo_query_tree.cuh"
-#include "optimizer/gpuqo_dpsub.cuh"
+#include "gpuqo.cuh"
+#include "gpuqo_timing.cuh"
+#include "gpuqo_debug.cuh"
+#include "gpuqo_cost.cuh"
+#include "gpuqo_filter.cuh"
+#include "gpuqo_binomial.cuh"
+#include "gpuqo_query_tree.cuh"
+#include "gpuqo_dpsub.cuh"
 
 // relsize depends on algorithm
 #define RELSIZE (sizeof(JoinRelation))

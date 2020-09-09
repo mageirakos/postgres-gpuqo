@@ -12,8 +12,7 @@
 
 #include <thrust/device_vector.h>
 
-#include <optimizer/gpuqo_common.h>
-#include <optimizer/gpuqo.cuh>
+#include "gpuqo.cuh"
 
 template<typename T>
 void buildQueryTree(uint64_t idx, T &gpu_memo_vals, QueryTree **qt);

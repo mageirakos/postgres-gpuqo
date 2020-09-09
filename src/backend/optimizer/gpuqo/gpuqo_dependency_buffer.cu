@@ -8,7 +8,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include "optimizer/gpuqo_dependency_buffer.cuh"
+#include "gpuqo_dependency_buffer.cuh"
 
 DependencyBuffer::DependencyBuffer(int n_rels) 
         : n_rels(n_rels) {

@@ -12,7 +12,7 @@
 
 #include <iostream>
 #include "optimizer/gpuqo_common.h"
-#include "optimizer/gpuqo_uninitalloc.cuh"
+#include "gpuqo_uninitalloc.cuh"
 
 // I did not want to include the full c.h for fear of conflicts so I just 
 // include the definitions (to get USE_ASSERT_CHECKING) and just define the

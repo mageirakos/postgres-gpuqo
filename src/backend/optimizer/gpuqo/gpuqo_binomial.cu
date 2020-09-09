@@ -8,7 +8,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include <optimizer/gpuqo_binomial.cuh>
+#include "gpuqo_binomial.cuh"
 
 void precompute_binoms(thrust::host_vector<uint64_t> &binoms, int N){
     for (int n = 0; n <= N; n++){

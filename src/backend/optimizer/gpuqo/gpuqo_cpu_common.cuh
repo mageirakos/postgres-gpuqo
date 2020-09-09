@@ -17,13 +17,11 @@
 #include <cmath>
 #include <cstdint>
 
-#include "optimizer/gpuqo_common.h"
-
-#include "optimizer/gpuqo.cuh"
-#include "optimizer/gpuqo_timing.cuh"
-#include "optimizer/gpuqo_debug.cuh"
-#include "optimizer/gpuqo_cost.cuh"
-#include "optimizer/gpuqo_filter.cuh"
+#include "gpuqo.cuh"
+#include "gpuqo_timing.cuh"
+#include "gpuqo_debug.cuh"
+#include "gpuqo_cost.cuh"
+#include "gpuqo_filter.cuh"
 
 typedef std::vector< std::list<JoinRelation*> > vector_list_t;
 typedef std::unordered_map<RelationID, JoinRelation*> memo_t;

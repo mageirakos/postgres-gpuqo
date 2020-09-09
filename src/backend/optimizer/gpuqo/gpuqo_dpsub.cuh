@@ -12,6 +12,8 @@
 
 #include <thrust/tabulate.h>
 
+#include "gpuqo.cuh"
+
 #define PENDING_KEYS_SIZE (gpuqo_dpsub_n_parallel*gpuqo_dpsub_filter_keys_overprovisioning)
 
 #define WARP_SIZE 32

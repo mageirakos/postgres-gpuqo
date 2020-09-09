@@ -12,8 +12,7 @@
 
 #include <thrust/device_ptr.h>
 
-#include "optimizer/gpuqo_common.h"
-#include "optimizer/gpuqo.cuh"
+#include "gpuqo.cuh"
 
 extern __host__ __device__
 bool is_disjoint(JoinRelation &left_rel, JoinRelation &right_rel);

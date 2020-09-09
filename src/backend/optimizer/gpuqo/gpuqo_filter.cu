@@ -13,10 +13,10 @@
  
  #include "optimizer/gpuqo_common.h"
  
- #include "optimizer/gpuqo.cuh"
- #include "optimizer/gpuqo_timing.cuh"
- #include "optimizer/gpuqo_debug.cuh"
- #include "optimizer/gpuqo_filter.cuh"
+ #include "gpuqo.cuh"
+ #include "gpuqo_timing.cuh"
+ #include "gpuqo_debug.cuh"
+ #include "gpuqo_filter.cuh"
 
 __host__ __device__
 bool is_disjoint(JoinRelation &left_rel, JoinRelation &right_rel)

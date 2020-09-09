@@ -13,10 +13,10 @@
 
 #include "optimizer/gpuqo_common.h"
 
-#include "optimizer/gpuqo.cuh"
-#include "optimizer/gpuqo_timing.cuh"
-#include "optimizer/gpuqo_debug.cuh"
-#include "optimizer/gpuqo_cost.cuh"
+#include "gpuqo.cuh"
+#include "gpuqo_timing.cuh"
+#include "gpuqo_debug.cuh"
+#include "gpuqo_cost.cuh"
 
 
 __host__ __device__

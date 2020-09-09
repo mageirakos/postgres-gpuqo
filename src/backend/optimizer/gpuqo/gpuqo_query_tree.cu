@@ -8,7 +8,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include <optimizer/gpuqo_query_tree.cuh>
+#include "gpuqo_query_tree.cuh"
 
 template<typename T>
 void buildQueryTree(uint64_t idx, T &gpu_memo_vals, QueryTree **qt)

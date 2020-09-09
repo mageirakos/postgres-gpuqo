@@ -12,8 +12,7 @@
 
 #include <thrust/device_ptr.h>
 
-#include "optimizer/gpuqo_common.h"
-#include "optimizer/gpuqo.cuh"
+#include "gpuqo.cuh"
 
 #define BASEREL_COEFF   0.2
 #define HASHJOIN_COEFF  1

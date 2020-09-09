@@ -10,7 +10,7 @@
 #ifndef GPUQO_CPU_DPE_CUH
 #define GPUQO_CPU_DPE_CUH
 
-#include "optimizer/gpuqo_cpu_common.cuh"
+#include "gpuqo_cpu_common.cuh"
 
 extern QueryTree* gpuqo_cpu_dpe(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm);
 
