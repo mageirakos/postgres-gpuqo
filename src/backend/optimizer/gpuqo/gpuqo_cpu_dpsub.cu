@@ -33,6 +33,10 @@ void gpuqo_cpu_dpsub_enumerate(GpuqoPlannerInfo* info, join_f join_function, mem
     // first bit is zero
     for (RelationID i=1; i < BMS64_NTH(info->n_rels); i++){
         RelationID join_id = i << 1; // first bit is 0 in Postgres
+
+        if (!is_connected(join_id, info))
+            continue;
+
         RelationID left_id = BMS64_LOWEST(join_id);
         RelationID right_id;
         while (left_id != join_id){
