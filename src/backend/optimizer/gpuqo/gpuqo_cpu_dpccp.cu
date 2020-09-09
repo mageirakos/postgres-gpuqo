@@ -51,7 +51,7 @@ void enumerate_csg_rec(RelationID S, RelationID X, RelationID cmp,
                     GpuqoPlannerInfo* info, emit_f emit_function, memo_t &memo,
                     extra_t extra, struct DPCPUAlgorithm algorithm){
     LOG_DEBUG("enumerate_csg_rec(%llu, %llu, %llu)\n", S, X, cmp);
-    RelationID N = BMS64_DIFFERENCE(get_neighbours(S, info), X);
+    RelationID N = BMS64_DIFFERENCE(get_neighbours(S, info->edge_table), X);
     std::list<RelationID> *subsets = get_all_subsets(N);
     for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
         RelationID emit_set = BMS64_UNION(S, *subset);
@@ -79,7 +79,7 @@ void enumerate_csg(GpuqoPlannerInfo* info, emit_f emit_function, memo_t &memo, e
 void enumerate_cmp(RelationID S, GpuqoPlannerInfo* info, emit_f emit_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
     LOG_DEBUG("enumerate_cmp(%llu)\n", S);
     RelationID X = BMS64_SET_ALL_LOWER_INC(S);
-    RelationID N = BMS64_DIFFERENCE(get_neighbours(S, info), X);
+    RelationID N = BMS64_DIFFERENCE(get_neighbours(S, info->edge_table), X);
     RelationID temp = N;
     while (temp != BMS64_EMPTY){
         int idx = BMS64_HIGHEST_POS(temp)-1;

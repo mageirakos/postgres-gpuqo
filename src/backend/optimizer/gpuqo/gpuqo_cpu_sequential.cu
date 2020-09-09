@@ -63,7 +63,7 @@ QueryTree* gpuqo_cpu_sequential(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm
         jr->right_relation_ptr = NULL; 
         jr->cost = baserel_cost(info->base_rels[i]); 
         jr->rows = info->base_rels[i].rows; 
-        jr->edges = info->base_rels[i].edges;
+        jr->edges = info->edge_table[i];
         memo.insert(std::make_pair(info->base_rels[i].id, jr));
     }
 

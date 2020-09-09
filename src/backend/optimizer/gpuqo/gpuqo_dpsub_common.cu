@@ -190,7 +190,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
         t.right_relation_id = 0; 
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
-        t.edges = info->base_rels[i].edges;
+        t.edges = info->edge_table[i];
         params.gpu_memo_vals[info->base_rels[i].id] = t;
 
         params.out_relid = BMS64_UNION(params.out_relid, info->base_rels[i].id);

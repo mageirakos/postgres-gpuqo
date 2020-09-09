@@ -41,7 +41,7 @@ void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
             RelationID emit_X, RelationID I, RelationID E,
             ext_loop_stack_elem_t* loop_stack, int &loop_stack_size,
             JoinRelation &jr_out, join_stack_t &join_stack, 
-            JoinRelation* memo_vals, GpuqoPlannerInfo* info){
+            JoinRelation* memo_vals, GpuqoPlannerInfo* info, EdgeMask* edge_table){
     // LOG_DEBUG("enumerate_sub_csg_emit(%llu, %llu, %llu, %llu, %llu)\n",
     //         T, emit_S, emit_X, I, E);
     Assert(BMS64_IS_SUBSET(emit_S, T));
@@ -52,7 +52,7 @@ void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
 
     RelationID new_N = BMS64_INTERSECTION(
         BMS64_DIFFERENCE(
-            get_neighbours(emit_S, info), 
+            get_neighbours(emit_S, edge_table), 
             emit_X
         ),
         BMS64_DIFFERENCE(T, E)
@@ -96,6 +96,11 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
     stack.lanemask_le = (1 << (stack.lane_id+1)) - 1;
 
     LOG_DEBUG("[%d: %d] lanemask_le=%u\n", stack.wOffset, stack.lane_id, stack.lanemask_le);
+
+    __shared__ EdgeMask edge_table[MAX_DEPTH];
+    for (int i = stack.lane_id; i < MAX_DEPTH; i+=WARP_SIZE){
+        edge_table[i] = info->edge_table[i];
+    }
 
     RelationID temp;
     if (I != BMS64_EMPTY){
@@ -166,7 +171,8 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
 
                 enumerate_sub_csg_emit(T, emit_S, emit_X, I, E, 
                                 loop_stack, loop_stack_size,
-                                jr_out, join_stack, memo_vals, info);
+                                jr_out, join_stack, memo_vals, info,
+                                edge_table);
             } else{
                 int wScan = __popc(~pthBlt & stack.lanemask_le);
                 int pos = stack.wOffset + stack.stackTop + wScan - 1;
@@ -202,7 +208,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
 
             enumerate_sub_csg_emit(T, emit_S, emit_X, I, E, 
                 loop_stack, loop_stack_size,
-                jr_out, join_stack, memo_vals, info);
+                jr_out, join_stack, memo_vals, info, edge_table);
 
             stack.stackTop = 0;
         }

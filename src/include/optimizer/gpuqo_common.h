@@ -40,11 +40,16 @@ extern int gpuqo_dpe_pairs_per_depbuf;
 typedef Bitmapset64 EdgeMask;
 typedef Bitmapset64 RelationID;
 
+typedef struct EqClassInfo{
+	RelationID relids;
+	double* sels;
+	struct EqClassInfo* next;
+} EqClassInfo;
+
 typedef struct BaseRelation{
 	RelationID id;
 	double rows;
 	double tuples;
-	EdgeMask edges;
 } BaseRelation;
 
 typedef struct QueryTree{
@@ -55,15 +60,12 @@ typedef struct QueryTree{
 	struct QueryTree* right;
 } QueryTree;
 
-typedef struct EdgeInfo{
-	double sel;
-	bool has_index;
-} EdgeInfo;
-
 typedef struct GpuqoPlannerInfo{
 	int n_rels;
 	BaseRelation *base_rels;
-	EdgeInfo *edge_table;
+	EdgeMask* edge_table;
+	EdgeMask* indexed_edge_table;
+	EqClassInfo* eq_classes;
 } GpuqoPlannerInfo;
 
 #endif							/* GPUQO_COMMON_H */

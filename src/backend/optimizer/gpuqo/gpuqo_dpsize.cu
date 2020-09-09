@@ -151,7 +151,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
         t.right_relation_id = 0; 
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
-        t.edges = info->base_rels[i].edges;
+        t.edges = info->edge_table[i];
         gpu_memo_vals[i] = t;
 
         partition_sizes[i] = i == 0 ? info->n_rels : 0;
