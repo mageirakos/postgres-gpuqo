@@ -104,16 +104,3 @@ estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
     // clamp the number of rows
     return rows > 1 ? round(rows) : 1;
 }
-
-
-__device__
-JoinRelation joinCost::operator()(JoinRelation jr){
-    JoinRelation left_rel = memo_vals[jr.left_relation_idx];
-    JoinRelation right_rel = memo_vals[jr.right_relation_idx];
-
-    jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
-
-    jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
-
-    return jr;
-}

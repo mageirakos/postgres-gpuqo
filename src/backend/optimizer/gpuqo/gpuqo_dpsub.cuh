@@ -13,15 +13,13 @@
 #include <thrust/tabulate.h>
 
 #include "gpuqo.cuh"
+#include "gpuqo_binomial.cuh"
 
 #define PENDING_KEYS_SIZE (gpuqo_dpsub_n_parallel*gpuqo_dpsub_filter_keys_overprovisioning)
 
 #define WARP_SIZE 32
 #define WARP_MASK 0xFFFFFFFF
 #define BLOCK_DIM 256
-
-__host__ __device__
-RelationID dpsub_unrank_sid(uint64_t sid, uint64_t qss, uint64_t sq, uint64_t* binoms);
 
 typedef struct join_stack_elem_t{
     JoinRelation *left_rel;
@@ -39,21 +37,6 @@ struct ccc_stack_t{
 };
 
 typedef struct ccc_stack_t<join_stack_elem_t> join_stack_t;
-
-__device__
-bool check_join(JoinRelation &left_rel, JoinRelation &right_rel, 
-                GpuqoPlannerInfo* info);
-
-__device__
-void do_join(RelationID relid, JoinRelation &jr_out, 
-            JoinRelation &left_rel, JoinRelation &right_rel,
-            GpuqoPlannerInfo* info);
-
-__device__
-void try_join(RelationID relid, JoinRelation &jr_out, 
-            RelationID l, RelationID r, bool additional_predicate,
-            join_stack_t &stack, JoinRelation* memo_vals, 
-            GpuqoPlannerInfo* info);
 
 typedef struct dpsub_iter_param_t{
     GpuqoPlannerInfo* info;
@@ -80,45 +63,87 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params);
 
 void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t &params);
 
-struct dpsubEnumerateAllSubs : public pairs_enum_func_t 
-{
-    thrust::device_ptr<JoinRelation> memo_vals;
-    GpuqoPlannerInfo* info;
-    int n_splits;
-public:
-    dpsubEnumerateAllSubs(
-        thrust::device_ptr<JoinRelation> _memo_vals,
-        GpuqoPlannerInfo* _info,
-        int _n_splits
-    ) : memo_vals(_memo_vals), info(_info), n_splits(_n_splits)
-    {}
-
-    __device__
-    JoinRelation operator()(RelationID relid, uint64_t cid);
-};
-
-struct dpsubEnumerateCsg : public pairs_enum_func_t 
-{
-    thrust::device_ptr<JoinRelation> memo_vals;
-    GpuqoPlannerInfo* info;
-    int n_splits;
-public:
-    dpsubEnumerateCsg(
-        thrust::device_ptr<JoinRelation> _memo_vals,
-        GpuqoPlannerInfo* _info,
-        int _n_splits
-    ) : memo_vals(_memo_vals), info(_info), n_splits(_n_splits)
-    {}
-
-    __device__
-    JoinRelation operator()(RelationID relid, uint64_t cid);
-};
-
 EXTERN_PROTOTYPE_TIMING(unrank);
 EXTERN_PROTOTYPE_TIMING(filter);
 EXTERN_PROTOTYPE_TIMING(compute);
 EXTERN_PROTOTYPE_TIMING(prune);
 EXTERN_PROTOTYPE_TIMING(scatter);
 EXTERN_PROTOTYPE_TIMING(iteration);
+
+__host__ __device__
+__forceinline__
+RelationID dpsub_unrank_sid(uint64_t sid, uint64_t qss, uint64_t sq, uint64_t* binoms){
+    RelationID s = BMS64_EMPTY;
+    int t = 0;
+    int qss_tmp = qss, sq_tmp = sq;
+
+    while (sq_tmp > 0 && qss_tmp > 0){
+        uint64_t o = BINOM(binoms, sq, sq_tmp-1, qss_tmp-1);
+        if (sid < o){
+            s = BMS64_UNION(s, BMS64_NTH(t));
+            qss_tmp--;
+        } else {
+            sid -= o;
+        }
+        t++;
+        sq_tmp--;
+    }
+
+    return s;
+}
+
+__device__
+__forceinline__
+bool check_join(JoinRelation &left_rel, JoinRelation &right_rel, 
+                GpuqoPlannerInfo* info) {
+    // make sure those subsets were valid in a previous iteration
+    if (left_rel.id != BMS64_EMPTY && right_rel.id != BMS64_EMPTY){       
+        // enumerator must generate disjoint sets
+        Assert(is_disjoint(left_rel, right_rel));
+
+        // enumerator must generate self-connected sets
+        Assert(is_connected(left_rel.id, info));
+        Assert(is_connected(right_rel.id, info));
+
+        if (are_connected(left_rel, right_rel, info)){
+            return true;
+        } else {
+            LOG_DEBUG("[%llu] Cannot join %llu and %llu\n", BMS64_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
+            return false;
+        }
+    } else {
+        LOG_DEBUG("[%llu] Invalid subsets %llu and %llu\n", BMS64_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
+        return false;
+    }
+}
+
+__device__
+__forceinline__
+void do_join(RelationID relid, JoinRelation &jr_out, 
+            JoinRelation &left_rel, JoinRelation &right_rel,
+            GpuqoPlannerInfo* info) {
+    LOG_DEBUG("[%llu] Joining %llu and %llu\n", 
+            relid, left_rel.id, right_rel.id);
+
+    JoinRelation jr;
+    jr.id = relid;
+    jr.left_relation_id = left_rel.id;
+    jr.left_relation_idx = left_rel.id;
+    jr.right_relation_id = right_rel.id;
+    jr.right_relation_idx = right_rel.id;
+    jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
+    jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
+    jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
+
+    if (jr.cost < jr_out.cost){
+        jr_out = jr;
+    }
+}
+
+__device__
+void try_join(RelationID relid, JoinRelation &jr_out, 
+            RelationID l, RelationID r, bool additional_predicate,
+            join_stack_t &stack, JoinRelation* memo_vals, 
+            GpuqoPlannerInfo* info);
 
 #endif							/* GPUQO_DPSUB_CUH */

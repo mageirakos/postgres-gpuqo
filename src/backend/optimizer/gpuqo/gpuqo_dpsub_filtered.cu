@@ -34,6 +34,8 @@
 #include "gpuqo_binomial.cuh"
 #include "gpuqo_query_tree.cuh"
 #include "gpuqo_dpsub.cuh"
+#include "gpuqo_dpsub_enum_all_subs.cuh"
+#include "gpuqo_dpsub_csg.cuh"
 
 // user-configured variables
 bool gpuqo_dpsub_filter_enable;

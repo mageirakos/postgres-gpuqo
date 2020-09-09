@@ -34,6 +34,7 @@
 #include "gpuqo_binomial.cuh"
 #include "gpuqo_query_tree.cuh"
 #include "gpuqo_dpsub.cuh"
+#include "gpuqo_dpsub_enum_all_subs.cuh"
 
 /* unrankEvaluateDPSub
  *

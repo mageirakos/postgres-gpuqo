@@ -7,30 +7,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include <iostream>
-#include <cmath>
-#include <cstdint>
-
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/generate.h>
-#include <thrust/sort.h>
-#include <thrust/copy.h>
-#include <thrust/tabulate.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/tuple.h>
-#include <thrust/system/system_error.h>
-#include <thrust/distance.h>
-
-#include "optimizer/gpuqo_common.h"
-
-#include "gpuqo.cuh"
-#include "gpuqo_timing.cuh"
-#include "gpuqo_debug.cuh"
-#include "gpuqo_cost.cuh"
-#include "gpuqo_filter.cuh"
-#include "gpuqo_dpsub.cuh"
+#include "gpuqo_dpsub_csg.cuh"
 
 #define WARP_SIZE 32
 

@@ -12,7 +12,7 @@ top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
 OBJS   = gpuqo_main.o 
-NVOBJS = gpuqo_dpsize.o gpuqo_dpsub_common.o gpuqo_dpsub_unfiltered.o gpuqo_dpsub_filtered.o gpuqo_dpsub_csg.o gpuqo_cost.o gpuqo_joinrelation.o gpuqo_query_tree.o gpuqo_binomial.o gpuqo_filter.o  gpuqo_cpu_common.o gpuqo_cpu_sequential.o gpuqo_cpu_dpe.o gpuqo_dependency_buffer.o gpuqo_cpu_dpsize.o gpuqo_cpu_dpsub.o gpuqo_cpu_dpccp.o gpuqo_malloc.o
+NVOBJS = gpuqo_dpsize.o gpuqo_dpsub_common.o gpuqo_dpsub_unfiltered.o gpuqo_dpsub_filtered.o gpuqo_dpsub_csg.o gpuqo_cost.o gpuqo_joinrelation.o gpuqo_query_tree.o gpuqo_binomial.o gpuqo_cpu_common.o gpuqo_cpu_sequential.o gpuqo_cpu_dpe.o gpuqo_dependency_buffer.o gpuqo_cpu_dpsize.o gpuqo_cpu_dpsub.o gpuqo_cpu_dpccp.o gpuqo_malloc.o
 
 # NVIDIA-specific code (do not edit)
 
