@@ -37,8 +37,8 @@ extern int gpuqo_dpsub_csg_threshold;
 extern int gpuqo_dpe_n_threads;
 extern int gpuqo_dpe_pairs_per_depbuf;
 
-typedef Bitmapset64 EdgeMask;
-typedef Bitmapset64 RelationID;
+typedef Bitmapset32 EdgeMask;
+typedef Bitmapset32 RelationID;
 
 typedef struct BaseRelation{
 	RelationID id;

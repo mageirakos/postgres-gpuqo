@@ -58,12 +58,12 @@ struct JoinRelation{
 	RelationID id;
 	RelationID left_relation_id;
 	union{
-		uint64_t left_relation_idx;
+		uint32_t left_relation_idx;
 		struct JoinRelation* left_relation_ptr;
 	};
 	RelationID right_relation_id;
 	union{
-		uint64_t right_relation_idx;
+		uint32_t right_relation_idx;
 		struct JoinRelation* right_relation_ptr;
 	};
 	double rows;

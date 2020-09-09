@@ -56,12 +56,12 @@ T* build_join_relation(T &left_rel,T &right_rel){
 
     T* join_rel = new T;
 
-    join_rel->id = BMS64_UNION(left_rel.id, right_rel.id);
+    join_rel->id = BMS32_UNION(left_rel.id, right_rel.id);
     join_rel->left_relation_id = left_rel.id;
     join_rel->left_relation_ptr = &left_rel;
     join_rel->right_relation_id = right_rel.id;
     join_rel->right_relation_ptr = &right_rel;
-    join_rel->edges = BMS64_UNION(left_rel.edges, right_rel.edges);
+    join_rel->edges = BMS32_UNION(left_rel.edges, right_rel.edges);
     join_rel->cost = std::numeric_limits<double>::max();
     join_rel->rows = std::numeric_limits<double>::max();
 

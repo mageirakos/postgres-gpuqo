@@ -31,7 +31,7 @@ public:
     {}
 
     __device__
-    JoinRelation operator()(RelationID relid, uint64_t cid);
+    JoinRelation operator()(RelationID relid, uint32_t cid);
 };
 
 #endif              // GPUQO_DPSUB_ENUM_ALL_SUBS_CUH

@@ -53,7 +53,7 @@ void try_join(RelationID relid, JoinRelation &jr_out,
             join_stack_t &stack, JoinRelation* memo_vals, 
             GpuqoPlannerInfo* info)
 {
-    LOG_DEBUG("[%d, %d] try_join(%llu, %llu, %llu, %s)\n", 
+    LOG_DEBUG("[%d, %d] try_join(%u, %u, %u, %s)\n", 
                 blockIdx.x, threadIdx.x, relid, l, r,
                 additional_predicate ? "true" : "false");
 
@@ -61,8 +61,8 @@ void try_join(RelationID relid, JoinRelation &jr_out,
     JoinRelation *right_rel = &memo_vals[r];
 
     Assert(__activemask() == WARP_MASK);
-    Assert(left_rel->id == BMS64_EMPTY || left_rel->id == l);
-    Assert(right_rel->id == BMS64_EMPTY || right_rel->id == r);
+    Assert(left_rel->id == BMS32_EMPTY || left_rel->id == l);
+    Assert(right_rel->id == BMS32_EMPTY || right_rel->id == r);
 
     bool p = check_join(*left_rel, *right_rel, info) && additional_predicate;
     unsigned pthBlt = __ballot_sync(WARP_MASK, !p);
@@ -76,13 +76,13 @@ void try_join(RelationID relid, JoinRelation &jr_out,
         if (!p){
             left_rel = stack.ctxStack[pos].left_rel;
             right_rel = stack.ctxStack[pos].right_rel;
-            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%llu, r=%llu\n", stack.wOffset, stack.lane_id, pos, left_rel->id, right_rel->id);
+            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", stack.wOffset, stack.lane_id, pos, left_rel->id, right_rel->id);
         } else {
-            LOG_DEBUG("[%d: %d] Using local values: l=%llu, r=%llu\n", stack.wOffset, stack.lane_id, left_rel->id, right_rel->id);
+            LOG_DEBUG("[%d: %d] Using local values: l=%u, r=%u\n", stack.wOffset, stack.lane_id, left_rel->id, right_rel->id);
         }
         stack.stackTop -= reducedNTaken;
 
-        Assert(BMS64_UNION(left_rel->id, right_rel->id) == relid);
+        Assert(BMS32_UNION(left_rel->id, right_rel->id) == relid);
 
         do_join(relid, jr_out, *left_rel, *right_rel, info);
 
@@ -90,7 +90,7 @@ void try_join(RelationID relid, JoinRelation &jr_out,
         int wScan = __popc(~pthBlt & stack.lanemask_le);
         int pos = stack.wOffset + stack.stackTop + wScan - 1;
         if (p){
-            LOG_DEBUG("[%d: %d] Accumulating stack (%d): l=%llu, r=%llu\n", stack.wOffset, stack.lane_id, pos, left_rel->id, right_rel->id);
+            LOG_DEBUG("[%d: %d] Accumulating stack (%d): l=%u, r=%u\n", stack.wOffset, stack.lane_id, pos, left_rel->id, right_rel->id);
             stack.ctxStack[pos].left_rel = left_rel;
             stack.ctxStack[pos].right_rel = right_rel;
         }
@@ -121,7 +121,7 @@ void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t 
             params.gpu_scratchpad_vals.begin(),
             params.gpu_reduced_keys.begin(),
             params.gpu_reduced_vals.begin(),
-            thrust::equal_to<uint64_t>(),
+            thrust::equal_to<RelationID>(),
             thrust::minimum<JoinRelation>()
         );
         STOP_TIMING(prune);
@@ -165,21 +165,21 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsub);
     START_TIMING(init);
 
-    uint64_t max_memo_size = gpuqo_dpsize_max_memo_size_mb * MB / RELSIZE;
-    uint64_t req_memo_size = 1ULL<<(info->n_rels+1);
+    uint32_t max_memo_size = gpuqo_dpsize_max_memo_size_mb * MB / RELSIZE;
+    uint32_t req_memo_size = 1U<<(info->n_rels+1);
     if (max_memo_size < req_memo_size){
         printf("Insufficient memo size\n");
         return NULL;
     }
 
-    uint64_t memo_size = std::min(req_memo_size, max_memo_size);
+    uint32_t memo_size = std::min(req_memo_size, max_memo_size);
 
     dpsub_iter_param_t params;
     params.info = info;
     params.gpu_memo_vals = thrust::device_vector<JoinRelation>(memo_size);
 
     QueryTree* out = NULL;
-    params.out_relid = BMS64_EMPTY;
+    params.out_relid = BMS32_EMPTY;
 
     for(int i=0; i<info->n_rels; i++){
         JoinRelation t;
@@ -193,11 +193,11 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
         t.edges = info->base_rels[i].edges;
         params.gpu_memo_vals[info->base_rels[i].id] = t;
 
-        params.out_relid = BMS64_UNION(params.out_relid, info->base_rels[i].id);
+        params.out_relid = BMS32_UNION(params.out_relid, info->base_rels[i].id);
     }
 
     int binoms_size = (info->n_rels+1)*(info->n_rels+1);
-    params.binoms = thrust::host_vector<uint64_t>(binoms_size);
+    params.binoms = thrust::host_vector<uint32_t>(binoms_size);
     precompute_binoms(params.binoms, info->n_rels);
     params.gpu_binoms = params.binoms;
 
@@ -230,12 +230,12 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
             // calculate number of combinations of relations that make up 
             // a joinrel of size i
             params.n_sets = BINOM(params.binoms, info->n_rels, info->n_rels, i);
-            params.n_joins_per_set = ((1ULL)<<i);
-            params.tot = params.n_sets * params.n_joins_per_set;
+            params.n_joins_per_set = ((1U)<<i);
+            params.tot = ((uint64_t)params.n_sets) * params.n_joins_per_set;
 
-            uint64_t n_iters;
-            uint64_t filter_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_filter_threshold;
-            uint64_t csg_threshold = gpuqo_dpsub_n_parallel * gpuqo_dpsub_csg_threshold;
+            uint32_t n_iters;
+            uint64_t filter_threshold = ((uint64_t)gpuqo_dpsub_n_parallel) * gpuqo_dpsub_filter_threshold;
+            uint64_t csg_threshold = ((uint64_t)gpuqo_dpsub_n_parallel) * gpuqo_dpsub_csg_threshold;
 
             START_TIMING(iteration);
             if ((gpuqo_dpsub_filter_enable && params.tot > filter_threshold) 

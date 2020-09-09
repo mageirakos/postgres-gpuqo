@@ -15,6 +15,6 @@
 #include "gpuqo.cuh"
 
 template<typename T>
-void buildQueryTree(uint64_t idx, T &gpu_memo_vals, QueryTree **qt);
+void buildQueryTree(uint32_t idx, T &gpu_memo_vals, QueryTree **qt);
 
 #endif							/* GPUQO_QUERY_TREE_CUH */

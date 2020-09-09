@@ -18,7 +18,7 @@ __host__ __device__
 __forceinline__
 bool is_disjoint(JoinRelation &left_rel, JoinRelation &right_rel)
 {
-    return !BMS64_INTERSECTS(left_rel.id, right_rel.id);
+    return !BMS32_INTERSECTS(left_rel.id, right_rel.id);
 }
 
 __host__ __device__
@@ -26,37 +26,37 @@ __forceinline__
 bool are_connected(JoinRelation &left_rel, JoinRelation &right_rel,
                 GpuqoPlannerInfo* info)
 {
-    return (left_rel.edges & right_rel.id) != 0ULL;
+    return BMS32_INTERSECTS(left_rel.edges, right_rel.id);
 }
 
 __host__ __device__
 __forceinline__
 RelationID get_neighbours(RelationID set, GpuqoPlannerInfo* info){
-    RelationID neigs = BMS64_EMPTY;
+    RelationID neigs = BMS32_EMPTY;
     RelationID temp = set;
-    while (temp != BMS64_EMPTY){
-        int baserel_idx = BMS64_LOWEST_POS(temp)-2;
-        neigs = BMS64_UNION(neigs, info->base_rels[baserel_idx].edges);
-        temp = BMS64_UNSET(temp, baserel_idx+1);
+    while (temp != BMS32_EMPTY){
+        int baserel_idx = BMS32_LOWEST_POS(temp)-2;
+        neigs = BMS32_UNION(neigs, info->base_rels[baserel_idx].edges);
+        temp = BMS32_UNSET(temp, baserel_idx+1);
     }
-    return BMS64_DIFFERENCE(neigs, set);
+    return BMS32_DIFFERENCE(neigs, set);
 }
 
 __host__ __device__
 __forceinline__
 bool is_connected(RelationID relid, GpuqoPlannerInfo* info)
 {
-    RelationID T = BMS64_LOWEST(relid);
+    RelationID T = BMS32_LOWEST(relid);
     RelationID N = T;
     do {
         // explore only from newly found nodes that are missing
-        N = BMS64_INTERSECTION(
-            BMS64_DIFFERENCE(relid, T), 
+        N = BMS32_INTERSECTION(
+            BMS32_DIFFERENCE(relid, T), 
             get_neighbours(N, info)
         );
         // add new nodes to set
-        T = BMS64_UNION(T, N);
-    } while (T != relid && N != BMS64_EMPTY);
+        T = BMS32_UNION(T, N);
+    } while (T != relid && N != BMS32_EMPTY);
     // either all nodes have been found or no new connected node exists
 
     // if I managed to visit all nodes, then subgraph is connected
@@ -82,7 +82,7 @@ public:
         RelationID relid = t.get<0>();
         JoinRelation jr = t.get<1>();
 
-        LOG_DEBUG("%llu %llu\n", 
+        LOG_DEBUG("%u %u\n", 
             jr.left_relation_idx,
             jr.right_relation_idx
         );

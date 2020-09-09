@@ -22,19 +22,19 @@
 __host__ __device__
 bool has_useful_index(JoinRelation &left_rel, JoinRelation &right_rel,
                     GpuqoPlannerInfo* info){
-    if (BMS64_SIZE(right_rel.id) != 1)  // inner must be base rel
+    if (BMS32_SIZE(right_rel.id) != 1)  // inner must be base rel
         return false;
     // -1 since it's 1-indexed, 
     // another -1 since relation with id 0b10 is at index 0 and so on
-    int baserel_right_idx = BMS64_LOWEST_POS(right_rel.id) - 2;
+    int baserel_right_idx = BMS32_LOWEST_POS(right_rel.id) - 2;
     BaseRelation &baserel_right = info->base_rels[baserel_right_idx];
     RelationID baserel_right_edges = baserel_right.edges;
 
-    while (baserel_right_edges != BMS64_EMPTY){
-        int baserel_left_idx = BMS64_LOWEST_POS(baserel_right_edges) - 2;
+    while (baserel_right_edges != BMS32_EMPTY){
+        int baserel_left_idx = BMS32_LOWEST_POS(baserel_right_edges) - 2;
         if(info->edge_table[baserel_left_idx*info->n_rels+baserel_right_idx].has_index)
             return true;
-        baserel_right_edges = BMS64_UNSET(baserel_right_edges, baserel_left_idx+1);
+        baserel_right_edges = BMS32_UNSET(baserel_right_edges, baserel_left_idx+1);
     }
     return false;
 }
@@ -82,21 +82,21 @@ estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
     // NB: edges might be multiple so I need to check every baserel in the left
     // joinrel
     RelationID left_id = left_rel.id;
-    while (left_id != BMS64_EMPTY){
+    while (left_id != BMS32_EMPTY){
         // -1 since it's 1-indexed, 
         // another -1 since relation with id 0b10 is at index 0 and so on
-        int baserel_left_idx = BMS64_LOWEST_POS(left_id) - 2;
+        int baserel_left_idx = BMS32_LOWEST_POS(left_id) - 2;
         BaseRelation &baserel_left = info->base_rels[baserel_left_idx];
         RelationID baserel_left_edges = baserel_left.edges;
 
-        while (baserel_left_edges != BMS64_EMPTY){
-            int baserel_right_idx = BMS64_LOWEST_POS(baserel_left_edges) - 2;
-            if (BMS64_IS_SET(right_rel.id, baserel_right_idx+1)){
+        while (baserel_left_edges != BMS32_EMPTY){
+            int baserel_right_idx = BMS32_LOWEST_POS(baserel_left_edges) - 2;
+            if (BMS32_IS_SET(right_rel.id, baserel_right_idx+1)){
                 sel *= info->edge_table[baserel_left_idx*info->n_rels+baserel_right_idx].sel;
             }
-            baserel_left_edges = BMS64_UNSET(baserel_left_edges, baserel_right_idx+1);
+            baserel_left_edges = BMS32_UNSET(baserel_left_edges, baserel_right_idx+1);
         }
-        left_id = BMS64_UNSET(left_id, baserel_left_idx+1);
+        left_id = BMS32_UNSET(left_id, baserel_left_idx+1);
     }
     
     double rows = sel * left_rel.rows * right_rel.rows;

@@ -12,46 +12,46 @@
 
 #include "stdint.h"
 
-// For the moment it's limited to 64 relations
+// For the moment it's limited to 32 relations
 // I need to find a way to efficiently and dynamically increase this value
-typedef unsigned long long Bitmapset64;
+typedef uint32_t Bitmapset32;
 
-#define BMS64_EMPTY (0ULL)
-#define BMS64_NTH(n) (1ULL<<(n))
-#define BMS64_CMP(a) (~(a))
-#define BMS64_LOWEST(a) ((a) & (-(a)))
-#define BMS64_SET_ALL_LOWER(a) (a != BMS64_EMPTY ? BMS64_LOWEST(a)-1 : BMS64_EMPTY)
-#define BMS64_SET_ALL_LOWER_INC(a) BMS64_UNION((a), BMS64_SET_ALL_LOWER(a))
-#define BMS64_UNION(a, b) ((a) | (b))
-#define BMS64_INTERSECTION(a, b) ((a) & (b))
-#define BMS64_INTERSECTS(a, b) (BMS64_INTERSECTION((a), (b)) != BMS64_EMPTY)
-#define BMS64_IS_SUBSET(a, b) (BMS64_INTERSECTION((a), (b)) == (a))
-#define BMS64_DIFFERENCE(a, b) BMS64_INTERSECTION((a), BMS64_CMP(b))
-#define BMS64_NEXT_SUBSET(subset, set) ((set) & ((subset)-(set)))
-#define BMS64_SET(a, n) BMS64_UNION((a), BMS64_NTH(n))
-#define BMS64_UNSET(a, n) BMS64_DIFFERENCE((a), BMS64_NTH(n))
-#define BMS64_IS_SET(a, n) BMS64_INTERSECTS((a), BMS64_NTH(n))
-#define BMS64_EXPAND_TO_MASK(val, mask) _pdep_u64(val, mask)
+#define BMS32_EMPTY (0U)
+#define BMS32_NTH(n) (1U<<(n))
+#define BMS32_CMP(a) (~(a))
+#define BMS32_LOWEST(a) ((a) & (-(a)))
+#define BMS32_SET_ALL_LOWER(a) (a != BMS32_EMPTY ? BMS32_LOWEST(a)-1 : BMS32_EMPTY)
+#define BMS32_SET_ALL_LOWER_INC(a) BMS32_UNION((a), BMS32_SET_ALL_LOWER(a))
+#define BMS32_UNION(a, b) ((a) | (b))
+#define BMS32_INTERSECTION(a, b) ((a) & (b))
+#define BMS32_INTERSECTS(a, b) (BMS32_INTERSECTION((a), (b)) != BMS32_EMPTY)
+#define BMS32_IS_SUBSET(a, b) (BMS32_INTERSECTION((a), (b)) == (a))
+#define BMS32_DIFFERENCE(a, b) BMS32_INTERSECTION((a), BMS32_CMP(b))
+#define BMS32_NEXT_SUBSET(subset, set) ((set) & ((subset)-(set)))
+#define BMS32_SET(a, n) BMS32_UNION((a), BMS32_NTH(n))
+#define BMS32_UNSET(a, n) BMS32_DIFFERENCE((a), BMS32_NTH(n))
+#define BMS32_IS_SET(a, n) BMS32_INTERSECTS((a), BMS32_NTH(n))
+#define BMS32_EXPAND_TO_MASK(val, mask) _pdep_u32(val, mask)
 
 #ifdef __CUDA_ARCH__
-#define BMS64_SIZE(s) __popcll(s)
-#define BMS64_LOWEST_POS(s) __ffsll(s)
-#define BMS64_HIGHEST_POS(s) (64-__clzll(s))
+#define BMS32_SIZE(s) __popc(s)
+#define BMS32_LOWEST_POS(s) __ffs(s)
+#define BMS32_HIGHEST_POS(s) (32-__clz(s))
 #else
-#define BMS64_SIZE(s) __builtin_popcount(s)
-#define BMS64_LOWEST_POS(s) __builtin_ffsll(s)
-#define BMS64_HIGHEST_POS(s) (64-__builtin_clzll(s))
+#define BMS32_SIZE(s) __builtin_popcount(s)
+#define BMS32_LOWEST_POS(s) __builtin_ffs(s)
+#define BMS32_HIGHEST_POS(s) (32-__builtin_clz(s))
 #endif
 
-#define BMS64_HIGHEST(a) (BMS64_NTH(BMS64_HIGHEST_POS(a)-1))
+#define BMS32_HIGHEST(a) (BMS32_NTH(BMS32_HIGHEST_POS(a)-1))
 
 #ifndef __BMI2__
 #ifdef __CUDA_ARCH__
 __device__ __host__
 #endif
-inline uint64_t _pdep_u64(uint64_t val, uint64_t mask){
-    uint64_t res = 0ULL;
-    for (uint64_t bb = 1; mask; bb += bb) {
+inline uint32_t _pdep_u32(uint32_t val, uint32_t mask){
+    uint32_t res = 0;
+    for (uint32_t bb = 1; mask; bb += bb) {
         if (val & bb)
             res |= mask & -mask;
         mask &= mask - 1;

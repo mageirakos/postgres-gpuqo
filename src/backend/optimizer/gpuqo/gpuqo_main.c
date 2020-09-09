@@ -22,7 +22,7 @@
 int gpuqo_algorithm;
 
 BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
-Bitmapset64 convertBitmapset(Bitmapset* set);
+Bitmapset32 convertBitmapset(Bitmapset* set);
 void printQueryTree(QueryTree* qt, int indent);
 void printEdges(GpuqoPlannerInfo* info);
 RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels);
@@ -55,7 +55,7 @@ void printQueryTree(QueryTree* qt, int indent){
 
     for (i = 0; i<indent; i++)
         printf(" ");
-    printf("%llu (rows=%.0f, cost=%.2f)\n", qt->id, qt->rows, qt->cost);
+    printf("%u (rows=%.0f, cost=%.2f)\n", qt->id, qt->rows, qt->cost);
 
     printQueryTree(qt->left, indent + 2);
     printQueryTree(qt->right, indent + 2);
@@ -65,11 +65,11 @@ void printEdges(GpuqoPlannerInfo* info){
     for (int i = 0; i < info->n_rels; i++){
         RelationID edges = info->base_rels[i].edges;
         printf("%d:", i+1);
-        while (edges != BMS64_EMPTY){
-            int idx = BMS64_LOWEST_POS(edges)-1;
+        while (edges != BMS32_EMPTY){
+            int idx = BMS32_LOWEST_POS(edges)-1;
             EdgeInfo* edge = &info->edge_table[i*info->n_rels+idx-1];
             printf(" %d(%.4f,%s)", idx, edge->sel, edge->has_index ? "I": "");
-            edges = BMS64_UNSET(edges, idx);
+            edges = BMS32_UNSET(edges, idx);
         }
         printf("\n");
     }
@@ -116,7 +116,7 @@ RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_re
     }
 
     if (this_rel == NULL) {
-        printf("WARNING: Found NULL RelOptInfo*: %llu (%llu, %llu)\n", 
+        printf("WARNING: Found NULL RelOptInfo*: %u (%u, %u)\n", 
                 qt->id, 
                 qt->left ? qt->left->id : 0, 
                 qt->right ? qt->right->id : 0
@@ -129,11 +129,14 @@ RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_re
     return this_rel;
 }
 
-Bitmapset64 convertBitmapset(Bitmapset* set){
+Bitmapset32 convertBitmapset(Bitmapset* set){
     if (set->nwords > 1){
-        printf("WARNING: only relids of 64 bits are supported!\n");
+        printf("WARNING: only relids of 32 bits are supported!\n");
     }
-    return set->words[0];
+    if (set->words[0] & 0xFFFFFFFF00000000ULL){
+        printf("WARNING: only relids of 32 bits are supported!\n");
+    }
+    return (Bitmapset32)(set->words[0] & 0xFFFFFFFFULL);
 }
 
 BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
@@ -154,12 +157,12 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
 			continue;
 
         if (bms_overlap(rel->relids, ec->ec_relids)){
-            baserel.edges = BMS64_UNION(baserel.edges, convertBitmapset(ec->ec_relids));
+            baserel.edges = BMS32_UNION(baserel.edges, convertBitmapset(ec->ec_relids));
         }
     }
 
     // remove itself if present
-    baserel.edges = BMS64_DIFFERENCE(baserel.edges, baserel.id);
+    baserel.edges = BMS32_DIFFERENCE(baserel.edges, baserel.id);
 
     return baserel;
 }
@@ -180,7 +183,7 @@ void fillEdgeTable(PlannerInfo *root, List *initial_rels, GpuqoPlannerInfo* info
         foreach(lc_inner, initial_rels){
             RelOptInfo* rel_inner = (RelOptInfo*) lfirst(lc_inner);
             
-            if (BMS64_INTERSECTS(info->base_rels[i].edges, convertBitmapset(rel_inner->relids))){
+            if (BMS32_INTERSECTS(info->base_rels[i].edges, convertBitmapset(rel_inner->relids))){
                 double sel;
                 SpecialJoinInfo sjinfo;
                 
