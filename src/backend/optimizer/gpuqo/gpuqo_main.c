@@ -116,7 +116,11 @@ RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_re
     }
 
     if (this_rel == NULL) {
-        printf("WARNING: Found NULL RelOptInfo*\n");
+        printf("WARNING: Found NULL RelOptInfo*: %llu (%llu, %llu)\n", 
+                qt->id, 
+                qt->left ? qt->left->id : 0, 
+                qt->right ? qt->right->id : 0
+        );
     }
 
     // clean-up the query tree

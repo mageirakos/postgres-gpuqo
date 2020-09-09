@@ -22,8 +22,15 @@ void buildQueryTree(uint64_t idx, T &gpu_memo_vals, QueryTree **qt)
     (*qt)->rows = jr.rows;
     (*qt)->cost = jr.cost;
 
-    if (jr.left_relation_id == 0 && jr.right_relation_id == 0)
-    return;
+    if (jr.left_relation_id == 0 && jr.right_relation_id == 0){ // leaf
+        return;
+    }
+
+    if (jr.left_relation_id == 0 || jr.right_relation_id == 0){ // error
+        printf("ERROR in buildQueryTree: %llu has children %llu and %llu\n",
+                jr.id, jr.left_relation_id, jr.right_relation_id);
+        return;
+    }
 
     buildQueryTree<T>(jr.left_relation_idx, gpu_memo_vals, &((*qt)->left));
     buildQueryTree<T>(jr.right_relation_idx, gpu_memo_vals, &((*qt)->right));
