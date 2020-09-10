@@ -68,40 +68,52 @@ public:
         partition_sizes(_partition_sizes), iid(_iid), offset(_offset)
     {}
 
-    __device__
-    thrust::tuple<RelationID, uint2> operator()(uint64_t cid) 
-    {
-        uint32_t lp = 0;
-        uint32_t rp = iid - 2;
-        uint64_t o = partition_sizes[lp] * partition_sizes[rp];
-        cid += offset;
+        __device__
+        thrust::tuple<RelationID, uint2> operator()(uint64_t cid) 
+        {
+            __shared__ uint64_t offsets[32];
+            int n_active = __popc(__activemask());
 
-        while (cid >= o){
-            cid -= o;
-            lp++;
-            rp--;
-            o = partition_sizes[lp] * partition_sizes[rp];
+            for (int i = threadIdx.x; i <= iid-2; i += n_active){
+                offsets[i] = partition_sizes[i] * partition_sizes[iid-2-i];
+            }
+            __syncthreads();
+    
+            uint32_t lp = 0;
+            uint32_t rp = iid - 2;
+            uint64_t o = offsets[lp];
+            cid += offset;
+
+            while (cid >= o){
+                cid -= o;
+                lp++;
+                rp--;
+
+                Assert(lp >= 0 && lp <= iid-2 && lp < 32);
+                Assert(rp >= 0 && rp <= iid-2 && rp < 32);
+
+                o = offsets[lp];
+            }
+
+            uint32_t l = cid / partition_sizes[rp];
+            uint32_t r = cid % partition_sizes[rp];
+    
+            RelationID relid;
+            uint2 out = make_uint2(
+                partition_offsets[lp] + l, 
+                partition_offsets[rp] + r
+            );
+    
+            LOG_DEBUG("%llu: %u %u\n", 
+                cid, 
+                out.x,
+                out.y
+            );
+    
+            relid = BMS32_UNION(memo_keys[out.x], memo_keys[out.y]);
+    
+            return thrust::tuple<RelationID, uint2>(relid, out);
         }
-
-        uint32_t l = cid / partition_sizes[rp];
-        uint32_t r = cid % partition_sizes[rp];
-
-        RelationID relid;
-        uint2 out = make_uint2(
-            partition_offsets[lp] + l, 
-            partition_offsets[rp] + r
-        );
-
-        LOG_DEBUG("%llu: %u %u\n", 
-            cid, 
-            out.x,
-            out.y
-        );
-
-        relid = BMS32_UNION(memo_keys[out.x], memo_keys[out.y]);
-
-        return thrust::tuple<RelationID, uint2>(relid, out);
-    }
 };
 
 
@@ -124,10 +136,13 @@ public:
         RelationID relid = t.get<0>();
         uint2 idxs = t.get<1>();
 
-        LOG_DEBUG("%u %u\n", 
+        LOG_DEBUG("%d %d: %u %u\n", 
+            blockIdx.x,
+            threadIdx.x,
             idxs.x,
             idxs.y
         );
+        
         JoinRelation& left_rel = memo_vals.get()[idxs.x];
         JoinRelation& right_rel = memo_vals.get()[idxs.y];
 
