@@ -11,6 +11,8 @@
 #ifndef GPUQO_DEBUG_CUH
 #define GPUQO_DEBUG_CUH
 
+#include <iostream>
+
 // activate profiling as a conequence of debug (if not yet active)
 #ifdef GPUQO_DEBUG
 #ifndef GPUQO_PROFILE
@@ -38,5 +40,8 @@
 #else
 #define LOG_PROFILE(fmt, ...)
 #endif
+
+__host__
+std::ostream & operator<<(std::ostream &os, const uint2& idxs);
 
 #endif							/* GPUQO_DEBUG_CUH */

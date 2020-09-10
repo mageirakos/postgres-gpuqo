@@ -16,16 +16,23 @@
 
 __host__ __device__
 __forceinline__
-bool is_disjoint(JoinRelation &left_rel, JoinRelation &right_rel)
+bool is_disjoint(RelationID left_rel_id, RelationID right_rel_id)
 {
-    return !BMS32_INTERSECTS(left_rel.id, right_rel.id);
+    return !BMS32_INTERSECTS(left_rel_id, right_rel_id);
+}
+
+__host__ __device__
+__forceinline__
+bool is_disjoint(JoinRelation &left_rel, JoinRelation &right_rel)
+{ 
+    return is_disjoint(left_rel.id, right_rel.id);
 }
 
 __host__ __device__
 __forceinline__
 bool is_disjoint(JoinRelation &join_rel)
 {
-    return !BMS32_INTERSECTS(
+    return is_disjoint(
         join_rel.left_relation_id, 
         join_rel.right_relation_id
     );
@@ -80,41 +87,6 @@ bool is_connected(RelationID relid, EdgeMask* edge_table)
     // if I managed to visit all nodes, then subgraph is connected
     return T == relid; 
 }
- 
-struct filterJoinedDisconnected : public thrust::unary_function<thrust::tuple<RelationID, JoinRelation>, bool>
-{
-    thrust::device_ptr<RelationID> memo_keys;
-    thrust::device_ptr<JoinRelation> memo_vals;
-    GpuqoPlannerInfo* info;
-public:
-    filterJoinedDisconnected(
-        thrust::device_ptr<RelationID> _memo_keys,
-        thrust::device_ptr<JoinRelation> _memo_vals,
-        GpuqoPlannerInfo* _info
-    ) : memo_keys(_memo_keys), memo_vals(_memo_vals), info(_info)
-    {}
-
-    __device__
-    bool operator()(thrust::tuple<RelationID, JoinRelation> t) 
-    {
-        RelationID relid = t.get<0>();
-        JoinRelation jr = t.get<1>();
-
-        LOG_DEBUG("%u %u\n", 
-            jr.left_relation_idx,
-            jr.right_relation_idx
-        );
-
-        JoinRelation& left_rel = memo_vals.get()[jr.left_relation_idx];
-        JoinRelation& right_rel = memo_vals.get()[jr.right_relation_idx];
-
-        if (!is_disjoint(jr)) // not disjoint
-            return true;
-        else{
-            return !are_connected(left_rel.edges, jr.right_relation_id, info);
-        }
-    }
-};
 
 struct filterDisconnectedRelations : public thrust::unary_function<RelationID, bool>
 {

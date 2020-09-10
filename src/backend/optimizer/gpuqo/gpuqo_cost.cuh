@@ -31,31 +31,5 @@ extern __host__ __device__
 double estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info
 );
-
-struct joinCost : public thrust::unary_function<JoinRelation,JoinRelation>
-{
-    thrust::device_ptr<RelationID> memo_keys;
-    thrust::device_ptr<JoinRelation> memo_vals;
-    GpuqoPlannerInfo* info;
-public:
-    joinCost(
-        thrust::device_ptr<RelationID> _memo_keys,
-        thrust::device_ptr<JoinRelation> _memo_vals,
-        GpuqoPlannerInfo* _info
-    ) : memo_keys(_memo_keys), memo_vals(_memo_vals), info(_info)
-    {}
-
-    __device__
-    JoinRelation operator()(JoinRelation jr){
-        JoinRelation left_rel = memo_vals[jr.left_relation_idx];
-        JoinRelation right_rel = memo_vals[jr.right_relation_idx];
-
-        jr.edges = BMS32_UNION(left_rel.edges, right_rel.edges);
-        jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
-        jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
-
-        return jr;
-    }
-};
 	
 #endif							/* GPUQO_COST_CUH */

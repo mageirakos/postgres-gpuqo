@@ -19,6 +19,7 @@
 #include <thrust/tabulate.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/tuple.h>
 #include <thrust/system/system_error.h>
 #include <thrust/distance.h>
@@ -36,6 +37,7 @@
 #define MB (KB*1024)
 #define GB (MB*1024)
 #define RELSIZE (sizeof(JoinRelation)+sizeof(RelationID))
+#define SCR_ENTRY_SIZE (sizeof(uint2)+sizeof(RelationID))
 
 int gpuqo_dpsize_min_scratchpad_size_mb;
 int gpuqo_dpsize_max_scratchpad_size_mb;
@@ -45,7 +47,7 @@ int gpuqo_dpsize_max_memo_size_mb;
  *
  *	 unrank algorithm for DPsize GPU variant
  */
-struct unrankDPSize : public thrust::unary_function< uint32_t,thrust::tuple<RelationID, JoinRelation> >
+struct unrankDPSize : public thrust::unary_function< uint32_t,thrust::tuple<RelationID, uint2> >
 {
     thrust::device_ptr<RelationID> memo_keys;
     thrust::device_ptr<JoinRelation> memo_vals;
@@ -67,7 +69,7 @@ public:
     {}
 
     __device__
-    thrust::tuple<RelationID, JoinRelation> operator()(uint64_t cid) 
+    thrust::tuple<RelationID, uint2> operator()(uint64_t cid) 
     {
         uint32_t lp = 0;
         uint32_t rp = iid - 2;
@@ -85,24 +87,104 @@ public:
         uint32_t r = cid % partition_sizes[rp];
 
         RelationID relid;
-        JoinRelation jr;
-
-        jr.left_relation_idx = partition_offsets[lp] + l;
-        jr.right_relation_idx = partition_offsets[rp] + r;
+        uint2 out = make_uint2(
+            partition_offsets[lp] + l, 
+            partition_offsets[rp] + r
+        );
 
         LOG_DEBUG("%llu: %u %u\n", 
             cid, 
-            jr.left_relation_idx,
-            jr.right_relation_idx
+            out.x,
+            out.y
         );
-    
-        jr.left_relation_id = memo_keys[jr.left_relation_idx];
-        jr.right_relation_id = memo_keys[jr.right_relation_idx];
 
-        relid = BMS32_UNION(jr.left_relation_id, jr.right_relation_id);
-        jr.id = relid;
+        relid = BMS32_UNION(memo_keys[out.x], memo_keys[out.y]);
 
-        return thrust::tuple<RelationID, JoinRelation>(relid, jr);
+        return thrust::tuple<RelationID, uint2>(relid, out);
+    }
+};
+
+
+struct filterJoinedDisconnected : public thrust::unary_function<thrust::tuple<RelationID, uint2>, bool>
+{
+    thrust::device_ptr<RelationID> memo_keys;
+    thrust::device_ptr<JoinRelation> memo_vals;
+    GpuqoPlannerInfo* info;
+public:
+    filterJoinedDisconnected(
+        thrust::device_ptr<RelationID> _memo_keys,
+        thrust::device_ptr<JoinRelation> _memo_vals,
+        GpuqoPlannerInfo* _info
+    ) : memo_keys(_memo_keys), memo_vals(_memo_vals), info(_info)
+    {}
+
+    __device__
+    bool operator()(thrust::tuple<RelationID, uint2> t) 
+    {
+        RelationID relid = t.get<0>();
+        uint2 idxs = t.get<1>();
+
+        LOG_DEBUG("%u %u\n", 
+            idxs.x,
+            idxs.y
+        );
+        JoinRelation& left_rel = memo_vals.get()[idxs.x];
+        JoinRelation& right_rel = memo_vals.get()[idxs.y];
+
+        if (!is_disjoint(left_rel, right_rel)) // not disjoint
+            return true;
+        else{
+            return !are_connected(left_rel, right_rel, info);
+        }
+    }
+};
+
+
+struct joinCost : public thrust::unary_function<uint2,JoinRelation>
+{
+    thrust::device_ptr<RelationID> memo_keys;
+    thrust::device_ptr<JoinRelation> memo_vals;
+    GpuqoPlannerInfo* info;
+public:
+    joinCost(
+        thrust::device_ptr<RelationID> _memo_keys,
+        thrust::device_ptr<JoinRelation> _memo_vals,
+        GpuqoPlannerInfo* _info
+    ) : memo_keys(_memo_keys), memo_vals(_memo_vals), info(_info)
+    {}
+
+    __device__
+    JoinRelation operator()(uint2 idxs){
+        JoinRelation jr;
+
+        JoinRelation left_rel = memo_vals[idxs.x];
+        JoinRelation right_rel = memo_vals[idxs.y];
+
+        jr.id = BMS32_UNION(left_rel.id, right_rel.id);
+        jr.left_relation_id = left_rel.id;
+        jr.right_relation_id = left_rel.id;
+        jr.left_relation_idx = idxs.x;
+        jr.right_relation_idx = idxs.y;
+        jr.edges = BMS32_UNION(left_rel.edges, right_rel.edges);
+        jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
+        jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
+
+        return jr;
+    }
+};
+
+struct joinRelToUint2 : public thrust::unary_function<thrust::tuple<RelationID,JoinRelation>,thrust::tuple<RelationID,uint2> >
+{
+public:
+    joinRelToUint2() {}
+
+    __device__
+    thrust::tuple<RelationID,uint2> operator()(thrust::tuple<RelationID,JoinRelation> t){
+        JoinRelation& jr = t.get<1>();
+        return thrust::make_tuple(
+            t.get<0>(),
+            make_uint2(jr.left_relation_idx, jr.right_relation_idx)
+        );
     }
 };
 
@@ -121,8 +203,8 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsize);
     START_TIMING(init);
 
-    uint32_t min_scratchpad_capacity = gpuqo_dpsize_min_scratchpad_size_mb * MB / RELSIZE;
-    uint32_t max_scratchpad_capacity = gpuqo_dpsize_max_scratchpad_size_mb * MB / RELSIZE;
+    uint32_t min_scratchpad_capacity = gpuqo_dpsize_min_scratchpad_size_mb * MB / SCR_ENTRY_SIZE;
+    uint32_t max_scratchpad_capacity = gpuqo_dpsize_max_scratchpad_size_mb * MB / SCR_ENTRY_SIZE;
     uint32_t prune_threshold = max_scratchpad_capacity * 2 / 3;
     uint32_t max_memo_size = gpuqo_dpsize_max_memo_size_mb * MB / RELSIZE;
 
@@ -159,7 +241,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
     // scratchpad size is increased on demand, starting from a minimum capacity
     uninit_device_vector_relid gpu_scratchpad_keys;
     gpu_scratchpad_keys.reserve(min_scratchpad_capacity);
-    uninit_device_vector_joinrel gpu_scratchpad_vals;
+    uninit_device_vector_uint2 gpu_scratchpad_vals;
     gpu_scratchpad_vals.reserve(min_scratchpad_capacity);
 
     STOP_TIMING(init);
@@ -234,7 +316,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                     // if I already pruned at least once, I need to fetch those 
                     // partially pruned samples from the memo to the scratchpad
                     START_TIMING(copy_pruned);
-                    thrust::copy(
+                    thrust::transform(
                         thrust::make_zip_iterator(thrust::make_tuple(
                             gpu_memo_keys.begin()+partition_offsets[i-1],
                             gpu_memo_vals.begin()+partition_offsets[i-1]
@@ -246,7 +328,8 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                         thrust::make_zip_iterator(thrust::make_tuple(
                             gpu_scratchpad_keys.begin(),
                             gpu_scratchpad_vals.begin()
-                        ))
+                        )),
+                        joinRelToUint2()
                     );
 
                     // I now have already ps[i-1] joinrels in the sratchpad

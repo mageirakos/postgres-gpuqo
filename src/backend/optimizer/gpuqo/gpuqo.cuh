@@ -113,6 +113,7 @@ extern std::ostream & operator<<(std::ostream &os, const JoinRelation& jr);
 
 typedef thrust::device_vector<RelationID, uninitialized_allocator<RelationID> > uninit_device_vector_relid;
 typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation> > uninit_device_vector_joinrel;
+typedef thrust::device_vector<uint2, uninitialized_allocator<uint2> > uninit_device_vector_uint2;
 
 extern "C" void* gpuqo_malloc(size_t size);
 extern "C" void gpuqo_free(void* p);
