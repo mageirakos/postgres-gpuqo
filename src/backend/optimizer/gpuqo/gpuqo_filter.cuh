@@ -23,10 +23,28 @@ bool is_disjoint(JoinRelation &left_rel, JoinRelation &right_rel)
 
 __host__ __device__
 __forceinline__
+bool is_disjoint(JoinRelation &join_rel)
+{
+    return !BMS64_INTERSECTS(
+        join_rel.left_relation_id, 
+        join_rel.right_relation_id
+    );
+}
+
+__host__ __device__
+__forceinline__
+bool are_connected(EdgeMask left_edges, RelationID right_id,
+                GpuqoPlannerInfo* info)
+{
+    return BMS64_INTERSECTS(left_edges, right_id);
+}
+
+__host__ __device__
+__forceinline__
 bool are_connected(JoinRelation &left_rel, JoinRelation &right_rel,
                 GpuqoPlannerInfo* info)
 {
-    return (left_rel.edges & right_rel.id) != 0ULL;
+    return are_connected(left_rel.edges, right_rel.id, info);
 }
 
 __host__ __device__
@@ -87,13 +105,13 @@ public:
             jr.right_relation_idx
         );
 
-        JoinRelation left_rel = memo_vals[jr.left_relation_idx];
-        JoinRelation right_rel = memo_vals[jr.right_relation_idx];
+        JoinRelation& left_rel = memo_vals.get()[jr.left_relation_idx];
+        JoinRelation& right_rel = memo_vals.get()[jr.right_relation_idx];
 
-        if (!is_disjoint(left_rel, right_rel)) // not disjoint
+        if (!is_disjoint(jr)) // not disjoint
             return true;
         else{
-            return !are_connected(left_rel, right_rel, info);
+            return !are_connected(left_rel.edges, jr.right_relation_id, info);
         }
     }
 };

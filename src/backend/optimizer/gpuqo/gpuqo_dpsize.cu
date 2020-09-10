@@ -95,15 +95,11 @@ public:
             jr.left_relation_idx,
             jr.right_relation_idx
         );
-        
-        JoinRelation left_rel = memo_vals[jr.left_relation_idx];
-        JoinRelation right_rel = memo_vals[jr.right_relation_idx];
-        
-        jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
-        jr.left_relation_id = left_rel.id;
-        jr.right_relation_id = right_rel.id;
+    
+        jr.left_relation_id = memo_keys[jr.left_relation_idx];
+        jr.right_relation_id = memo_keys[jr.right_relation_idx];
 
-        relid = BMS64_UNION(left_rel.id, right_rel.id);
+        relid = BMS64_UNION(jr.left_relation_id, jr.right_relation_id);
         jr.id = relid;
 
         return thrust::tuple<RelationID, JoinRelation>(relid, jr);
@@ -193,7 +189,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                 n_combinations += partition_sizes[j-1] * partition_sizes[i-j-1];
             }
 
-            LOG_PROFILE("\nStarting iteration %d: %d combinations\n", i, n_combinations);
+            LOG_PROFILE("\nStarting iteration %d: %llu combinations (scratchpad: %llu)\n", i, n_combinations, max_scratchpad_capacity);
 
             // If < max_scratchpad_capacity I may need to increase it
             if (n_combinations < max_scratchpad_capacity){

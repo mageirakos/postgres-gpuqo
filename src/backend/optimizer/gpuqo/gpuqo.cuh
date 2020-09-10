@@ -56,19 +56,22 @@ do { \
 // of GPUQO
 struct JoinRelation{
 	RelationID id;
+	EdgeMask edges;
+
 	RelationID left_relation_id;
+	RelationID right_relation_id;
+
 	union{
 		uint64_t left_relation_idx;
 		struct JoinRelation* left_relation_ptr;
 	};
-	RelationID right_relation_id;
 	union{
 		uint64_t right_relation_idx;
 		struct JoinRelation* right_relation_ptr;
 	};
+
 	double rows;
 	double cost;
-	EdgeMask edges;
 	
 #ifdef USE_ASSERT_CHECKING
 	bool referenced;
