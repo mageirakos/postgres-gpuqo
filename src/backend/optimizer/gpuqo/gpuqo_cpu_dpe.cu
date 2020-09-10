@@ -64,13 +64,13 @@ void process_depbuf(DependencyBuffer* depbuf, GpuqoPlannerInfo* info){
     depbuf_entry_t job;
     while ((job = depbuf->pop()).first != NULL){
         JoinRelationDPE *memo_join_rel = job.first;
-        LOG_DEBUG("Processing %llu (%d);: %d pairs\n", memo_join_rel->id, 
+        LOG_DEBUG("Processing %u (%d);: %d pairs\n", memo_join_rel->id, 
                 memo_join_rel->num_entry.load(), job.second->size());
         for (auto iter = job.second->begin(); iter != job.second->end(); ++iter){
             JoinRelationDPE *left_rel = iter->first;
             JoinRelationDPE *right_rel = iter->second;
 
-            LOG_DEBUG("  %llu -> %llu (%d) %llu (%d);\n", memo_join_rel->id,
+            LOG_DEBUG("  %u -> %u (%d) %u (%d);\n", memo_join_rel->id,
                     left_rel->id, left_rel->num_entry.load(), right_rel->id, 
                     right_rel->num_entry.load());
 
@@ -129,7 +129,7 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
             JoinRelationDPE &left_rel, JoinRelationDPE &right_rel,
             GpuqoPlannerInfo* info, memo_t &memo, extra_t extra){
     bool out;
-    RelationID relid = BMS64_UNION(left_rel.id, right_rel.id);
+    RelationID relid = BMS32_UNION(left_rel.id, right_rel.id);
 
     auto find_iter = memo.find(relid);
     if (find_iter != memo.end()){
@@ -157,7 +157,7 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
     mExtra->depbufs.depbuf_next->push(join_rel, &left_rel, &right_rel);
     mExtra->job_count++;
 
-    LOG_DEBUG("Inserted %llu (%d)\n", relid, join_rel->num_entry.load());
+    LOG_DEBUG("Inserted %u (%d)\n", relid, join_rel->num_entry.load());
 
     if (mExtra->job_count >= gpuqo_dpe_pairs_per_depbuf
             && mExtra->depbufs.n_waiting >= gpuqo_dpe_n_threads-1){
@@ -282,7 +282,7 @@ QueryTree* gpuqo_cpu_dpe(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm){
         jr->right_relation_ptr = NULL; 
         jr->cost = baserel_cost(info->base_rels[i]); 
         jr->rows = info->base_rels[i].rows; 
-        jr->edges = info->base_rels[i].edges;
+        jr->edges = info->edge_table[i];
         jr->num_entry.store(0, std::memory_order_consume);
         memo.insert(std::make_pair(info->base_rels[i].id, (JoinRelation*) jr));
     }
@@ -310,9 +310,9 @@ QueryTree* gpuqo_cpu_dpe(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm){
         pthread_join(mExtra->threads[i], NULL);
     }
 
-    RelationID final_joinrel_id = 0ULL;
+    RelationID final_joinrel_id = BMS32_EMPTY;
     for (int i = 0; i < info->n_rels; i++)
-        final_joinrel_id = BMS64_UNION(final_joinrel_id, info->base_rels[i].id);
+        final_joinrel_id = BMS32_UNION(final_joinrel_id, info->base_rels[i].id);
 
     
     auto final_joinrel_pair = memo.find(final_joinrel_id);

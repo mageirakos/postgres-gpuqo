@@ -22,28 +22,22 @@
 __host__ __device__
 bool has_useful_index(JoinRelation &left_rel, JoinRelation &right_rel,
                     GpuqoPlannerInfo* info){
-    if (BMS64_SIZE(right_rel.id) != 1)  // inner must be base rel
+    if (BMS32_SIZE(right_rel.id) != 1)  // inner must be base rel
         return false;
     // -1 since it's 1-indexed, 
     // another -1 since relation with id 0b10 is at index 0 and so on
-    int baserel_right_idx = BMS64_LOWEST_POS(right_rel.id) - 2;
-    BaseRelation &baserel_right = info->base_rels[baserel_right_idx];
-    RelationID baserel_right_edges = baserel_right.edges;
-
-    while (baserel_right_edges != BMS64_EMPTY){
-        int baserel_left_idx = BMS64_LOWEST_POS(baserel_right_edges) - 2;
-        if(info->edge_table[baserel_left_idx*info->n_rels+baserel_right_idx].has_index)
-            return true;
-        baserel_right_edges = BMS64_UNSET(baserel_right_edges, baserel_left_idx+1);
-    }
-    return false;
+    int baserel_right_idx = BMS32_LOWEST_POS(right_rel.id) - 2;
+    
+    return BMS32_INTERSECTS(
+        left_rel.id, 
+        info->indexed_edge_table[baserel_right_idx]
+    );
 }
 
 __host__ __device__
 double baserel_cost(BaseRelation &base_rel){
     return BASEREL_COEFF * base_rel.tuples;
 }
-
 
 __host__ __device__
 double 
@@ -76,27 +70,36 @@ estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
 {
     double sel = 1.0;
     
-    // for each baserel of the left relation, for each edge of that base rel
-    // getting to the right relation,
-    // I multiply the selectivity by the selectivity of that edge
-    // NB: edges might be multiple so I need to check every baserel in the left
-    // joinrel
-    RelationID left_id = left_rel.id;
-    while (left_id != BMS64_EMPTY){
-        // -1 since it's 1-indexed, 
-        // another -1 since relation with id 0b10 is at index 0 and so on
-        int baserel_left_idx = BMS64_LOWEST_POS(left_id) - 2;
-        BaseRelation &baserel_left = info->base_rels[baserel_left_idx];
-        RelationID baserel_left_edges = baserel_left.edges;
+    // for each ec that involves any baserel on the left and on the right,
+    // get its selectivity.
+    // NB: one equivalence class may only apply a selectivity once so the lowest
+    // matching id on both sides is kept
+    EqClassInfo* ec = info->eq_classes;
+    while (ec != NULL){
+        RelationID match_l = BMS32_INTERSECTION(ec->relids, left_rel.id);
+        RelationID match_r = BMS32_INTERSECTION(ec->relids, right_rel.id);
 
-        while (baserel_left_edges != BMS64_EMPTY){
-            int baserel_right_idx = BMS64_LOWEST_POS(baserel_left_edges) - 2;
-            if (BMS64_IS_SET(right_rel.id, baserel_right_idx+1)){
-                sel *= info->edge_table[baserel_left_idx*info->n_rels+baserel_right_idx].sel;
-            }
-            baserel_left_edges = BMS64_UNSET(baserel_left_edges, baserel_right_idx+1);
+        if (match_l != BMS32_EMPTY && match_r != BMS32_EMPTY){
+            // more than one on the same equivalence class may match
+            // just take the lowest one (already done in BMS32_SET_ALL_LOWER)
+
+            int idx_l = BMS32_SIZE(
+                BMS32_INTERSECTION(
+                    BMS32_SET_ALL_LOWER(match_l),
+                    ec->relids
+                )
+            );
+            int idx_r = BMS32_SIZE(
+                BMS32_INTERSECTION(
+                    BMS32_SET_ALL_LOWER(match_r),
+                    ec->relids
+                )
+            );
+            int size = BMS32_SIZE(ec->relids);
+
+            sel *= ec->sels[idx_l*size+idx_r];
         }
-        left_id = BMS64_UNSET(left_id, baserel_left_idx+1);
+        ec = ec->next;
     }
     
     double rows = sel * left_rel.rows * right_rel.rows;

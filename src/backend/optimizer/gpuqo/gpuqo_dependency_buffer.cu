@@ -20,8 +20,8 @@ DependencyBuffer::DependencyBuffer(int n_rels)
 void DependencyBuffer::push(JoinRelationDPE *join_rel,  
                         JoinRelationDPE *left_rel, JoinRelationDPE *right_rel){
     // push is not thread-safe
-    int left_size = BMS64_SIZE(left_rel->id);
-    int right_size = BMS64_SIZE(right_rel->id);
+    int left_size = BMS32_SIZE(left_rel->id);
+    int right_size = BMS32_SIZE(right_rel->id);
     int big_size = std::max(left_size, right_size);
     int small_size = std::min(left_size, right_size);
     int index = big_size * n_rels + small_size;

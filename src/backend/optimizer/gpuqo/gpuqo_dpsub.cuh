@@ -42,21 +42,21 @@ typedef struct dpsub_iter_param_t{
     GpuqoPlannerInfo* info;
     RelationID out_relid;
     thrust::device_vector<JoinRelation> gpu_memo_vals;
-    thrust::host_vector<uint64_t> binoms;
-    thrust::device_vector<uint64_t> gpu_binoms;
+    thrust::host_vector<uint32_t> binoms;
+    thrust::device_vector<uint32_t> gpu_binoms;
     uninit_device_vector_relid gpu_pending_keys;
     uninit_device_vector_relid gpu_scratchpad_keys;
     uninit_device_vector_joinrel gpu_scratchpad_vals;
     uninit_device_vector_relid gpu_reduced_keys;
     uninit_device_vector_joinrel gpu_reduced_vals;
-    uint64_t n_sets;
-    uint64_t n_joins_per_set;
+    uint32_t n_sets;
+    uint32_t n_joins_per_set;
     uint64_t tot;
 } dpsub_iter_param_t;
 
 typedef thrust::pair<uninit_device_vector_relid::iterator, uninit_device_vector_joinrel::iterator> scatter_iter_t;
 
-typedef thrust::binary_function<RelationID, uint64_t, JoinRelation> pairs_enum_func_t;
+typedef thrust::binary_function<RelationID, uint32_t, JoinRelation> pairs_enum_func_t;
 
 int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params);
 int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params);
@@ -72,15 +72,15 @@ EXTERN_PROTOTYPE_TIMING(iteration);
 
 __host__ __device__
 __forceinline__
-RelationID dpsub_unrank_sid(uint64_t sid, uint64_t qss, uint64_t sq, uint64_t* binoms){
-    RelationID s = BMS64_EMPTY;
+RelationID dpsub_unrank_sid(uint32_t sid, uint32_t qss, uint32_t sq, uint32_t* binoms){
+    RelationID s = BMS32_EMPTY;
     int t = 0;
     int qss_tmp = qss, sq_tmp = sq;
 
     while (sq_tmp > 0 && qss_tmp > 0){
-        uint64_t o = BINOM(binoms, sq, sq_tmp-1, qss_tmp-1);
+        uint32_t o = BINOM(binoms, sq, sq_tmp-1, qss_tmp-1);
         if (sid < o){
-            s = BMS64_UNION(s, BMS64_NTH(t));
+            s = BMS32_UNION(s, BMS32_NTH(t));
             qss_tmp--;
         } else {
             sid -= o;
@@ -97,22 +97,22 @@ __forceinline__
 bool check_join(JoinRelation &left_rel, JoinRelation &right_rel, 
                 GpuqoPlannerInfo* info) {
     // make sure those subsets were valid in a previous iteration
-    if (left_rel.id != BMS64_EMPTY && right_rel.id != BMS64_EMPTY){       
+    if (left_rel.id != BMS32_EMPTY && right_rel.id != BMS32_EMPTY){       
         // enumerator must generate disjoint sets
         Assert(is_disjoint(left_rel, right_rel));
 
         // enumerator must generate self-connected sets
-        Assert(is_connected(left_rel.id, info));
-        Assert(is_connected(right_rel.id, info));
+        Assert(is_connected(left_rel.id, info->edge_table));
+        Assert(is_connected(right_rel.id, info->edge_table));
 
         if (are_connected(left_rel, right_rel, info)){
             return true;
         } else {
-            LOG_DEBUG("[%llu] Cannot join %llu and %llu\n", BMS64_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
+            LOG_DEBUG("[%u] Cannot join %u and %u\n", BMS32_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
             return false;
         }
     } else {
-        LOG_DEBUG("[%llu] Invalid subsets %llu and %llu\n", BMS64_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
+        LOG_DEBUG("[%u] Invalid subsets %u and %u\n", BMS32_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
         return false;
     }
 }
@@ -122,7 +122,7 @@ __forceinline__
 void do_join(RelationID relid, JoinRelation &jr_out, 
             JoinRelation &left_rel, JoinRelation &right_rel,
             GpuqoPlannerInfo* info) {
-    LOG_DEBUG("[%llu] Joining %llu and %llu\n", 
+    LOG_DEBUG("[%u] Joining %u and %u\n", 
             relid, left_rel.id, right_rel.id);
 
     JoinRelation jr;
@@ -131,7 +131,7 @@ void do_join(RelationID relid, JoinRelation &jr_out,
     jr.left_relation_idx = left_rel.id;
     jr.right_relation_id = right_rel.id;
     jr.right_relation_idx = right_rel.id;
-    jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
+    jr.edges = BMS32_UNION(left_rel.edges, right_rel.edges);
     jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
     jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
 

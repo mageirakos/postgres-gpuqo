@@ -31,25 +31,25 @@ void gpuqo_cpu_dpsub_init(GpuqoPlannerInfo* info, memo_t &memo, extra_t &extra){
 void gpuqo_cpu_dpsub_enumerate(GpuqoPlannerInfo* info, join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
 
     // first bit is zero
-    for (RelationID i=1; i < BMS64_NTH(info->n_rels); i++){
+    for (RelationID i=1; i < BMS32_NTH(info->n_rels); i++){
         RelationID join_id = i << 1; // first bit is 0 in Postgres
 
-        if (!is_connected(join_id, info))
+        if (!is_connected(join_id, info->edge_table))
             continue;
 
-        RelationID left_id = BMS64_LOWEST(join_id);
+        RelationID left_id = BMS32_LOWEST(join_id);
         RelationID right_id;
         while (left_id != join_id){
-            right_id = BMS64_DIFFERENCE(join_id, left_id);
+            right_id = BMS32_DIFFERENCE(join_id, left_id);
 
-            if (left_id != BMS64_EMPTY && right_id != BMS64_EMPTY){
+            if (left_id != BMS32_EMPTY && right_id != BMS32_EMPTY){
                 auto left = memo.find(left_id);
                 auto right = memo.find(right_id);
 
                 if (left != memo.end() && right != memo.end()){
                     JoinRelation *left_rel = left->second;
                     JoinRelation *right_rel = right->second;
-                    int level = BMS64_SIZE(join_id);
+                    int level = BMS32_SIZE(join_id);
 
                     join_function(level, false, *right_rel, *left_rel, info,    
                             memo, extra, algorithm
@@ -57,7 +57,7 @@ void gpuqo_cpu_dpsub_enumerate(GpuqoPlannerInfo* info, join_f join_function, mem
                 }
             }
 
-            left_id = BMS64_NEXT_SUBSET(left_id, join_id);
+            left_id = BMS32_NEXT_SUBSET(left_id, join_id);
         }
     }
 }

@@ -11,7 +11,7 @@
 #include "gpuqo_query_tree.cuh"
 
 template<typename T>
-void buildQueryTree(uint64_t idx, T &gpu_memo_vals, QueryTree **qt)
+void buildQueryTree(uint32_t idx, T &gpu_memo_vals, QueryTree **qt)
 {
     JoinRelation jr = gpu_memo_vals[idx];
 
@@ -27,7 +27,7 @@ void buildQueryTree(uint64_t idx, T &gpu_memo_vals, QueryTree **qt)
     }
 
     if (jr.left_relation_id == 0 || jr.right_relation_id == 0){ // error
-        printf("ERROR in buildQueryTree: %llu has children %llu and %llu\n",
+        printf("ERROR in buildQueryTree: %u has children %u and %u\n",
                 jr.id, jr.left_relation_id, jr.right_relation_id);
         return;
     }
@@ -36,5 +36,5 @@ void buildQueryTree(uint64_t idx, T &gpu_memo_vals, QueryTree **qt)
     buildQueryTree<T>(jr.right_relation_idx, gpu_memo_vals, &((*qt)->right));
 }
 
-template void buildQueryTree< thrust::device_vector<JoinRelation> >(uint64_t idx, thrust::device_vector<JoinRelation> &gpu_memo_vals, QueryTree **qt);
-template void buildQueryTree<uninit_device_vector_joinrel>(uint64_t idx, uninit_device_vector_joinrel &gpu_memo_vals, QueryTree **qt);
+template void buildQueryTree< thrust::device_vector<JoinRelation> >(uint32_t idx, thrust::device_vector<JoinRelation> &gpu_memo_vals, QueryTree **qt);
+template void buildQueryTree<uninit_device_vector_joinrel>(uint32_t idx, uninit_device_vector_joinrel &gpu_memo_vals, QueryTree **qt);

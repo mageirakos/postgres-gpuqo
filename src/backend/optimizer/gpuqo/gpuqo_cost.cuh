@@ -50,7 +50,7 @@ public:
         JoinRelation left_rel = memo_vals[jr.left_relation_idx];
         JoinRelation right_rel = memo_vals[jr.right_relation_idx];
 
-        jr.edges = BMS64_UNION(left_rel.edges, right_rel.edges);
+        jr.edges = BMS32_UNION(left_rel.edges, right_rel.edges);
         jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
         jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
 

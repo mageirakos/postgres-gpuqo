@@ -45,20 +45,20 @@ int gpuqo_dpsize_max_memo_size_mb;
  *
  *	 unrank algorithm for DPsize GPU variant
  */
-struct unrankDPSize : public thrust::unary_function< uint64_t,thrust::tuple<RelationID, JoinRelation> >
+struct unrankDPSize : public thrust::unary_function< uint32_t,thrust::tuple<RelationID, JoinRelation> >
 {
     thrust::device_ptr<RelationID> memo_keys;
     thrust::device_ptr<JoinRelation> memo_vals;
-    thrust::device_ptr<uint64_t> partition_offsets;
-    thrust::device_ptr<uint64_t> partition_sizes;
+    thrust::device_ptr<uint32_t> partition_offsets;
+    thrust::device_ptr<uint32_t> partition_sizes;
     int iid;
     uint64_t offset;
 public:
     unrankDPSize(
         thrust::device_ptr<RelationID> _memo_keys,
         thrust::device_ptr<JoinRelation> _memo_vals,
-        thrust::device_ptr<uint64_t> _partition_offsets,
-        thrust::device_ptr<uint64_t> _partition_sizes,
+        thrust::device_ptr<uint32_t> _partition_offsets,
+        thrust::device_ptr<uint32_t> _partition_sizes,
         int _iid,
         uint64_t _offset
     ) : memo_keys(_memo_keys), memo_vals(_memo_vals), 
@@ -69,8 +69,8 @@ public:
     __device__
     thrust::tuple<RelationID, JoinRelation> operator()(uint64_t cid) 
     {
-        uint64_t lp = 0;
-        uint64_t rp = iid - 2;
+        uint32_t lp = 0;
+        uint32_t rp = iid - 2;
         uint64_t o = partition_sizes[lp] * partition_sizes[rp];
         cid += offset;
 
@@ -81,8 +81,8 @@ public:
             o = partition_sizes[lp] * partition_sizes[rp];
         }
 
-        uint64_t l = cid / partition_sizes[rp];
-        uint64_t r = cid % partition_sizes[rp];
+        uint32_t l = cid / partition_sizes[rp];
+        uint32_t r = cid % partition_sizes[rp];
 
         RelationID relid;
         JoinRelation jr;
@@ -90,7 +90,7 @@ public:
         jr.left_relation_idx = partition_offsets[lp] + l;
         jr.right_relation_idx = partition_offsets[rp] + r;
 
-        LOG_DEBUG("%llu: %llu %llu\n", 
+        LOG_DEBUG("%llu: %u %u\n", 
             cid, 
             jr.left_relation_idx,
             jr.right_relation_idx
@@ -99,7 +99,7 @@ public:
         jr.left_relation_id = memo_keys[jr.left_relation_idx];
         jr.right_relation_id = memo_keys[jr.right_relation_idx];
 
-        relid = BMS64_UNION(jr.left_relation_id, jr.right_relation_id);
+        relid = BMS32_UNION(jr.left_relation_id, jr.right_relation_id);
         jr.id = relid;
 
         return thrust::tuple<RelationID, JoinRelation>(relid, jr);
@@ -121,19 +121,19 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsize);
     START_TIMING(init);
 
-    uint64_t min_scratchpad_capacity = gpuqo_dpsize_min_scratchpad_size_mb * MB / RELSIZE;
-    uint64_t max_scratchpad_capacity = gpuqo_dpsize_max_scratchpad_size_mb * MB / RELSIZE;
-    uint64_t prune_threshold = max_scratchpad_capacity * 2 / 3;
-    uint64_t max_memo_size = gpuqo_dpsize_max_memo_size_mb * MB / RELSIZE;
+    uint32_t min_scratchpad_capacity = gpuqo_dpsize_min_scratchpad_size_mb * MB / RELSIZE;
+    uint32_t max_scratchpad_capacity = gpuqo_dpsize_max_scratchpad_size_mb * MB / RELSIZE;
+    uint32_t prune_threshold = max_scratchpad_capacity * 2 / 3;
+    uint32_t max_memo_size = gpuqo_dpsize_max_memo_size_mb * MB / RELSIZE;
 
-    uint64_t memo_size = std::min((uint64_t) 1ULL<<info->n_rels, max_memo_size);
+    uint32_t memo_size = std::min(1U<<info->n_rels, max_memo_size);
     
     uninit_device_vector_relid gpu_memo_keys(memo_size);
     uninit_device_vector_joinrel gpu_memo_vals(memo_size);
-    thrust::host_vector<uint64_t> partition_offsets(info->n_rels);
-    thrust::host_vector<uint64_t> partition_sizes(info->n_rels);
-    thrust::device_vector<uint64_t> gpu_partition_offsets(info->n_rels);
-    thrust::device_vector<uint64_t> gpu_partition_sizes(info->n_rels);
+    thrust::host_vector<uint32_t> partition_offsets(info->n_rels);
+    thrust::host_vector<uint32_t> partition_sizes(info->n_rels);
+    thrust::device_vector<uint32_t> gpu_partition_offsets(info->n_rels);
+    thrust::device_vector<uint32_t> gpu_partition_sizes(info->n_rels);
     QueryTree* out = NULL;
 
     for(int i=0; i<info->n_rels; i++){
@@ -147,7 +147,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
         t.right_relation_id = 0; 
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
-        t.edges = info->base_rels[i].edges;
+        t.edges = info->edge_table[i];
         gpu_memo_vals[i] = t;
 
         partition_sizes[i] = i == 0 ? info->n_rels : 0;
@@ -226,7 +226,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
 
             // size of the already filtered joinrels at the beginning of the 
             // scratchpad
-            uint64_t temp_size;
+            uint32_t temp_size;
 
             // until I go through every possible iteration
             while (offset < n_combinations){
@@ -263,7 +263,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                             && temp_size < prune_threshold)
                 {
                     // how many combinations I will try at this iteration
-                    uint64_t chunk_size;
+                    uint32_t chunk_size;
 
                     if (n_combinations - offset < max_scratchpad_capacity - temp_size){
                         // all remaining
@@ -395,7 +395,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                     ),
                     gpu_memo_keys.begin()+partition_offsets[i-1],
                     gpu_memo_vals.begin()+partition_offsets[i-1],
-                    thrust::equal_to<uint64_t>(),
+                    thrust::equal_to<RelationID>(),
                     thrust::minimum<JoinRelation>()
                 );
     
