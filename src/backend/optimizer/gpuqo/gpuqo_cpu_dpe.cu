@@ -282,7 +282,7 @@ QueryTree* gpuqo_cpu_dpe(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm){
         jr->right_relation_ptr = NULL; 
         jr->cost = baserel_cost(info->base_rels[i]); 
         jr->rows = info->base_rels[i].rows; 
-        jr->edges = info->base_rels[i].edges;
+        jr->edges = info->edge_table[i];
         jr->num_entry.store(0, std::memory_order_consume);
         memo.insert(std::make_pair(info->base_rels[i].id, (JoinRelation*) jr));
     }

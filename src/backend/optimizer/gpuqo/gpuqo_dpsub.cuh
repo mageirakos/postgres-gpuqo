@@ -102,8 +102,8 @@ bool check_join(JoinRelation &left_rel, JoinRelation &right_rel,
         Assert(is_disjoint(left_rel, right_rel));
 
         // enumerator must generate self-connected sets
-        Assert(is_connected(left_rel.id, info));
-        Assert(is_connected(right_rel.id, info));
+        Assert(is_connected(left_rel.id, info->edge_table));
+        Assert(is_connected(right_rel.id, info->edge_table));
 
         if (are_connected(left_rel, right_rel, info)){
             return true;

@@ -150,7 +150,7 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                 uint32_t n_valid_relids = 0;
                 for (uint32_t sid=0; sid < n_tab_sets; sid++){
                     RelationID relid = dpsub_unrank_sid(sid, iter, params.info->n_rels, params.binoms.data()) << 1;
-                    if (is_connected(relid, params.info)){
+                    if (is_connected(relid, params.info->edge_table)){
                         relids[n_valid_relids++] = relid; 
                     }
                 }
