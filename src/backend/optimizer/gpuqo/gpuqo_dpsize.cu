@@ -273,10 +273,12 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
         DECLARE_NV_TIMING(sort);
         DECLARE_NV_TIMING(compute_prune);
         DECLARE_NV_TIMING(update_offsets);
+        DECLARE_NV_TIMING(iteration);
         DECLARE_NV_TIMING(build_qt);
 
         // iterate over the size of the resulting joinrel
         for(int i=2; i<=info->n_rels; i++){
+            START_TIMING(iteration);
             START_TIMING(iter_init);
             
             // calculate number of combinations of relations that make up 
@@ -526,6 +528,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                 pruning_iter++;
             } // pruning loop: while(offset<n_combinations)
 
+            STOP_TIMING(iteration);
             LOG_DEBUG("It took %d pruning iterations", pruning_iter);
             
             PRINT_CHECKPOINT_TIMING(iter_init);
@@ -535,6 +538,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
             PRINT_CHECKPOINT_TIMING(sort);
             PRINT_CHECKPOINT_TIMING(compute_prune);
             PRINT_CHECKPOINT_TIMING(update_offsets);
+            PRINT_TIMING(iteration);
         } // dpsize loop: for i = 2..n_rels
 
         START_TIMING(build_qt);
