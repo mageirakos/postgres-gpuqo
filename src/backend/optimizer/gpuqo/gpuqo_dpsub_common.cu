@@ -233,7 +233,8 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
             params.n_joins_per_set = ((1U)<<i);
             params.tot = ((uint64_t)params.n_sets) * params.n_joins_per_set;
 
-            uint32_t n_iters;
+            // used only if profiling is enabled
+            uint32_t n_iters __attribute__((unused));
             uint64_t filter_threshold = ((uint64_t)gpuqo_dpsub_n_parallel) * gpuqo_dpsub_filter_threshold;
             uint64_t csg_threshold = ((uint64_t)gpuqo_dpsub_n_parallel) * gpuqo_dpsub_csg_threshold;
 
