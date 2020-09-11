@@ -21,7 +21,7 @@
 
 typedef std::chrono::steady_clock::time_point time_point;
 #define NOW() std::chrono::steady_clock::now()
-#define TIME_DIFF_MS(end, begin) std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() / 1000.0
+#define TIME_DIFF_MS(end, begin) std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count() / 1000000.0
 #ifdef GPUQO_PROFILE
 #define EXTERN_PROTOTYPE_TIMING(s)  		extern time_point timeStart_##s; extern double timeDiff_##s; extern double timeTotal_##s; extern int count_##s; extern double timeCheckpoint_##s; extern int countCheckpoint_##s; extern bool is_nv_##s
 #define PROTOTYPE_TIMING(s)  		time_point timeStart_##s; double timeDiff_##s; double timeTotal_##s; int count_##s; double timeCheckpoint_##s; int countCheckpoint_##s; bool is_nv_##s
