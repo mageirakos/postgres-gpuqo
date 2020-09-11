@@ -89,8 +89,8 @@ public:
                 lp++;
                 rp--;
 
-                Assert(lp >= 0 && lp <= iid-2 && lp < 32);
-                Assert(rp >= 0 && rp <= iid-2 && rp < 32);
+                Assert(lp <= iid-2 && lp < 32);
+                Assert(rp <= iid-2 && rp < 32);
 
                 o = offsets[lp];
             }
