@@ -5,6 +5,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Chebyshev as T
+from scipy.stats.mstats import gmean
 
 def folder2series(folder, depth=1):
     return '/'.join(folder.split('/')[-depth:])
@@ -126,7 +127,68 @@ def scatter_plot(series, metric="plan", ratio=False):
     if ratio:
         plt.ylabel("Time ratio (lower is better)")
         plt.yscale("log")
-        vals = np.array([2,3,5,10,100])
+        vals = np.array([2,3,5,10,20,30,50,100])
+        ticks = []
+        labels = []
+        ticks += (1/vals[::-1]).tolist()
+        labels += [f"1/{i}" for i in vals[::-1]]
+        ticks.append(1)
+        labels.append("1")
+        ticks += vals.tolist()
+        labels += [str(i) for i in vals]
+        plt.yticks(ticks, labels)
+        plt.axhline(1, label=next(iter(series)).split(' vs ')[1])
+    else:
+        plt.ylabel("Time (ms)")
+
+    plt.legend()
+    plt.grid()
+    plt.xlabel("Number of tables")
+
+def line_plot_count_time(queries, metric="plan", label=None, ratio=False, color=None):
+    keys = sorted(list(queries.keys()))
+    x = np.array([queries[k]['tables'] for k in keys])
+    x_line = []
+    y_line = []
+
+    if ratio:
+        y = np.array([queries[k][f'{metric}_time_ratio'] for k in keys])
+
+        for n in np.sort(np.unique(x)):
+            mask = (x == n) & (y > 0)
+            if np.any(mask):
+                x_line.append(n)
+                y_line.append(gmean(y[mask]))   
+    else:
+        y = np.array([queries[k][f'{metric}_time_avg'] for k in keys])
+        yerr = np.array([queries[k][f'{metric}_time_std'] for k in keys])
+        plt.errorbar(x, y, yerr=yerr, linestyle="None", color=color)
+
+        for n in np.sort(np.unique(x)):
+            mask = (x == n) & (y > 0)
+            if np.any(mask):
+                x_line.append(n)
+                y_line.append(np.average(y[mask]))   
+
+    
+
+    plt.plot(x_line, y_line, label=label, color=color)
+    plt.scatter(x, y, label=label, color=color)
+
+def line_plot(series, metric="plan", ratio=False):
+    for i, (s, queries) in enumerate(series.items()):
+        line_plot_count_time(
+            queries, 
+            metric=args.metric, 
+            label=s, 
+            ratio=ratio,
+            color=f"C{i if not ratio else i+1}")
+
+    # configure matplotlib
+    if ratio:
+        plt.ylabel("Time ratio (lower is better)")
+        plt.yscale("log")
+        vals = np.array([2,3,5,10,20,30,50,100])
         ticks = []
         labels = []
         ticks += (1/vals[::-1]).tolist()
@@ -189,7 +251,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--sql_folder", default=".", help="Path to the sql queries.")
     parser.add_argument("-s", "--save", default=None, help="Path to save plot to.")
     parser.add_argument("-m", "--metric", default="plan", choices=["plan", "exec", "total"], help="Show whether to choose plan or execution time or their sum.")
-    parser.add_argument("-t", "--type", default="scatter", choices=["scatter", "bar"], help="Choose plot type: scatter or bar.")
+    parser.add_argument("-t", "--type", default="scatter", choices=["scatter", "bar","line"], help="Choose plot type: scatter or bar.")
     parser.add_argument("-r", "--ratio", default=False, action="store_true", help="Plot ratio related to the first series.")
     parser.add_argument("--min_tables", type=int, default=0, help="Limit the number of tables to only the ones that have more than this number of tables.")
     parser.add_argument("--max_tables", type=int, default=1e10, help="Limit the number of tables to only the ones that have less than this number of tables.")
@@ -243,6 +305,12 @@ if __name__ == "__main__":
         )
     elif args.type == 'bar':
         bar_plot(
+            series, 
+            metric=args.metric, 
+            ratio=args.ratio
+        )
+    elif args.type == 'line':
+        line_plot(
             series, 
             metric=args.metric, 
             ratio=args.ratio
