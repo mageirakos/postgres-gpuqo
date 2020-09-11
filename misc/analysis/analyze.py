@@ -12,13 +12,6 @@ def folder2series(folder, depth=1):
 
 def ratio(v, ref):
     return v/ref
-    if v > ref:
-        return v/ref
-    elif v < ref:
-        return -ref/v
-    else:
-        return 0
-
 
 def count_tables(query):
     return len(query[query.find("FROM"):query.find("WHERE")].split(','))
