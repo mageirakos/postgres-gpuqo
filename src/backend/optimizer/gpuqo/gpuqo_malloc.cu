@@ -29,6 +29,7 @@ extern "C" void* gpuqo_malloc(size_t size){
     void *p = NULL;
     if (using_gpu()){
         cudaMallocManaged(&p, size);
+        cudaMemAdvise(p, size, cudaMemAdviseSetReadMostly, 0);
     } else{
         p = malloc(size);
     }
