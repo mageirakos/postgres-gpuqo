@@ -30,7 +30,7 @@ typedef std::chrono::steady_clock::time_point time_point;
 #define DECLARE_TIMING(s)  		PROTOTYPE_TIMING(s); INIT_TIMING(s)
 #define DECLARE_NV_TIMING(s)  		PROTOTYPE_TIMING(s); INIT_NV_TIMING(s)
 #define START_TIMING(s)    		timeStart_##s = NOW()
-#define STOP_TIMING(s)     		if (is_nv_##s) cudaThreadSynchronize(); timeDiff_##s = TIME_DIFF_MS(NOW(), timeStart_##s); timeTotal_##s += timeDiff_##s; count_##s++
+#define STOP_TIMING(s)     		if (is_nv_##s) cudaDeviceSynchronize(); timeDiff_##s = TIME_DIFF_MS(NOW(), timeStart_##s); timeTotal_##s += timeDiff_##s; count_##s++
 #define CLEAR_TIMING(s)         timeTotal_##s = 0; count_##s = 0; timeCheckpoint_##s=timeTotal_##s; countCheckpoint_##s = count_##s
 #define PRINT_TIMING(s) 		std::cout << #s " took " << (timeDiff_##s) << "ms" << std::endl
 #define PRINT_TOTAL_TIMING(s)   std::cout << #s " took " << (double)(count_##s ? timeTotal_##s : 0) << "ms in total over " << count_##s << " runs" << std::endl; timeCheckpoint_##s=timeTotal_##s; countCheckpoint_##s = count_##s
