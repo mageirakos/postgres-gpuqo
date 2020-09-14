@@ -15,12 +15,6 @@
 bool gpuqo_dpsub_csg_enable;
 int gpuqo_dpsub_csg_threshold;
 
-typedef struct loop_stack_elem_t{
-    RelationID S;
-    RelationID X;
-    RelationID N;
-} loop_stack_elem_t;
-
 typedef struct ext_loop_stack_elem_t{
     RelationID S;
     RelationID X;
