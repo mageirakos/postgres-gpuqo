@@ -17,9 +17,12 @@
 
 #define PENDING_KEYS_SIZE (gpuqo_dpsub_n_parallel*gpuqo_dpsub_filter_keys_overprovisioning)
 
+#define BLOCK_DIM 256
 #define WARP_SIZE 32
 #define WARP_MASK 0xFFFFFFFF
-#define BLOCK_DIM 256
+#define LANE_ID (threadIdx.x & (WARP_SIZE-1))
+#define W_OFFSET (threadIdx.x & (~(WARP_SIZE-1)))
+#define LANE_MASK_LE (WARP_MASK >> (WARP_SIZE-1-LANE_ID))
 
 typedef struct join_stack_elem_t{
     JoinRelation *left_rel;
@@ -31,9 +34,6 @@ template <typename stack_elem_t>
 struct ccc_stack_t{
     volatile stack_elem_t* ctxStack;
     int stackTop;
-    int wOffset;
-    int lane_id;
-    unsigned lanemask_le;
 };
 
 typedef struct ccc_stack_t<join_stack_elem_t> join_stack_t;

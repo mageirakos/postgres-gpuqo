@@ -51,9 +51,6 @@ public:
         join_stack_t stack;
         stack.ctxStack = ctxStack;
         stack.stackTop = 0;
-        stack.wOffset = threadIdx.x & (~(WARP_SIZE-1));
-        stack.lane_id = threadIdx.x & (WARP_SIZE-1);
-        stack.lanemask_le = (1 << (stack.lane_id+1)) - 1;
 
         bool stop = false;
         for (int i = 0; i < n_pairs; i++){
@@ -72,12 +69,12 @@ public:
             l = BMS32_NEXT_SUBSET(l, relid);
         }
 
-        if (stack.lane_id < stack.stackTop){
-            int pos = stack.wOffset + stack.stackTop - stack.lane_id - 1;
+        if (LANE_ID < stack.stackTop){
+            int pos = W_OFFSET + stack.stackTop - LANE_ID - 1;
             JoinRelation *left_rel = stack.ctxStack[pos].left_rel;
             JoinRelation *right_rel = stack.ctxStack[pos].right_rel;
 
-            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", stack.wOffset, stack.lane_id, pos, left_rel->id, right_rel->id);
+            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, left_rel->id, right_rel->id);
 
             do_join(relid, jr_out, *left_rel, *right_rel, info);
         }

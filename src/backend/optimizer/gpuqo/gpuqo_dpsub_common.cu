@@ -67,18 +67,18 @@ void try_join(RelationID relid, JoinRelation &jr_out,
     bool p = check_join(*left_rel, *right_rel, info) && additional_predicate;
     unsigned pthBlt = __ballot_sync(WARP_MASK, !p);
     int reducedNTaken = __popc(pthBlt);
-    if (stack.lane_id == 0){
-        LOG_DEBUG("[%d] pthBlt=%u, reducedNTaken=%d, stackTop=%d\n", stack.wOffset, pthBlt, reducedNTaken, stack.stackTop);
+    if (LANE_ID == 0){
+        LOG_DEBUG("[%d] pthBlt=%u, reducedNTaken=%d, stackTop=%d\n", W_OFFSET, pthBlt, reducedNTaken, stack.stackTop);
     }
     if (stack.stackTop >= reducedNTaken){
-        int wScan = __popc(pthBlt & stack.lanemask_le);
-        int pos = stack.wOffset + stack.stackTop - wScan;
+        int wScan = __popc(pthBlt & LANE_MASK_LE);
+        int pos = W_OFFSET + stack.stackTop - wScan;
         if (!p){
             left_rel = stack.ctxStack[pos].left_rel;
             right_rel = stack.ctxStack[pos].right_rel;
-            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", stack.wOffset, stack.lane_id, pos, left_rel->id, right_rel->id);
+            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, left_rel->id, right_rel->id);
         } else {
-            LOG_DEBUG("[%d: %d] Using local values: l=%u, r=%u\n", stack.wOffset, stack.lane_id, left_rel->id, right_rel->id);
+            LOG_DEBUG("[%d: %d] Using local values: l=%u, r=%u\n", W_OFFSET, LANE_ID, left_rel->id, right_rel->id);
         }
         stack.stackTop -= reducedNTaken;
 
@@ -87,17 +87,17 @@ void try_join(RelationID relid, JoinRelation &jr_out,
         do_join(relid, jr_out, *left_rel, *right_rel, info);
 
     } else{
-        int wScan = __popc(~pthBlt & stack.lanemask_le);
-        int pos = stack.wOffset + stack.stackTop + wScan - 1;
+        int wScan = __popc(~pthBlt & LANE_MASK_LE);
+        int pos = W_OFFSET + stack.stackTop + wScan - 1;
         if (p){
-            LOG_DEBUG("[%d: %d] Accumulating stack (%d): l=%u, r=%u\n", stack.wOffset, stack.lane_id, pos, left_rel->id, right_rel->id);
+            LOG_DEBUG("[%d: %d] Accumulating stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, left_rel->id, right_rel->id);
             stack.ctxStack[pos].left_rel = left_rel;
             stack.ctxStack[pos].right_rel = right_rel;
         }
         stack.stackTop += WARP_SIZE - reducedNTaken;
     }
-    if (stack.lane_id == 0){
-        LOG_DEBUG("[%d] new stackTop=%d\n", stack.wOffset, stack.stackTop);
+    if (LANE_ID == 0){
+        LOG_DEBUG("[%d] new stackTop=%d\n", W_OFFSET, stack.stackTop);
     }
 }
 

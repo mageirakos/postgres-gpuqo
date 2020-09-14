@@ -9,8 +9,6 @@
 
 #include "gpuqo_dpsub_csg.cuh"
 
-#define WARP_SIZE 32
-
 // user-defined variables
 bool gpuqo_dpsub_csg_enable;
 int gpuqo_dpsub_csg_threshold;
@@ -85,11 +83,8 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
     csg_stack_t stack;
     stack.ctxStack = ctxStack;
     stack.stackTop = 0;
-    stack.wOffset = threadIdx.x & (~(WARP_SIZE-1));
-    stack.lane_id = threadIdx.x & (WARP_SIZE-1);
-    stack.lanemask_le = (1 << (stack.lane_id+1)) - 1;
 
-    LOG_DEBUG("[%d: %d] lanemask_le=%u\n", stack.wOffset, stack.lane_id, stack.lanemask_le);
+    LOG_DEBUG("[%d: %d] lanemask_le=%u\n", W_OFFSET, LANE_ID, LANE_MASK_LE);
 
     __shared__ EdgeMask edge_table[MAX_DEPTH];
     for (int i = threadIdx.x; i < info->n_rels; i+=blockDim.x){
@@ -149,18 +144,18 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
             bool p = next_subset != BMS32_EMPTY;
             unsigned pthBlt = __ballot_sync(WARP_MASK, !p);
             int reducedNTaken = __popc(pthBlt);
-            if (stack.lane_id == 0){
-                LOG_DEBUG("[%d] pthBlt=%u, reducedNTaken=%d, stackTop=%d\n", stack.wOffset, pthBlt, reducedNTaken, stack.stackTop);
+            if (LANE_ID == 0){
+                LOG_DEBUG("[%d] pthBlt=%u, reducedNTaken=%d, stackTop=%d\n", W_OFFSET, pthBlt, reducedNTaken, stack.stackTop);
             }
             if (stack.stackTop >= reducedNTaken){
-                int wScan = __popc(pthBlt & stack.lanemask_le);
-                int pos = stack.wOffset + stack.stackTop - wScan;
+                int wScan = __popc(pthBlt & LANE_MASK_LE);
+                int pos = W_OFFSET + stack.stackTop - wScan;
                 if (!p){
                     emit_S = stack.ctxStack[pos].S;
                     emit_X = stack.ctxStack[pos].X;
                     I = stack.ctxStack[pos].I;
                     E = BMS32_DIFFERENCE(R,I);
-                    LOG_DEBUG("[%d: %d] Consuming stack (%d): S=%u, X=%u, I=%u\n", stack.wOffset, stack.lane_id, pos, emit_S, emit_X, I);
+                    LOG_DEBUG("[%d: %d] Consuming stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S, emit_X, I);
                 }
                 stack.stackTop -= reducedNTaken;
 
@@ -169,28 +164,28 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                                 jr_out, join_stack, memo_vals, info,
                                 edge_table);
             } else{
-                int wScan = __popc(~pthBlt & stack.lanemask_le);
-                int pos = stack.wOffset + stack.stackTop + wScan - 1;
+                int wScan = __popc(~pthBlt & LANE_MASK_LE);
+                int pos = W_OFFSET + stack.stackTop + wScan - 1;
                 if (p){
                     stack.ctxStack[pos].S = emit_S;
                     stack.ctxStack[pos].X = emit_X;
                     stack.ctxStack[pos].I = I;
-                    LOG_DEBUG("[%d: %d] Accumulating stack (%d): S=%u, X=%u, I=%u\n", stack.wOffset, stack.lane_id, pos, emit_S, emit_X, I);
+                    LOG_DEBUG("[%d: %d] Accumulating stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S, emit_X, I);
                 }
                 stack.stackTop += WARP_SIZE - reducedNTaken;
             }
         } else {
-            if (stack.lane_id == 0){
-                LOG_DEBUG("[%d] Clearing stack (%d)\n", stack.wOffset, stack.stackTop);
+            if (LANE_ID == 0){
+                LOG_DEBUG("[%d] Clearing stack (%d)\n", W_OFFSET, stack.stackTop);
             }
-            if (stack.lane_id < stack.stackTop){
-                int pos = stack.wOffset + stack.stackTop - stack.lane_id - 1;
+            if (LANE_ID < stack.stackTop){
+                int pos = W_OFFSET + stack.stackTop - LANE_ID - 1;
                 emit_S = stack.ctxStack[pos].S;
                 emit_X = stack.ctxStack[pos].X;
                 I = stack.ctxStack[pos].I;
                 E = BMS32_DIFFERENCE(R,I);
 
-                LOG_DEBUG("[%d: %d] Consuming stack (%d): S=%u, X=%u, I=%u\n", stack.wOffset, stack.lane_id, pos, emit_S, emit_X, I);
+                LOG_DEBUG("[%d: %d] Consuming stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S, emit_X, I);
             } else {
                 // fake values just to get to try_join
                 // these will fail all checks and make the thread execute any
@@ -228,9 +223,6 @@ JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint32_t cid)
     join_stack_t join_stack;
     join_stack.ctxStack = ctxStack;
     join_stack.stackTop = 0;
-    join_stack.wOffset = threadIdx.x & (~(WARP_SIZE-1));
-    join_stack.lane_id = threadIdx.x & (WARP_SIZE-1);
-    join_stack.lanemask_le = (1 << (join_stack.lane_id+1)) - 1;
 
     Assert(BMS32_HIGHEST_POS(n_splits_bms)-1 <= BMS32_SIZE(relid));
     LOG_DEBUG("[%u, %u] n_splits_bms=%u, cmp_cid=%u\n", 
@@ -245,12 +237,12 @@ JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint32_t cid)
     enumerate_sub_csg<32>(relid, inc_set, exc_set, jr_out, join_stack,
         memo_vals.get(), info);
 
-    if (join_stack.lane_id < join_stack.stackTop){
-        int pos = join_stack.wOffset + join_stack.stackTop - join_stack.lane_id - 1;
+    if (LANE_ID < join_stack.stackTop){
+        int pos = W_OFFSET + join_stack.stackTop - LANE_ID - 1;
         JoinRelation *left_rel = join_stack.ctxStack[pos].left_rel;
         JoinRelation *right_rel = join_stack.ctxStack[pos].right_rel;
 
-        LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", join_stack.wOffset, join_stack.lane_id, pos, left_rel->id, right_rel->id);
+        LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, left_rel->id, right_rel->id);
 
         do_join(relid, jr_out, *left_rel, *right_rel, info);
     }
