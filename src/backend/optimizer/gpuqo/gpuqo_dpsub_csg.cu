@@ -92,9 +92,10 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
     LOG_DEBUG("[%d: %d] lanemask_le=%u\n", stack.wOffset, stack.lane_id, stack.lanemask_le);
 
     __shared__ EdgeMask edge_table[MAX_DEPTH];
-    for (int i = stack.lane_id; i < MAX_DEPTH; i+=WARP_SIZE){
+    for (int i = threadIdx.x; i < info->n_rels; i+=blockDim.x){
         edge_table[i] = info->edge_table[i];
     }
+    __syncthreads();
 
     RelationID temp;
     if (I != BMS32_EMPTY){
