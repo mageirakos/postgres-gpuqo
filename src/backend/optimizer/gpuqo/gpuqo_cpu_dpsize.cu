@@ -42,7 +42,11 @@ void gpuqo_cpu_dpsize_init(GpuqoPlannerInfo* info, memo_t &memo, extra_t &extra)
 void gpuqo_cpu_dpsize_enumerate(GpuqoPlannerInfo* info, join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
     struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) extra.alg;
 
+    DECLARE_TIMING(iteration);
+
     for (int join_s=2; join_s<=info->n_rels; join_s++){
+        LOG_PROFILE("\nStarting iteration %d\n", join_s);
+        START_TIMING(iteration);
         for (int big_s = join_s-1; big_s >= (join_s+1)/2; big_s--){
             int small_s = join_s-big_s;
             for (auto big_i = mExtra->rels_per_level[big_s].begin(); 
@@ -55,6 +59,8 @@ void gpuqo_cpu_dpsize_enumerate(GpuqoPlannerInfo* info, join_f join_function, me
                 }
             } 
         }
+        STOP_TIMING(iteration);
+        PRINT_TIMING(iteration);
     }
 
 }
