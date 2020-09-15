@@ -75,7 +75,7 @@ public:
             int n_active = __popc(__activemask());
 
             for (int i = threadIdx.x; i <= iid-2; i += n_active){
-                offsets[i] = partition_sizes[i] * partition_sizes[iid-2-i];
+                offsets[i] = ((uint64_t)partition_sizes[i]) * partition_sizes[iid-2-i];
             }
             __syncthreads();
     
@@ -285,7 +285,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
             // a joinrel of size i
             uint64_t n_combinations = 0;
             for (int j=1; j<i; j++){
-                n_combinations += partition_sizes[j-1] * partition_sizes[i-j-1];
+                n_combinations += ((uint64_t)partition_sizes[j-1]) * partition_sizes[i-j-1];
             }
 
             LOG_PROFILE("\nStarting iteration %d: %llu combinations (scratchpad: %llu)\n", i, n_combinations, max_scratchpad_capacity);
