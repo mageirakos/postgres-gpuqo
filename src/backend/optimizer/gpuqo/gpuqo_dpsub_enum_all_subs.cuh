@@ -52,21 +52,17 @@ public:
         stack.ctxStack = ctxStack;
         stack.stackTop = 0;
 
-        bool stop = false;
+        bool valid = join_id < n_possible_joins;
         for (int i = 0; i < n_pairs; i++){
-            stop = stop || (join_id+i != 0 && l == 0) || (join_id+i > n_possible_joins);
-
-            if (stop){
-                r=0; 
-                // makes try_join process an invalid pair, giving it the possibility
-                // to pop an element from the stack 
-            } else {
-                r = BMS32_DIFFERENCE(relid, l);
-            }
+            r = BMS32_DIFFERENCE(relid, l);
             
-            try_join(relid, jr_out, l, r, true, stack, memo_vals.get(), info);
+            try_join(jr_out, l, r, valid, stack, memo_vals.get(), info);
 
             l = BMS32_NEXT_SUBSET(l, relid);
+
+            // if l becomes 0, I reached the end and I mark all next joins as
+            // invalid
+            valid = valid && (l != 0);
         }
 
         if (LANE_ID < stack.stackTop){
