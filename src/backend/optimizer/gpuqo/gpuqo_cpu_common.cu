@@ -62,8 +62,8 @@ T* build_join_relation(T &left_rel,T &right_rel){
     join_rel->right_relation_id = right_rel.id;
     join_rel->right_relation_ptr = &right_rel;
     join_rel->edges = BMS32_UNION(left_rel.edges, right_rel.edges);
-    join_rel->cost = std::numeric_limits<double>::max();
-    join_rel->rows = std::numeric_limits<double>::max();
+    join_rel->cost = INFF;
+    join_rel->rows = INFF;
 
 #ifdef USE_ASSERT_CHECKING
     join_rel->referenced = false;

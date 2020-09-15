@@ -42,20 +42,20 @@ typedef Bitmapset32 RelationID;
 
 typedef struct EqClassInfo{
 	RelationID relids;
-	double* sels;
+	float* sels;
 	struct EqClassInfo* next;
 } EqClassInfo;
 
 typedef struct BaseRelation{
 	RelationID id;
-	double rows;
-	double tuples;
+	float rows;
+	float tuples;
 } BaseRelation;
 
 typedef struct QueryTree{
 	RelationID id;
-	double rows;
-	double cost;
+	float rows;
+	float cost;
 	struct QueryTree* left;
 	struct QueryTree* right;
 } QueryTree;

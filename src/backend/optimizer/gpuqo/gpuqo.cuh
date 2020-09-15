@@ -36,12 +36,14 @@ do { \
 		ProcessInterrupts(); \
 } while(0)
 
-// double infinity constant
+// floating-point infinity constants
 #include <limits>
 #ifdef __CUDA_ARCH__
 #define INFD __longlong_as_double(0x7ff0000000000000ULL)
+#define INFF __int_as_float(0x7f800000)
 #else
 #define INFD std::numeric_limits<double>::infinity()
+#define INFF std::numeric_limits<float>::infinity()
 #endif
 
 // constants for table sizes
@@ -70,8 +72,8 @@ struct JoinRelation{
 		struct JoinRelation* right_relation_ptr;
 	};
 
-	double rows;
-	double cost;
+	float rows;
+	float cost;
 	
 #ifdef USE_ASSERT_CHECKING
 	bool referenced;

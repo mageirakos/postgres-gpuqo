@@ -35,40 +35,74 @@ bool has_useful_index(JoinRelation &left_rel, JoinRelation &right_rel,
 }
 
 __host__ __device__
-double baserel_cost(BaseRelation &base_rel){
+float baserel_cost(BaseRelation &base_rel){
     return BASEREL_COEFF * base_rel.tuples;
 }
 
 __host__ __device__
-double 
-compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
-                    JoinRelation &right_rel, GpuqoPlannerInfo* info)
-{
-    double hash_cost = HASHJOIN_COEFF * join_rel.rows + left_rel.cost + right_rel.cost;
-    double nl_cost = left_rel.cost + left_rel.rows * right_rel.cost;
-    double inl_cost;
-
-    if (has_useful_index(left_rel, right_rel, info)){
-        inl_cost = left_rel.cost + INDEXSCAN_COEFF * left_rel.rows * max(join_rel.rows/left_rel.rows, 1.0);
-    } else{
-        inl_cost = INFD;
-    }
-
-    // explicit sort merge
-    double sm_cost = (left_rel.cost + right_rel.cost
-                        + SORT_COEFF * left_rel.rows * log(left_rel.rows)
-                        + SORT_COEFF * right_rel.rows * log(right_rel.rows)
-    );
-
-    return min(min(hash_cost, nl_cost), min(inl_cost, sm_cost));
+__forceinline__
+float 
+hash_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+               JoinRelation &right_rel, GpuqoPlannerInfo* info){
+    return HASHJOIN_COEFF * join_rel.rows + left_rel.cost + right_rel.cost;
 }
 
 __host__ __device__
-double 
+__forceinline__
+float 
+nl_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+               JoinRelation &right_rel, GpuqoPlannerInfo* info){
+    return left_rel.cost + left_rel.rows * right_rel.cost;
+}
+
+__host__ __device__
+__forceinline__
+float 
+inl_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+               JoinRelation &right_rel, GpuqoPlannerInfo* info){
+    return left_rel.cost + INDEXSCAN_COEFF * left_rel.rows * max(join_rel.rows/left_rel.rows, 1.0);
+}
+
+__host__ __device__
+__forceinline__
+float 
+sm_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+               JoinRelation &right_rel, GpuqoPlannerInfo* info){
+    return left_rel.cost + right_rel.cost
+        + SORT_COEFF * left_rel.rows * log(left_rel.rows)
+        + SORT_COEFF * right_rel.rows * log(right_rel.rows);
+}
+
+__host__ __device__
+float 
+compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+                    JoinRelation &right_rel, GpuqoPlannerInfo* info)
+{
+    float min_cost;
+
+    // hash join
+    min_cost = hash_join_cost(join_rel, left_rel, right_rel, info);
+
+    // nested loop join
+    min_cost = min(min_cost, nl_join_cost(join_rel, left_rel, right_rel, info));
+    
+    // indexed nested loop join
+    if (has_useful_index(left_rel, right_rel, info)){
+        min_cost = min(min_cost, inl_join_cost(join_rel, left_rel, right_rel, info));
+    }
+
+    // explicit sort merge
+    min_cost = min(min_cost, sm_join_cost(join_rel, left_rel, right_rel, info));
+
+    return min_cost;
+}
+
+__host__ __device__
+float 
 estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info) 
 {
-    double sel = 1.0;
+    float sel = 1.0;
     
     // for each ec that involves any baserel on the left and on the right,
     // get its selectivity.
@@ -102,7 +136,7 @@ estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
         ec = ec->next;
     }
     
-    double rows = sel * left_rel.rows * right_rel.rows;
+    float rows = sel * left_rel.rows * right_rel.rows;
 
     // clamp the number of rows
     return rows > 1 ? round(rows) : 1;

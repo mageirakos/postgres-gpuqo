@@ -10,8 +10,6 @@
 #ifndef GPUQO_COST_CUH
 #define GPUQO_COST_CUH
 
-#include <thrust/device_ptr.h>
-
 #include "gpuqo.cuh"
 
 #define BASEREL_COEFF   0.2
@@ -20,15 +18,15 @@
 #define SORT_COEFF      2
 
 extern __host__ __device__
-double baserel_cost(BaseRelation &base_rel);
+float baserel_cost(BaseRelation &base_rel);
 
 extern __host__ __device__
-double compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+float compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info
 );
 
 extern __host__ __device__
-double estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
+float estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info
 );
 	

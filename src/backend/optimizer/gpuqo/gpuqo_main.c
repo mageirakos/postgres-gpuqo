@@ -269,7 +269,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                         info->eq_classes = ec;
                         ec->relids = convertBitmapset(rinfo->parent_ec->ec_relids);
                         size = BMS32_SIZE(ec->relids);
-                        ec->sels = (double*) gpuqo_malloc(sizeof(double)*size*size);
+                        ec->sels = (float*) gpuqo_malloc(sizeof(float)*size*size);
                     } else {
                         size = BMS32_SIZE(ec->relids);
                     }
