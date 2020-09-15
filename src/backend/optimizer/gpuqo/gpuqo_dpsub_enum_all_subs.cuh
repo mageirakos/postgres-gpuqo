@@ -72,7 +72,7 @@ public:
 
             LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, left_rel->id, right_rel->id);
 
-            do_join(relid, jr_out, *left_rel, *right_rel, info);
+            do_join(jr_out, *left_rel, *right_rel, info);
         }
 
         return jr_out;

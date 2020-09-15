@@ -21,7 +21,8 @@
 #define WARP_SIZE 32
 #define WARP_MASK 0xFFFFFFFF
 #define LANE_ID (threadIdx.x & (WARP_SIZE-1))
-#define W_OFFSET (threadIdx.x & (~(WARP_SIZE-1)))
+#define WARP_ID (threadIdx.x & (~(WARP_SIZE-1)))
+#define W_OFFSET WARP_ID
 #define LANE_MASK_LE (WARP_MASK >> (WARP_SIZE-1-LANE_ID))
 
 typedef struct join_stack_elem_t{
@@ -119,14 +120,13 @@ bool check_join(JoinRelation &left_rel, JoinRelation &right_rel,
 
 __device__
 __forceinline__
-void do_join(RelationID relid, JoinRelation &jr_out, 
-            JoinRelation &left_rel, JoinRelation &right_rel,
-            GpuqoPlannerInfo* info) {
+void do_join(JoinRelation &jr_out, JoinRelation &left_rel, 
+             JoinRelation &right_rel, GpuqoPlannerInfo* info) {
     LOG_DEBUG("[%u] Joining %u and %u\n", 
             relid, left_rel.id, right_rel.id);
 
     JoinRelation jr;
-    jr.id = relid;
+    jr.id = BMS32_UNION(left_rel.id, right_rel.id);
     jr.left_relation_id = left_rel.id;
     jr.left_relation_idx = left_rel.id;
     jr.right_relation_id = right_rel.id;
@@ -141,9 +141,8 @@ void do_join(RelationID relid, JoinRelation &jr_out,
 }
 
 __device__
-void try_join(RelationID relid, JoinRelation &jr_out, 
-            RelationID l, RelationID r, bool additional_predicate,
-            join_stack_t &stack, JoinRelation* memo_vals, 
-            GpuqoPlannerInfo* info);
+void try_join(JoinRelation &jr_out, RelationID l, RelationID r, 
+            bool additional_predicate, join_stack_t &stack, 
+            JoinRelation* memo_vals, GpuqoPlannerInfo* info);
 
 #endif							/* GPUQO_DPSUB_CUH */

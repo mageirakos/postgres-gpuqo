@@ -39,7 +39,7 @@ void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
     Assert(BMS32_IS_SUBSET(emit_S, T));
     Assert(BMS32_IS_SUBSET(I, T));
 
-    try_join(T, jr_out, emit_S, BMS32_DIFFERENCE(T, emit_S), 
+    try_join(jr_out, emit_S, BMS32_DIFFERENCE(T, emit_S), 
             BMS32_IS_SUBSET(I, emit_S), join_stack, memo_vals, info);
 
     RelationID new_N = BMS32_INTERSECTION(
@@ -244,7 +244,7 @@ JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint32_t cid)
 
         LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, left_rel->id, right_rel->id);
 
-        do_join(relid, jr_out, *left_rel, *right_rel, info);
+        do_join(jr_out, *left_rel, *right_rel, info);
     }
     
     return jr_out;

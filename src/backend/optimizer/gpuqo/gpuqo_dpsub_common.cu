@@ -48,13 +48,12 @@ PROTOTYPE_TIMING(iteration);
 int gpuqo_dpsub_n_parallel;
 
 __device__
-void try_join(RelationID relid, JoinRelation &jr_out, 
-            RelationID l, RelationID r, bool additional_predicate,
-            join_stack_t &stack, JoinRelation* memo_vals, 
-            GpuqoPlannerInfo* info)
+void try_join(JoinRelation &jr_out, RelationID l, RelationID r, 
+                bool additional_predicate, join_stack_t &stack, 
+                JoinRelation* memo_vals, GpuqoPlannerInfo* info)
 {
-    LOG_DEBUG("[%d, %d] try_join(%u, %u, %u, %s)\n", 
-                blockIdx.x, threadIdx.x, relid, l, r,
+    LOG_DEBUG("[%d, %d] try_join(%u, %u, %s)\n", 
+                blockIdx.x, threadIdx.x, l, r,
                 additional_predicate ? "true" : "false");
 
     JoinRelation *left_rel = &memo_vals[l];
@@ -82,9 +81,7 @@ void try_join(RelationID relid, JoinRelation &jr_out,
         }
         stack.stackTop -= reducedNTaken;
 
-        Assert(BMS32_UNION(left_rel->id, right_rel->id) == relid);
-
-        do_join(relid, jr_out, *left_rel, *right_rel, info);
+        do_join(jr_out, *left_rel, *right_rel, info);
 
     } else{
         int wScan = __popc(~pthBlt & LANE_MASK_LE);
