@@ -171,17 +171,13 @@ public:
     JoinRelation operator()(uint2 idxs){
         JoinRelation jr;
 
-        JoinRelation left_rel = memo_vals[idxs.x];
-        JoinRelation right_rel = memo_vals[idxs.y];
-
-        jr.id = BMS32_UNION(left_rel.id, right_rel.id);
-        jr.left_relation_id = left_rel.id;
-        jr.right_relation_id = left_rel.id;
-        jr.left_relation_idx = idxs.x;
-        jr.right_relation_idx = idxs.y;
-        jr.edges = BMS32_UNION(left_rel.edges, right_rel.edges);
-        jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
-        jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
+        make_join_rel(jr, 
+            idxs.x,
+            memo_vals.get()[idxs.x], 
+            idxs.y,
+            memo_vals.get()[idxs.y], 
+            info
+        );
 
         return jr;
     }

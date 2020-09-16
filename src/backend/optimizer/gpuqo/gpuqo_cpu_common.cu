@@ -90,10 +90,7 @@ T* make_join_relation(T &left_rel,T &right_rel, GpuqoPlannerInfo* info){
 #endif
 
     T* join_rel = build_join_relation<T>(left_rel, right_rel);
-
-    join_rel->rows = estimate_join_rows(*join_rel, left_rel, right_rel, info);
-
-    join_rel->cost = compute_join_cost(*join_rel, left_rel, right_rel, info);
+    compute_join_cost(*join_rel, left_rel, right_rel, info);
 
     return join_rel;
 }

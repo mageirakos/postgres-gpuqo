@@ -21,13 +21,20 @@ extern __host__ __device__
 float baserel_cost(BaseRelation &base_rel);
 
 extern __host__ __device__
-float compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+void compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info
 );
 
-extern __host__ __device__
-float estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
+extern __device__
+void make_join_rel(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info
+);
+	
+extern __device__
+void make_join_rel(JoinRelation &join_rel, 
+                    uint32_t left_idx, JoinRelation &left_rel,
+                    uint32_t right_idx, JoinRelation &right_rel,
+                    GpuqoPlannerInfo* info
 );
 	
 #endif							/* GPUQO_COST_CUH */

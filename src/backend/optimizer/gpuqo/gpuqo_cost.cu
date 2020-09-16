@@ -20,6 +20,7 @@
 
 
 __host__ __device__
+__forceinline__
 bool has_useful_index(JoinRelation &left_rel, JoinRelation &right_rel,
                     GpuqoPlannerInfo* info){
     if (BMS32_SIZE(right_rel.id) != 1)  // inner must be base rel
@@ -74,8 +75,9 @@ sm_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
 }
 
 __host__ __device__
+__forceinline__
 float 
-compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+calc_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info)
 {
     float min_cost;
@@ -98,6 +100,7 @@ compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
 }
 
 __host__ __device__
+__forceinline__
 float 
 estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info) 
@@ -140,4 +143,51 @@ estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
 
     // clamp the number of rows
     return rows > 1 ? round(rows) : 1;
+}
+
+__host__ __device__
+__forceinline__
+void 
+_compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+                    JoinRelation &right_rel, GpuqoPlannerInfo* info)
+{    
+    join_rel.rows = estimate_join_rows(join_rel, left_rel, right_rel, info);
+    join_rel.cost = calc_join_cost(join_rel, left_rel, right_rel, info);
+}
+
+__host__ __device__
+void 
+compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
+                    JoinRelation &right_rel, GpuqoPlannerInfo* info)
+{    
+    _compute_join_cost(join_rel, left_rel, right_rel, info);
+}
+
+__device__
+void 
+make_join_rel(JoinRelation &join_rel, uint32_t left_idx, JoinRelation &left_rel,
+                uint32_t right_idx, JoinRelation &right_rel, 
+                GpuqoPlannerInfo* info)
+{    
+    join_rel.id = BMS32_UNION(left_rel.id, right_rel.id);
+    join_rel.left_relation_id = left_rel.id;
+    join_rel.left_relation_idx = left_idx;
+    join_rel.right_relation_id = right_rel.id;
+    join_rel.right_relation_idx = right_idx;
+    join_rel.edges = BMS32_UNION(left_rel.edges, right_rel.edges);
+    _compute_join_cost(join_rel, left_rel, right_rel, info);
+}
+
+__device__
+void 
+make_join_rel(JoinRelation &join_rel, JoinRelation &left_rel,
+              JoinRelation &right_rel, GpuqoPlannerInfo* info)
+{    
+    join_rel.id = BMS32_UNION(left_rel.id, right_rel.id);
+    join_rel.left_relation_id = left_rel.id;
+    join_rel.left_relation_idx = left_rel.id;
+    join_rel.right_relation_id = right_rel.id;
+    join_rel.right_relation_idx = right_rel.id;
+    join_rel.edges = BMS32_UNION(left_rel.edges, right_rel.edges);
+    _compute_join_cost(join_rel, left_rel, right_rel, info);
 }

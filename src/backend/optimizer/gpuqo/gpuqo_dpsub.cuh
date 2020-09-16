@@ -127,14 +127,7 @@ void do_join(JoinRelation &jr_out, JoinRelation &left_rel,
             relid, left_rel.id, right_rel.id);
 
     JoinRelation jr;
-    jr.id = BMS32_UNION(left_rel.id, right_rel.id);
-    jr.left_relation_id = left_rel.id;
-    jr.left_relation_idx = left_rel.id;
-    jr.right_relation_id = right_rel.id;
-    jr.right_relation_idx = right_rel.id;
-    jr.edges = BMS32_UNION(left_rel.edges, right_rel.edges);
-    jr.rows = estimate_join_rows(jr, left_rel, right_rel, info);
-    jr.cost = compute_join_cost(jr, left_rel, right_rel, info);
+    make_join_rel(jr, left_rel, right_rel, info);
 
     if (jr.cost < jr_out.cost){
         jr_out = jr;
