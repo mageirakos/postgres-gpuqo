@@ -400,10 +400,9 @@
 
 #gpuqo = on
 #gpuqo_threshold = 8
-#gpuqo_dpsize_min_scratchpad_size_mb = 1
-#gpuqo_dpsize_max_scratchpad_size_mb = 1024
-#gpuqo_dpsize_max_memo_size_mb = 2048
-#gpuqo_dpsub_n_parallel = 16384
+#gpuqo_scratchpad_size_mb = 100
+#gpuqo_max_memo_size_mb = 1024
+#gpuqo_n_parallel = 10240
 #gpuqo_dpsub_filter = on
 #gpuqo_dpsub_filter_threshold = 16
 #gpuqo_dpsub_filter_cpu_enum_threshold = 1024

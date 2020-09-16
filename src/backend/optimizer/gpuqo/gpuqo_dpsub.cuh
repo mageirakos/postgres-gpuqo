@@ -15,7 +15,7 @@
 #include "gpuqo.cuh"
 #include "gpuqo_binomial.cuh"
 
-#define PENDING_KEYS_SIZE (gpuqo_dpsub_n_parallel*gpuqo_dpsub_filter_keys_overprovisioning)
+#define PENDING_KEYS_SIZE(params) ((params).scratchpad_size*gpuqo_dpsub_filter_keys_overprovisioning)
 
 #define BLOCK_DIM 256
 #define WARP_SIZE 32
@@ -53,6 +53,7 @@ typedef struct dpsub_iter_param_t{
     uint32_t n_sets;
     uint32_t n_joins_per_set;
     uint64_t tot;
+    uint32_t scratchpad_size;
 } dpsub_iter_param_t;
 
 typedef thrust::pair<uninit_device_vector_relid::iterator, uninit_device_vector_joinrel::iterator> scatter_iter_t;

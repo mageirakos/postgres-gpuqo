@@ -43,6 +43,10 @@ ifeq ($(enable_gpuqo_profiling),yes)
 NVCCFLAGS += -DGPUQO_PROFILE
 endif
 
+ifeq ($(enable_gpuqo_kernel_profiling),yes)
+NVCCFLAGS += -DGPUQO_KERNEL_PROFILE
+endif
+
 ifeq ($(enable_gpuqo_debug),yes)
 NVCCFLAGS += -DGPUQO_DEBUG
 endif

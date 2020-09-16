@@ -45,7 +45,7 @@ PROTOTYPE_TIMING(scatter);
 PROTOTYPE_TIMING(iteration);
 
 // User-configured option
-int gpuqo_dpsub_n_parallel;
+int gpuqo_n_parallel;
 
 __device__
 void try_join(JoinRelation &jr_out, RelationID l, RelationID r, 
@@ -162,7 +162,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsub);
     START_TIMING(init);
 
-    uint32_t max_memo_size = gpuqo_dpsize_max_memo_size_mb * MB / RELSIZE;
+    uint32_t max_memo_size = gpuqo_max_memo_size_mb * MB / RELSIZE;
     uint32_t req_memo_size = 1U<<(info->n_rels+1);
     if (max_memo_size < req_memo_size){
         printf("Insufficient memo size\n");
@@ -198,12 +198,25 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     precompute_binoms(params.binoms, info->n_rels);
     params.gpu_binoms = params.binoms;
 
-    // scratchpad size is increased on demand, starting from a minimum capacity
-    params.gpu_pending_keys = uninit_device_vector_relid(PENDING_KEYS_SIZE);
-    params.gpu_scratchpad_keys = uninit_device_vector_relid(gpuqo_dpsub_n_parallel);
-    params.gpu_scratchpad_vals = uninit_device_vector_joinrel(gpuqo_dpsub_n_parallel);
-    params.gpu_reduced_keys = uninit_device_vector_relid(gpuqo_dpsub_n_parallel);
-    params.gpu_reduced_vals = uninit_device_vector_joinrel(gpuqo_dpsub_n_parallel);
+    params.scratchpad_size = (
+        (
+            gpuqo_scratchpad_size_mb * MB
+        ) / (
+            sizeof(RelationID)*gpuqo_dpsub_filter_keys_overprovisioning + 
+            (sizeof(RelationID) + sizeof(JoinRelation))
+        )
+    );  
+
+    if (params.scratchpad_size < gpuqo_n_parallel)
+        params.scratchpad_size = gpuqo_n_parallel;
+
+    LOG_PROFILE("Using a scratchpad of size %u\n", params.scratchpad_size);
+
+    params.gpu_pending_keys = uninit_device_vector_relid(PENDING_KEYS_SIZE(params));
+    params.gpu_scratchpad_keys = uninit_device_vector_relid(params.scratchpad_size);
+    params.gpu_scratchpad_vals = uninit_device_vector_joinrel(params.scratchpad_size);
+    params.gpu_reduced_keys = uninit_device_vector_relid(params.scratchpad_size/32);
+    params.gpu_reduced_vals = uninit_device_vector_joinrel(params.scratchpad_size/32);
 
     STOP_TIMING(init);
 
@@ -232,8 +245,8 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
             // used only if profiling is enabled
             uint32_t n_iters __attribute__((unused));
-            uint64_t filter_threshold = ((uint64_t)gpuqo_dpsub_n_parallel) * gpuqo_dpsub_filter_threshold;
-            uint64_t csg_threshold = ((uint64_t)gpuqo_dpsub_n_parallel) * gpuqo_dpsub_csg_threshold;
+            uint64_t filter_threshold = ((uint64_t)gpuqo_n_parallel) * gpuqo_dpsub_filter_threshold;
+            uint64_t csg_threshold = ((uint64_t)gpuqo_n_parallel) * gpuqo_dpsub_csg_threshold;
 
             START_TIMING(iteration);
             if ((gpuqo_dpsub_filter_enable && params.tot > filter_threshold) 

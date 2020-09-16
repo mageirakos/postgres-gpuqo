@@ -2089,43 +2089,33 @@ static struct config_int ConfigureNamesInt[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"gpuqo_dpsize_min_scratchpad_size_mb", PGC_USERSET, QUERY_TUNING_GPUQO,
-			gettext_noop("Sets the minimum allocated memory for the scratchpad (DPSIZE only)."),
+		{"gpuqo_scratchpad_size_mb", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the allocated temporary memory for the \"scratchpad\"."),
 			NULL,
 			GUC_EXPLAIN
 		},
-		&gpuqo_dpsize_max_scratchpad_size_mb,
+		&gpuqo_scratchpad_size_mb,
 		10, 1, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{
-		{"gpuqo_dpsize_max_scratchpad_size_mb", PGC_USERSET, QUERY_TUNING_GPUQO,
-			gettext_noop("Sets the maximum allocated memory for the scratchpad (DPSIZE only)."),
+		{"gpuqo_max_memo_size_mb", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the maximum allocated memory for the memo."),
 			NULL,
 			GUC_EXPLAIN
 		},
-		&gpuqo_dpsize_max_scratchpad_size_mb,
+		&gpuqo_max_memo_size_mb,
 		1024, 1, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{
-		{"gpuqo_dpsize_max_memo_size_mb", PGC_USERSET, QUERY_TUNING_GPUQO,
-			gettext_noop("Sets the maximum allocated memory for the memo (DPSIZE only)."),
+		{"gpuqo_n_parallel", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of operations to perform in parallel. It's used to find the best work division in dpsub and to decide when to stop pruning on dpsize."),
 			NULL,
 			GUC_EXPLAIN
 		},
-		&gpuqo_dpsize_max_memo_size_mb,
-		2048, 1, INT_MAX,
-		NULL, NULL, NULL
-	},
-	{
-		{"gpuqo_dpsub_n_parallel", PGC_USERSET, QUERY_TUNING_GPUQO,
-			gettext_noop("Sets the number of join pairs to compute in parallel."),
-			NULL,
-			GUC_EXPLAIN
-		},
-		&gpuqo_dpsub_n_parallel,
-		16384, 1, INT_MAX,
+		&gpuqo_n_parallel,
+		10240, 1, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{
@@ -2140,7 +2130,7 @@ static struct config_int ConfigureNamesInt[] =
 	},
 	{
 		{"gpuqo_dpsub_filter_cpu_enum_threshold", PGC_USERSET, QUERY_TUNING_GPUQO,
-			gettext_noop("Sets the number of join relations below which validity is checked on CPU (it's not worth offloading to GPU when parallelism is too low. Set to 0 to always perform filtering on GPU."),
+			gettext_noop("Sets the number of join relations below which validity is checked on CPU (it's not worth offloading to GPU when parallelism is too low). Set to 0 to always perform filtering on GPU."),
 			NULL,
 			GUC_EXPLAIN
 		},
@@ -2150,7 +2140,7 @@ static struct config_int ConfigureNamesInt[] =
 	},
 	{
 		{"gpuqo_dpsub_filter_keys_overprovisioning", PGC_USERSET, QUERY_TUNING_GPUQO,
-			gettext_noop("Sets the maximum number of join relations that will be checked in parallel in the filtering phase as a multiple of gpuqo_dpsub_n_parallel (i.e. a value of 100 means to try up to 100*gpuqo_dpsub_n_parallel join relations at a time)."),
+			gettext_noop("Sets the maximum number of join relations that will be checked in parallel in the filtering phase as a multiple of gpuqo_n_parallel (i.e. a value of 100 means to try up to 100*gpuqo_n_parallel join relations at a time)."),
 			NULL,
 			GUC_EXPLAIN
 		},

@@ -127,12 +127,12 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
     while (set_offset < params.n_sets){
         uint32_t n_remaining_sets = params.n_sets - set_offset;
         
-        while(n_pending_sets < gpuqo_dpsub_n_parallel
+        while(n_pending_sets < params.scratchpad_size
                 && n_remaining_sets > 0){
             uint32_t n_tab_sets;
 
-            if (n_remaining_sets > PENDING_KEYS_SIZE-n_pending_sets){
-                n_tab_sets = PENDING_KEYS_SIZE-n_pending_sets;
+            if (n_remaining_sets > PENDING_KEYS_SIZE(params)-n_pending_sets){
+                n_tab_sets = PENDING_KEYS_SIZE(params)-n_pending_sets;
             } else {
                 n_tab_sets = n_remaining_sets;
             }
@@ -194,7 +194,7 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
         uint32_t n_joins_per_thread;
         uint32_t n_sets_per_iteration;
         uint32_t threads_per_set;
-        uint32_t factor = gpuqo_dpsub_n_parallel / n_pending_sets;
+        uint32_t factor = gpuqo_n_parallel / n_pending_sets;
 
         if (factor < 32 || params.n_joins_per_set <= 32){
             threads_per_set = 32;
@@ -203,7 +203,7 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
         }
         
         n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
-        n_sets_per_iteration = min(gpuqo_dpsub_n_parallel / threads_per_set, n_pending_sets);
+        n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, n_pending_sets);
 
         LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
             n_joins_per_thread,
@@ -223,7 +223,7 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
         // do not empty all pending sets if there are some sets still to 
         // evaluate, since I will do them in the next iteration
         // If no sets remain, then I will empty all pending
-        while (n_pending_sets >= gpuqo_dpsub_n_parallel 
+        while (n_pending_sets >= gpuqo_n_parallel 
             || (n_pending_sets > 0 && n_remaining_sets == 0)
         ){
             uint32_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);

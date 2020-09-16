@@ -39,9 +39,8 @@
 #define RELSIZE (sizeof(JoinRelation)+sizeof(RelationID))
 #define SCR_ENTRY_SIZE (sizeof(uint2)+sizeof(RelationID))
 
-int gpuqo_dpsize_min_scratchpad_size_mb;
-int gpuqo_dpsize_max_scratchpad_size_mb;
-int gpuqo_dpsize_max_memo_size_mb;
+int gpuqo_scratchpad_size_mb;
+int gpuqo_max_memo_size_mb;
 
 /* unrankDPSize
  *
@@ -218,12 +217,17 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsize);
     START_TIMING(init);
 
-    uint32_t min_scratchpad_capacity = gpuqo_dpsize_min_scratchpad_size_mb * MB / SCR_ENTRY_SIZE;
-    uint32_t max_scratchpad_capacity = gpuqo_dpsize_max_scratchpad_size_mb * MB / SCR_ENTRY_SIZE;
-    uint32_t prune_threshold = max_scratchpad_capacity * 2 / 3;
-    uint32_t max_memo_size = gpuqo_dpsize_max_memo_size_mb * MB / RELSIZE;
+    uint32_t scratchpad_size = gpuqo_scratchpad_size_mb * MB / SCR_ENTRY_SIZE;
+    // at least 2*gpuqo_n_parallel otherwise it would be very inefficient
+    if (scratchpad_size < 2*gpuqo_n_parallel)
+        scratchpad_size = 2*gpuqo_n_parallel;
 
+    uint32_t prune_threshold = scratchpad_size - gpuqo_n_parallel;
+    uint32_t max_memo_size = gpuqo_max_memo_size_mb * MB / RELSIZE;
     uint32_t memo_size = std::min(1U<<info->n_rels, max_memo_size);
+
+    LOG_PROFILE("Using a scratchpad of size %u (prune threshold: %u)\n", 
+        scratchpad_size, prune_threshold);
     
     uninit_device_vector_relid gpu_memo_keys(memo_size);
     uninit_device_vector_joinrel gpu_memo_vals(memo_size);
@@ -254,10 +258,8 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
     gpu_partition_sizes = partition_sizes;
 
     // scratchpad size is increased on demand, starting from a minimum capacity
-    uninit_device_vector_relid gpu_scratchpad_keys;
-    gpu_scratchpad_keys.reserve(min_scratchpad_capacity);
-    uninit_device_vector_uint2 gpu_scratchpad_vals;
-    gpu_scratchpad_vals.reserve(min_scratchpad_capacity);
+    uninit_device_vector_relid gpu_scratchpad_keys(scratchpad_size);
+    uninit_device_vector_uint2 gpu_scratchpad_vals(scratchpad_size);
 
     STOP_TIMING(init);
 
@@ -288,30 +290,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                 n_combinations += ((uint64_t)partition_sizes[j-1]) * partition_sizes[i-j-1];
             }
 
-            LOG_PROFILE("\nStarting iteration %d: %llu combinations (scratchpad: %llu)\n", i, n_combinations, max_scratchpad_capacity);
-
-            // If < max_scratchpad_capacity I may need to increase it
-            if (n_combinations < max_scratchpad_capacity){
-                // allocate temp scratchpad
-                // prevent unneeded copy of old values in case new memory should be
-                // allocated
-                gpu_scratchpad_keys.resize(0); 
-                gpu_scratchpad_keys.resize(n_combinations);
-                // same as before
-                gpu_scratchpad_vals.resize(0); 
-                gpu_scratchpad_vals.resize(n_combinations);
-            } else{
-                // If >= max_scratchpad_capacity only need to increase up to
-                // max_scratchpad_capacity, if not already done so
-                if (gpu_scratchpad_keys.size() < max_scratchpad_capacity){
-                    gpu_scratchpad_keys.resize(0); 
-                    gpu_scratchpad_keys.resize(max_scratchpad_capacity);
-                }
-                if (gpu_scratchpad_vals.size() < max_scratchpad_capacity){
-                    gpu_scratchpad_vals.resize(0); 
-                    gpu_scratchpad_vals.resize(max_scratchpad_capacity);
-                }
-            }
+            LOG_PROFILE("\nStarting iteration %d: %llu combinations (scratchpad: %llu)\n", i, n_combinations, scratchpad_size);
 
             STOP_TIMING(iter_init);
 
@@ -358,19 +337,20 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                 }
 
                 // until there are no more combinations or the scratchpad is
-                // too full (threshold of 0.5 max capacity is arbitrary)
+                // too full (I would need to use fewer than `n_parallel` 
+                // threads in order to continue)
                 while (offset < n_combinations 
                             && temp_size < prune_threshold)
                 {
                     // how many combinations I will try at this iteration
                     uint32_t chunk_size;
 
-                    if (n_combinations - offset < max_scratchpad_capacity - temp_size){
+                    if (n_combinations - offset < scratchpad_size - temp_size){
                         // all remaining
                         chunk_size = n_combinations - offset;
                     } else{
                         // up to scratchpad capacity
-                        chunk_size = max_scratchpad_capacity - temp_size;
+                        chunk_size = scratchpad_size - temp_size;
                     }
 
                     // give possibility to user to interrupt
@@ -452,8 +432,8 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                     offset += chunk_size;
                 } // filtering loop: while(off<n_comb && temp_s < cap)
 
-                // I now have either all valid combinations or 0.5 scratchpad
-                // capacity combinations. In the first case, I will prune once
+                // I now have either all valid combinations or `prune_thresh` 
+                // combinations. In the first case, I will prune once
                 // and exit. In the second case, there are still some 
                 // combinations to try so I will prune this partial result and
                 // then reload it back in the scratchpad to finish execution

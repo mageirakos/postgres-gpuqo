@@ -86,7 +86,7 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
     uint32_t n_joins_per_thread;
     uint32_t n_sets_per_iteration;
     uint32_t threads_per_set;
-    uint32_t factor = gpuqo_dpsub_n_parallel / params.n_sets;
+    uint32_t factor = gpuqo_n_parallel / params.n_sets;
 
     if (factor < 32 || params.n_joins_per_set <= 32){
         threads_per_set = 32;
@@ -95,7 +95,7 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
     }
     
     n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
-    n_sets_per_iteration = min(gpuqo_dpsub_n_parallel / threads_per_set, params.n_sets);
+    n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, params.n_sets);
 
     LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
             n_joins_per_thread,
