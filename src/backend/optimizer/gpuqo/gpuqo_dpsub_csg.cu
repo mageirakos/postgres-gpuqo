@@ -39,7 +39,7 @@ void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
     Assert(BMS32_IS_SUBSET(emit_S, T));
     Assert(BMS32_IS_SUBSET(I, T));
 
-    try_join(jr_out, emit_S, BMS32_DIFFERENCE(T, emit_S), 
+    try_join<false>(jr_out, emit_S, BMS32_DIFFERENCE(T, emit_S), 
             BMS32_IS_SUBSET(I, emit_S), join_stack, memo_vals, info);
 
     RelationID new_N = BMS32_INTERSECTION(

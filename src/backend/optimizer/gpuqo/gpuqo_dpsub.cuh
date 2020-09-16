@@ -94,12 +94,14 @@ RelationID dpsub_unrank_sid(uint32_t sid, uint32_t qss, uint32_t sq, uint32_t* b
     return s;
 }
 
+template<bool CHECK_LEFT>
 __device__
 __forceinline__
-bool check_join(JoinRelation &left_rel, JoinRelation &right_rel, 
+bool check_join(RelationID left_id, JoinRelation &left_rel, 
+                RelationID right_id, JoinRelation &right_rel, 
                 GpuqoPlannerInfo* info) {
     // make sure those subsets were valid in a previous iteration
-    if (left_rel.id != BMS32_EMPTY && right_rel.id != BMS32_EMPTY){       
+    if ((!CHECK_LEFT || left_rel.id != BMS32_EMPTY) && right_rel.id != BMS32_EMPTY){       
         // enumerator must generate disjoint sets
         Assert(is_disjoint(left_rel, right_rel));
 
@@ -107,7 +109,9 @@ bool check_join(JoinRelation &left_rel, JoinRelation &right_rel,
         Assert(is_connected(left_rel.id, info->edge_table));
         Assert(is_connected(right_rel.id, info->edge_table));
 
-        if (are_connected(left_rel, right_rel, info)){
+        // left and right are inverted to continue accessing right relation 
+        // in case left was not checked. Doing so may yield a cache hit.
+        if (are_connected(right_rel.edges, left_id, info)){
             return true;
         } else {
             LOG_DEBUG("[%u] Cannot join %u and %u\n", BMS32_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
@@ -134,6 +138,7 @@ void do_join(JoinRelation &jr_out, JoinRelation &left_rel,
     }
 }
 
+template<bool CHECK_LEFT>
 __device__
 void try_join(JoinRelation &jr_out, RelationID l, RelationID r, 
             bool additional_predicate, join_stack_t &stack, 

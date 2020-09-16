@@ -56,7 +56,7 @@ public:
         for (int i = 0; i < n_pairs; i++){
             r = BMS32_DIFFERENCE(relid, l);
             
-            try_join(jr_out, l, r, valid, stack, memo_vals.get(), info);
+            try_join<true>(jr_out, l, r, valid, stack, memo_vals.get(), info);
 
             l = BMS32_NEXT_SUBSET(l, relid);
 

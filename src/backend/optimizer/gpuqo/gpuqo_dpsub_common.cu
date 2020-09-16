@@ -47,6 +47,7 @@ PROTOTYPE_TIMING(iteration);
 // User-configured option
 int gpuqo_n_parallel;
 
+template<bool CHECK_LEFT>
 __device__
 void try_join(JoinRelation &jr_out, RelationID l, RelationID r, 
                 bool additional_predicate, join_stack_t &stack, 
@@ -63,7 +64,7 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
     Assert(left_rel->id == BMS32_EMPTY || left_rel->id == l);
     Assert(right_rel->id == BMS32_EMPTY || right_rel->id == r);
 
-    bool p = check_join(*left_rel, *right_rel, info) && additional_predicate;
+    bool p = additional_predicate && check_join<CHECK_LEFT>(l, *left_rel, r, *right_rel, info);
     unsigned pthBlt = __ballot_sync(WARP_MASK, !p);
     int reducedNTaken = __popc(pthBlt);
     if (LANE_ID == 0){
@@ -97,6 +98,8 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
         LOG_DEBUG("[%d] new stackTop=%d\n", W_OFFSET, stack.stackTop);
     }
 }
+template __device__ void try_join<true>(JoinRelation &jr_out, RelationID l, RelationID r, bool additional_predicate, join_stack_t &stack,  JoinRelation* memo_vals, GpuqoPlannerInfo* info);
+template __device__ void try_join<false>(JoinRelation &jr_out, RelationID l, RelationID r, bool additional_predicate, join_stack_t &stack,  JoinRelation* memo_vals, GpuqoPlannerInfo* info);
 
 void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t &params){
     // give possibility to user to interrupt
