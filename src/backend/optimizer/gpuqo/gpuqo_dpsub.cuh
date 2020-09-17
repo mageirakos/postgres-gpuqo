@@ -103,11 +103,20 @@ bool check_join(RelationID left_id, JoinRelation &left_rel,
     // make sure those subsets were valid in a previous iteration
     if ((!CHECK_LEFT || left_rel.id != BMS32_EMPTY) && right_rel.id != BMS32_EMPTY){       
         // enumerator must generate disjoint sets
-        Assert(is_disjoint(left_rel, right_rel));
+        Assert(is_disjoint(left_id, right_id));
 
         // enumerator must generate self-connected sets
-        Assert(is_connected(left_rel.id, info->edge_table));
-        Assert(is_connected(right_rel.id, info->edge_table));
+        if (CHECK_LEFT){
+            Assert(is_connected(left_id, info->edge_table));
+        } else{ 
+            // if not checking left, it might happen that it is 0 
+            // but it's being taken care of in try_join
+            if (!(left_id == 0 || is_connected(left_id, info->edge_table))) 
+                printf("join_id=%u, left_id=%u, right_id=%u\n", 
+                    BMS32_UNION(left_id, right_id), left_id, right_id );
+            Assert(left_id == 0 || is_connected(left_id, info->edge_table));
+        }
+        Assert(is_connected(right_id, info->edge_table));
 
         // left and right are inverted to continue accessing right relation 
         // in case left was not checked. Doing so may yield a cache hit.
@@ -129,6 +138,9 @@ void do_join(JoinRelation &jr_out, JoinRelation &left_rel,
              JoinRelation &right_rel, GpuqoPlannerInfo* info) {
     LOG_DEBUG("[%u] Joining %u and %u\n", 
             BMS32_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
+
+    Assert(left_rel.id != BMS32_EMPTY);
+    Assert(right_rel.id != BMS32_EMPTY);
 
     JoinRelation jr;
     make_join_rel(jr, left_rel, right_rel, info);

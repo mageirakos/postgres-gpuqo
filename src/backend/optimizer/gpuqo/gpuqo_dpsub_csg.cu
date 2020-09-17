@@ -28,6 +28,7 @@ typedef struct emit_stack_elem_t{
 
 typedef ccc_stack_t<emit_stack_elem_t> csg_stack_t;
 
+template<int MAX_DEPTH>
 __forceinline__ __device__ 
 void enumerate_sub_csg_emit(RelationID T, RelationID emit_S, 
             RelationID emit_X, RelationID I, RelationID E,
@@ -38,9 +39,11 @@ void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
     //         T, emit_S, emit_X, I, E);
     Assert(BMS32_IS_SUBSET(emit_S, T));
     Assert(BMS32_IS_SUBSET(I, T));
+    Assert(emit_S == BMS32_EMPTY || is_connected(emit_S, edge_table));
 
     try_join<false>(jr_out, emit_S, BMS32_DIFFERENCE(T, emit_S), 
-            BMS32_IS_SUBSET(I, emit_S), join_stack, memo_vals, info);
+            emit_S != BMS32_EMPTY && BMS32_IS_SUBSET(I, emit_S), 
+            join_stack, memo_vals, info);
 
     RelationID new_N = BMS32_INTERSECTION(
         BMS32_DIFFERENCE(
@@ -63,6 +66,7 @@ void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
         loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
             emit_S, emit_X, I, new_N
         };
+        Assert(loop_stack_size < MAX_DEPTH);
     }
 }
 
@@ -100,8 +104,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
     }
 
     while (temp != BMS32_EMPTY){
-        int idx = BMS32_HIGHEST_POS(temp)-1;
-        RelationID v = BMS32_NTH(idx);
+        RelationID v = BMS32_LOWEST(temp);
         
         loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
             BMS32_EMPTY,
@@ -109,6 +112,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
             I,
             v
         };
+        Assert(loop_stack_size < MAX_DEPTH);
         temp = BMS32_DIFFERENCE(temp, v);
     }
 
@@ -126,6 +130,8 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
             I = top.I;
             E = BMS32_DIFFERENCE(R,I);
 
+            Assert(loop_stack_size >= 0);
+
             // LOG_DEBUG("[%u: %u, %u] loop_stack: S=%u, X=%u, N=%u\n", T, I, E, S, X, N);
 
             next_subset = BMS32_NEXT_SUBSET(BMS32_INTERSECTION(S,N), N);
@@ -137,6 +143,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
                     emit_S, X, I, N
                 };
+                Assert(loop_stack_size < MAX_DEPTH);
             }
         }
 
@@ -151,6 +158,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 int wScan = __popc(pthBlt & LANE_MASK_LE);
                 int pos = W_OFFSET + stack.stackTop - wScan;
                 if (!p){
+                    Assert(pos >= W_OFFSET && pos < W_OFFSET + WARP_SIZE);
                     emit_S = stack.ctxStack[pos].S;
                     emit_X = stack.ctxStack[pos].X;
                     I = stack.ctxStack[pos].I;
@@ -158,8 +166,9 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     LOG_DEBUG("[%d: %d] Consuming stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S, emit_X, I);
                 }
                 stack.stackTop -= reducedNTaken;
+                Assert(stack.stackTop >= 0);
 
-                enumerate_sub_csg_emit(T, emit_S, emit_X, I, E, 
+                enumerate_sub_csg_emit<MAX_DEPTH>(T, emit_S, emit_X, I, E, 
                                 loop_stack, loop_stack_size,
                                 jr_out, join_stack, memo_vals, info,
                                 edge_table);
@@ -167,12 +176,14 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 int wScan = __popc(~pthBlt & LANE_MASK_LE);
                 int pos = W_OFFSET + stack.stackTop + wScan - 1;
                 if (p){
+                    Assert(pos >= W_OFFSET && pos < W_OFFSET + WARP_SIZE);
                     stack.ctxStack[pos].S = emit_S;
                     stack.ctxStack[pos].X = emit_X;
                     stack.ctxStack[pos].I = I;
                     LOG_DEBUG("[%d: %d] Accumulating stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S, emit_X, I);
                 }
                 stack.stackTop += WARP_SIZE - reducedNTaken;
+                Assert(stack.stackTop <= WARP_SIZE);
             }
         } else {
             if (LANE_ID == 0){
@@ -180,6 +191,8 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
             }
             if (LANE_ID < stack.stackTop){
                 int pos = W_OFFSET + stack.stackTop - LANE_ID - 1;
+                Assert(pos >= W_OFFSET && pos < W_OFFSET + WARP_SIZE);
+
                 emit_S = stack.ctxStack[pos].S;
                 emit_X = stack.ctxStack[pos].X;
                 I = stack.ctxStack[pos].I;
@@ -196,7 +209,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 emit_X = T;
             }
 
-            enumerate_sub_csg_emit(T, emit_S, emit_X, I, E, 
+            enumerate_sub_csg_emit<MAX_DEPTH>(T, emit_S, emit_X, I, E, 
                 loop_stack, loop_stack_size,
                 jr_out, join_stack, memo_vals, info, edge_table);
 
@@ -239,6 +252,7 @@ JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint32_t cid)
 
     if (LANE_ID < join_stack.stackTop){
         int pos = W_OFFSET + join_stack.stackTop - LANE_ID - 1;
+        Assert(pos >= W_OFFSET && pos < W_OFFSET + WARP_SIZE);
         JoinRelation *left_rel = join_stack.ctxStack[pos].left_rel;
         JoinRelation *right_rel = join_stack.ctxStack[pos].right_rel;
 

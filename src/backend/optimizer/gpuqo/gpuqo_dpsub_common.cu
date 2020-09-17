@@ -65,6 +65,10 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
     Assert(right_rel->id == BMS32_EMPTY || right_rel->id == r);
 
     bool p = additional_predicate && check_join<CHECK_LEFT>(l, *left_rel, r, *right_rel, info);
+    
+    Assert(!p || left_rel->id != BMS32_EMPTY);
+    Assert(!p || right_rel->id != BMS32_EMPTY);
+
     unsigned pthBlt = __ballot_sync(WARP_MASK, !p);
     int reducedNTaken = __popc(pthBlt);
     if (LANE_ID == 0){
