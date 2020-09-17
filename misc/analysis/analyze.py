@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Chebyshev as T
 from scipy.stats.mstats import gmean
+from itertools import cycle
 
 def folder2series(folder, depth=1):
     return '/'.join(folder.split('/')[-depth:])
@@ -29,9 +30,10 @@ def load_results(folder):
             query = None
             plan_time = 0
             exec_time = 0
+            gpuqo_time = 0
             for line in f.readlines():
                 if 'sql' in line:
-                    if query and (plan_time or exec_time):
+                    if query and (plan_time or exec_time or gpuqo_time):
                         # save if there was a query previously
                         # create dict item if missing
                         if query not in queries:
@@ -39,22 +41,27 @@ def load_results(folder):
                                 'plan_time_raw': [],
                                 'exec_time_raw': [],
                                 'total_time_raw': [],
+                                'gpuqo_time_raw': [],
                             }
 
                         # fill dict item
                         queries[query]['plan_time_raw'].append(plan_time)
                         queries[query]['exec_time_raw'].append(exec_time)
                         queries[query]['total_time_raw'].append(plan_time + exec_time)
+                        queries[query]['gpuqo_time_raw'].append(gpuqo_time)
 
                         # reset values
                         plan_time = 0
                         exec_time = 0
+                        gpuqo_time = 0
                     query = line[:-5]
                 elif 'Planning' in line:
                     plan_time = float(line.split(':')[1][:-3])
                 elif 'Execution' in line:
                     exec_time = float(line.split(':')[1][:-3])
-
+                elif 'gpuqo' in line and 'took' in line:
+                    print(line)
+                    gpuqo_time = float(line.split()[-1][:-2])
                 else:
                     print(f"Unexpected line: {line}")
 
@@ -66,15 +73,17 @@ def load_results(folder):
                         'plan_time_raw': [],
                         'exec_time_raw': [],
                         'total_time_raw': [],
+                        'gpuqo_time_raw': [],
                     }
 
                 # fill dict item
                 queries[query]['plan_time_raw'].append(plan_time)
                 queries[query]['exec_time_raw'].append(exec_time)
                 queries[query]['total_time_raw'].append(plan_time + exec_time)
+                queries[query]['gpuqo_time_raw'].append(gpuqo_time)
     
     for query, d in queries.items():
-        for metric in ['plan', 'exec', 'total']:
+        for metric in ['plan', 'exec', 'total', 'gpuqo']:
             d[f"{metric}_time_avg"] = np.mean(d[f"{metric}_time_raw"])
             d[f"{metric}_time_std"] = np.std(d[f"{metric}_time_raw"])
             d[f"{metric}_time_count"] = len(d[f"{metric}_time_raw"])
@@ -85,7 +94,7 @@ def add_table_count(queries, sql_folder):
     for query, d in queries.items():
         d['tables'] = count_tables(
             read_query(
-                os.path.join(sql_folder, query + '.sql')
+                os.path.join(sql_folder, os.path.basename(query + '.sql'))
                 )
             )
     return queries
@@ -95,9 +104,9 @@ def load_results_complete(result_folder, sql_folder):
     add_table_count(queries, sql_folder)
     return queries
 
-def scatter_plot_count_time(queries, metric="plan", label=None, ratio=False, color=None):
+def scatter_plot_count_time(queries, metric="plan", label=None, ratio=False, color=None, marker="o", shift=0):
     keys = sorted(list(queries.keys()))
-    x = [queries[k]['tables'] for k in keys]
+    x = np.array([queries[k]['tables'] for k in keys]) + shift
     if ratio:
         y = [queries[k][f'{metric}_time_ratio'] for k in keys]
     else:
@@ -105,16 +114,20 @@ def scatter_plot_count_time(queries, metric="plan", label=None, ratio=False, col
         yerr = [queries[k][f'{metric}_time_std'] for k in keys]
         plt.errorbar(x, y, yerr=yerr, linestyle="None", color=color)
 
-    plt.scatter(x, y, label=label, color=color)
+    plt.scatter(x, y, label=label, color=color, marker=marker)
 
-def scatter_plot(series, metric="plan", ratio=False):
+def scatter_plot(series, metric="plan", ratio=False, max_shift=0):
+    markers = cycle(['+','x','1','2','3','4',])
+    shifts = np.linspace(-max_shift, max_shift, len(series))
     for i, (s, queries) in enumerate(series.items()):
         scatter_plot_count_time(
             queries, 
             metric=args.metric, 
             label=s, 
             ratio=ratio,
-            color=f"C{i if not ratio else i+1}")
+            color=f"C{i if not ratio else i+1}", 
+            marker=next(markers),
+            shift=shifts[i])
 
     # configure matplotlib
     if ratio:
@@ -138,9 +151,9 @@ def scatter_plot(series, metric="plan", ratio=False):
     plt.grid()
     plt.xlabel("Number of tables")
 
-def line_plot_count_time(queries, metric="plan", label=None, ratio=False, color=None):
+def line_plot_count_time(queries, metric="plan", label=None, ratio=False, color=None, marker="o", shift=0):
     keys = sorted(list(queries.keys()))
-    x = np.array([queries[k]['tables'] for k in keys])
+    x = np.array([queries[k]['tables'] for k in keys])+shift
     x_line = []
     y_line = []
 
@@ -166,16 +179,20 @@ def line_plot_count_time(queries, metric="plan", label=None, ratio=False, color=
     
 
     plt.plot(x_line, y_line, label=label, color=color)
-    plt.scatter(x, y, label=label, color=color)
+    plt.scatter(x, y, label=label, color=color, marker=marker)
 
-def line_plot(series, metric="plan", ratio=False):
+def line_plot(series, metric="plan", ratio=False, max_shift=0):
+    markers = cycle(['+','x','1','2','3','4',])
+    shifts = np.linspace(-max_shift, max_shift, len(series))
     for i, (s, queries) in enumerate(series.items()):
         line_plot_count_time(
             queries, 
             metric=args.metric, 
             label=s, 
             ratio=ratio,
-            color=f"C{i if not ratio else i+1}")
+            color=f"C{i if not ratio else i+1}",
+            marker=next(markers),
+            shift=shifts[i])
 
     # configure matplotlib
     if ratio:
@@ -243,12 +260,13 @@ if __name__ == "__main__":
     parser.add_argument("result_folders", nargs='+', type=str, help="Folders where results are stored. Each folder should contain one or more result file. Each different folder will be treated as a different experiment.")
     parser.add_argument("-d", "--sql_folder", default=".", help="Path to the sql queries.")
     parser.add_argument("-s", "--save", default=None, help="Path to save plot to.")
-    parser.add_argument("-m", "--metric", default="plan", choices=["plan", "exec", "total"], help="Show whether to choose plan or execution time or their sum.")
+    parser.add_argument("-m", "--metric", default="plan", choices=["plan", "exec", "total", "gpuqo"], help="Show whether to choose plan or execution time or their sum.")
     parser.add_argument("-t", "--type", default="scatter", choices=["scatter", "bar","line"], help="Choose plot type: scatter or bar.")
     parser.add_argument("-r", "--ratio", default=False, action="store_true", help="Plot ratio related to the first series.")
     parser.add_argument("--min_tables", type=int, default=0, help="Limit the number of tables to only the ones that have more than this number of tables.")
     parser.add_argument("--max_tables", type=int, default=1e10, help="Limit the number of tables to only the ones that have less than this number of tables.")
     parser.add_argument("--name_depth", type=int, default=1, help="Set depth of series name wrt to folder path (default=1).")
+    parser.add_argument("--shift", type=float, default=0.25, help="Set spread of points in scatter and line plots (default 0.25).")
     parser.add_argument("-v", "--verbose", default=False, action="store_true", help="Print debug messages.")
 
     args = parser.parse_args()
@@ -281,7 +299,7 @@ if __name__ == "__main__":
                         queries[query][f"{metric}_time_avg"], 
                         series[baseline][query][f"{metric}_time_avg"]
                     ) if query in series[baseline] else np.nan
-                    for metric in ['plan', 'exec', 'total']
+                    for metric in ['plan', 'exec', 'total', 'gpuqo']
                 }
                 new_series[new_label][query]['tables'] =queries[query]['tables']
 
@@ -294,7 +312,8 @@ if __name__ == "__main__":
         scatter_plot(
             series, 
             metric=args.metric, 
-            ratio=args.ratio
+            ratio=args.ratio,
+            max_shift=args.shift
         )
     elif args.type == 'bar':
         bar_plot(
@@ -306,12 +325,12 @@ if __name__ == "__main__":
         line_plot(
             series, 
             metric=args.metric, 
-            ratio=args.ratio
+            ratio=args.ratio,
+            max_shift=args.shift
         )
 
     if args.save:
         plt.save(args.save)
     else:
         plt.show()
-    
     
