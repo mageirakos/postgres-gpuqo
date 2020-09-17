@@ -63,16 +63,21 @@ void gpuqo_cpu_dpsub_enumerate(GpuqoPlannerInfo* info, join_f join_function, mem
 }
 
 bool gpuqo_cpu_dpsub_check_join(int level, JoinRelation &left_rel,
-                            JoinRelation &right_rel, GpuqoPlannerInfo* info, 
-                            memo_t &memo, extra_t extra){
+    JoinRelation &right_rel, GpuqoPlannerInfo* info, 
+    memo_t &memo, extra_t extra){
 
-    // I do not need to check connectedness of the single joinrels since 
+    // I do not need to check self-connectedness of the single joinrels since 
     // if they were not connected, they wouldn't have been generated and 
     // I would not have been able to find them in the memo
-    return (is_disjoint(left_rel, right_rel) 
-        && are_connected(left_rel, right_rel, info));
-}
+    // I do not need to check if they connect to each other since if they 
+    // weren't, join_rel would not be self-connected but I know it is
 
+    Assert(is_connected(left_rel.id, info->edge_table));
+    Assert(is_connected(right_rel.id, info->edge_table));
+    Assert(are_connected(left_rel, right_rel, info));
+
+    return is_disjoint(left_rel, right_rel);
+}
 void gpuqo_cpu_dpsub_post_join(int level, bool newrel, JoinRelation &join_rel, 
                             JoinRelation &left_rel, JoinRelation &right_rel,
                             GpuqoPlannerInfo* info, memo_t &memo, 

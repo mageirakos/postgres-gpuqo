@@ -64,7 +64,7 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
     Assert(left_rel->id == BMS32_EMPTY || left_rel->id == l);
     Assert(right_rel->id == BMS32_EMPTY || right_rel->id == r);
 
-    bool p = additional_predicate && check_join<CHECK_LEFT>(l, *left_rel, r, *right_rel, info);
+    bool p = additional_predicate && check_join<CHECK_LEFT>(*left_rel, *right_rel, info);
     
     Assert(!p || left_rel->id != BMS32_EMPTY);
     Assert(!p || right_rel->id != BMS32_EMPTY);
