@@ -11,13 +11,16 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "optimizer/cost.h"
+#include "optimizer/gpuqo.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
-#include "optimizer/gpuqo.h"
+#include "optimizer/restrictinfo.h"
 
 int gpuqo_algorithm;
 
@@ -223,6 +226,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
             if (BMS32_INTERSECTS(info->edge_table[i], convertBitmapset(rel_inner->relids))){
                 List *restrictlist = NULL;
                 SpecialJoinInfo sjinfo;
+                RelOptInfo *join_rel;
                 
                 sjinfo.type = T_SpecialJoinInfo;
                 sjinfo.jointype = JOIN_INNER;
@@ -238,14 +242,29 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                 sjinfo.syn_lefthand = rel_outer->relids;
                 sjinfo.syn_righthand = rel_inner->relids;
 
-                build_join_rel(root,
+                join_rel = build_join_rel(root,
                     bms_union(rel_outer->relids, 
                                 rel_inner->relids),
                     rel_outer,
                     rel_inner,
                     &sjinfo,
-                    &restrictlist
-                ); // I just care about restrictlist
+                    NULL
+                ); 
+                
+                // I just care about restrictlist
+                // but I need to recompute it since it may have been cleaned
+                // out by fk selectivities
+                restrictlist = build_joinrel_restrictlist(root, join_rel,
+                    rel_outer, rel_inner
+                );
+                
+                // recompute selectivities (they will be cached inside the 
+                // RestrictInfo), if necessary
+                clauselist_selectivity(root,
+										restrictlist,
+										0,
+										sjinfo.jointype,
+										&sjinfo);
 
                 foreach(lc_restrictinfo, restrictlist){
                     int size, idx_l, idx_r;
@@ -302,6 +321,14 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                         }
                     }
                 }
+
+                // fk selectivity
+                info->fk_selecs[i * info->n_rels + j] = 
+                    get_foreign_key_join_selectivity(root,
+											   rel_outer->relids,
+											   rel_inner->relids,
+											   &sjinfo,
+											   &restrictlist);
                 
             }
             j++;
@@ -330,7 +357,13 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
 #endif
 
     info = (GpuqoPlannerInfo*) gpuqo_malloc(sizeof(GpuqoPlannerInfo));
+    
     info->base_rels = (BaseRelation*) gpuqo_malloc(n_rels * sizeof(BaseRelation));
+
+    info->fk_selecs = (float*) gpuqo_malloc(n_rels * n_rels * sizeof(float));
+    for (int i = 0; i < n_rels*n_rels; i++)
+        info->fk_selecs[i] = NAN;
+
     info->n_rels = n_rels;
     info->eq_classes = NULL;
 

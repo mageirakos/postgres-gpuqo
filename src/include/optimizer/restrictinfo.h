@@ -45,4 +45,9 @@ extern bool join_clause_is_movable_into(RestrictInfo *rinfo,
 										Relids currentrelids,
 										Relids current_and_outer);
 
+extern List *build_joinrel_restrictlist(PlannerInfo *root,
+										RelOptInfo *joinrel,
+										RelOptInfo *outer_rel,
+										RelOptInfo *inner_rel);
+
 #endif							/* RESTRICTINFO_H */

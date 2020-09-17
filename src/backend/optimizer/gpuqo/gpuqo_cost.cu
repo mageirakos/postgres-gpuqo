@@ -106,6 +106,20 @@ estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info) 
 {
     float sel = 1.0;
+
+    // check fk with base relations
+    if (BMS32_SIZE(left_rel.id) == 1 && BMS32_SIZE(right_rel.id) == 1){
+        int left_rel_idx = BMS32_LOWEST_POS(left_rel.id)-2;
+        int right_rel_idx = BMS32_LOWEST_POS(right_rel.id)-2;
+        float fksel = info->fk_selecs[left_rel_idx * info->n_rels + right_rel_idx];
+
+        if(!isnan(fksel)){
+            float rows = fksel * left_rel.rows * right_rel.rows;
+    
+            // clamp the number of rows
+            return rows > 1 ? round(rows) : 1;
+        }
+    }
     
     // for each ec that involves any baserel on the left and on the right,
     // get its selectivity.
