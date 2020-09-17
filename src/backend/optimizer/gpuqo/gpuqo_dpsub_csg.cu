@@ -205,7 +205,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 // pending join
                 // this thread will not touch any queue
 
-                emit_S = E;
+                emit_S = BMS32_EMPTY;
                 emit_X = T;
             }
 
