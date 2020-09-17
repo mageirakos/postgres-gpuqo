@@ -128,7 +128,7 @@ __forceinline__
 void do_join(JoinRelation &jr_out, JoinRelation &left_rel, 
              JoinRelation &right_rel, GpuqoPlannerInfo* info) {
     LOG_DEBUG("[%u] Joining %u and %u\n", 
-            relid, left_rel.id, right_rel.id);
+            BMS32_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
 
     JoinRelation jr;
     make_join_rel(jr, left_rel, right_rel, info);
