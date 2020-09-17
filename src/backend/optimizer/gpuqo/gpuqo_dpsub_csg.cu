@@ -28,7 +28,7 @@ typedef struct emit_stack_elem_t{
 
 typedef ccc_stack_t<emit_stack_elem_t> csg_stack_t;
 
-template<int MAX_DEPTH>
+template<int STACK_SIZE>
 __forceinline__ __device__ 
 void enumerate_sub_csg_emit(RelationID T, RelationID emit_S, 
             RelationID emit_X, RelationID I, RelationID E,
@@ -66,11 +66,11 @@ void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
         loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
             emit_S, emit_X, I, new_N
         };
-        Assert(loop_stack_size < MAX_DEPTH);
+        Assert(loop_stack_size < STACK_SIZE);
     }
 }
 
-template<int MAX_DEPTH>
+template<int MAX_RELS, int STACK_SIZE>
 __device__
 void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     JoinRelation &jr_out, join_stack_t &join_stack,
@@ -80,7 +80,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
     Assert(BMS32_IS_SUBSET(I, T));
 
     // S, X, I, N
-    ext_loop_stack_elem_t loop_stack[MAX_DEPTH];
+    ext_loop_stack_elem_t loop_stack[STACK_SIZE];
     int loop_stack_size = 0;
 
     volatile __shared__ emit_stack_elem_t ctxStack[BLOCK_DIM];
@@ -90,7 +90,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
 
     LOG_DEBUG("[%d: %d] lanemask_le=%u\n", W_OFFSET, LANE_ID, LANE_MASK_LE);
 
-    __shared__ EdgeMask edge_table[MAX_DEPTH];
+    __shared__ EdgeMask edge_table[STACK_SIZE];
     for (int i = threadIdx.x; i < info->n_rels; i+=blockDim.x){
         edge_table[i] = info->edge_table[i];
     }
@@ -112,7 +112,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
             I,
             v
         };
-        Assert(loop_stack_size < MAX_DEPTH);
+        Assert(loop_stack_size < STACK_SIZE);
         temp = BMS32_DIFFERENCE(temp, v);
     }
 
@@ -143,7 +143,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
                     emit_S, X, I, N
                 };
-                Assert(loop_stack_size < MAX_DEPTH);
+                Assert(loop_stack_size < STACK_SIZE);
             }
         }
 
@@ -168,7 +168,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 stack.stackTop -= reducedNTaken;
                 Assert(stack.stackTop >= 0);
 
-                enumerate_sub_csg_emit<MAX_DEPTH>(T, emit_S, emit_X, I, E, 
+                enumerate_sub_csg_emit<STACK_SIZE>(T, emit_S, emit_X, I, E, 
                                 loop_stack, loop_stack_size,
                                 jr_out, join_stack, memo_vals, info,
                                 edge_table);
@@ -209,7 +209,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 emit_X = T;
             }
 
-            enumerate_sub_csg_emit<MAX_DEPTH>(T, emit_S, emit_X, I, E, 
+            enumerate_sub_csg_emit<STACK_SIZE>(T, emit_S, emit_X, I, E, 
                 loop_stack, loop_stack_size,
                 jr_out, join_stack, memo_vals, info, edge_table);
 
@@ -247,7 +247,7 @@ JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint32_t cid)
     RelationID inc_set = BMS32_EXPAND_TO_MASK(cid, relid);
     RelationID exc_set = BMS32_EXPAND_TO_MASK(cmp_cid, relid);
     
-    enumerate_sub_csg<32>(relid, inc_set, exc_set, jr_out, join_stack,
+    enumerate_sub_csg<32,64>(relid, inc_set, exc_set, jr_out, join_stack,
         memo_vals.get(), info);
 
     if (LANE_ID < join_stack.stackTop){
