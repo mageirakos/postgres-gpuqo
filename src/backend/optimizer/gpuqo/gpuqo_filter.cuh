@@ -85,7 +85,7 @@ bool is_connected(RelationID relid, EdgeMask* edge_table)
     // either all nodes have been found or no new connected node exists
 
     // if I managed to visit all nodes, then subgraph is connected
-    return T == relid; 
+    return relid != BMS32_EMPTY && T == relid; 
 }
 
 struct filterDisconnectedRelations : public thrust::unary_function<RelationID, bool>
