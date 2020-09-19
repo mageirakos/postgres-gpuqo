@@ -31,41 +31,47 @@ def load_results(folder):
             plan_time = 0
             exec_time = 0
             gpuqo_time = 0
+            gpuqo_warmup_time = 0
             for line in f.readlines():
                 if 'sql' in line:
-                    if query and (plan_time or exec_time or gpuqo_time):
-                        # save if there was a query previously
-                        # create dict item if missing
-                        if query not in queries:
-                            queries[query] = {
-                                'plan_time_raw': [],
-                                'exec_time_raw': [],
-                                'total_time_raw': [],
-                                'gpuqo_time_raw': [],
-                            }
+                    if query:
+                        if plan_time or exec_time or gpuqo_time:
+                            # save if there was a query previously
+                            # create dict item if missing
+                            if query not in queries:
+                                queries[query] = {
+                                    'plan_time_raw': [],
+                                    'exec_time_raw': [],
+                                    'total_time_raw': [],
+                                    'gpuqo_time_raw': [],
+                                }
 
-                        # fill dict item
-                        queries[query]['plan_time_raw'].append(plan_time)
-                        queries[query]['exec_time_raw'].append(exec_time)
-                        queries[query]['total_time_raw'].append(plan_time + exec_time)
-                        queries[query]['gpuqo_time_raw'].append(gpuqo_time)
+                            # fill dict item
+                            queries[query]['plan_time_raw'].append(plan_time)
+                            queries[query]['exec_time_raw'].append(exec_time)
+                            queries[query]['total_time_raw'].append(plan_time + exec_time)
+                            queries[query]['gpuqo_time_raw'].append(gpuqo_time)
 
                         # reset values
                         plan_time = 0
                         exec_time = 0
                         gpuqo_time = 0
+                        gpuqo_warmup_time = 0
                     query = line[:-5]
                 elif 'Planning' in line:
                     plan_time = float(line.split(':')[1][:-3])
                 elif 'Execution' in line:
                     exec_time = float(line.split(':')[1][:-3])
                 elif 'gpuqo' in line and 'took' in line:
-                    print(line)
-                    gpuqo_time = float(line.split()[-1][:-2])
-                else:
-                    print(f"Unexpected line: {line}")
+                    t = float(line.split()[-1][:-2])
+                    if gpuqo_warmup_time == 0:
+                        gpuqo_warmup_time = t
+                    else:
+                        gpuqo_time = t
+                # else:
+                #     print(f"Unexpected line: {line.strip()}")
 
-            if query:
+            if query and (plan_time or exec_time or gpuqo_time):
                 # save last query if any
                 # create dict item if missing
                 if query not in queries:
