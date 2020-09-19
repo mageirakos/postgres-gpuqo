@@ -39,10 +39,6 @@ typedef struct JoinHashEntry
 
 static void build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
 								RelOptInfo *input_rel);
-static List *build_joinrel_restrictlist(PlannerInfo *root,
-										RelOptInfo *joinrel,
-										RelOptInfo *outer_rel,
-										RelOptInfo *inner_rel);
 static void build_joinrel_joinlist(RelOptInfo *joinrel,
 								   RelOptInfo *outer_rel,
 								   RelOptInfo *inner_rel);
@@ -1023,7 +1019,7 @@ build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
  * RestrictInfo nodes are no longer context-dependent.  Instead, just include
  * the original nodes in the lists made for the join relation.
  */
-static List *
+List *
 build_joinrel_restrictlist(PlannerInfo *root,
 						   RelOptInfo *joinrel,
 						   RelOptInfo *outer_rel,

@@ -197,4 +197,10 @@ extern PathTarget *set_pathtarget_cost_width(PlannerInfo *root, PathTarget *targ
 extern double compute_bitmap_pages(PlannerInfo *root, RelOptInfo *baserel,
 								   Path *bitmapqual, int loop_count, Cost *cost, double *tuple);
 
+extern Selectivity get_foreign_key_join_selectivity(PlannerInfo *root,
+													Relids outer_relids,
+													Relids inner_relids,
+													SpecialJoinInfo *sjinfo,
+													List **restrictlist);
+
 #endif							/* COST_H */

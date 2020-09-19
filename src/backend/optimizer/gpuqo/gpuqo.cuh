@@ -41,9 +41,13 @@ do { \
 #ifdef __CUDA_ARCH__
 #define INFD __longlong_as_double(0x7ff0000000000000ULL)
 #define INFF __int_as_float(0x7f800000)
+#define NAND __longlong_as_double(0xfff8000000000000ULL)
+#define NANF __int_as_float(0x7fffffff)
 #else
 #define INFD std::numeric_limits<double>::infinity()
 #define INFF std::numeric_limits<float>::infinity()
+#define NAND std::numeric_limits<double>::nan()
+#define NANF std::numeric_limits<float>::nan()
 #endif
 
 // constants for table sizes
