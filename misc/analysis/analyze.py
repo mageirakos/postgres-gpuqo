@@ -95,6 +95,7 @@ def add_table_count(queries, sql_folder):
         d['tables'] = count_tables(
             read_query(
                 os.path.join(sql_folder, os.path.basename(query + '.sql'))
+                if sql_folder else query + '.sql'
                 )
             )
     return queries
@@ -258,7 +259,7 @@ def bar_plot(series, metric="plan", ratio=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plot some stats")
     parser.add_argument("result_folders", nargs='+', type=str, help="Folders where results are stored. Each folder should contain one or more result file. Each different folder will be treated as a different experiment.")
-    parser.add_argument("-d", "--sql_folder", default=".", help="Path to the sql queries.")
+    parser.add_argument("-d", "--sql_folder", default=None, help="Path to the sql queries.")
     parser.add_argument("-s", "--save", default=None, help="Path to save plot to.")
     parser.add_argument("-m", "--metric", default="plan", choices=["plan", "exec", "total", "gpuqo"], help="Show whether to choose plan or execution time or their sum.")
     parser.add_argument("-t", "--type", default="scatter", choices=["scatter", "bar","line"], help="Choose plot type: scatter or bar.")
