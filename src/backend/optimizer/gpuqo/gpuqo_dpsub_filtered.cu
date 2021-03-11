@@ -233,12 +233,11 @@ void dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
     uint32_t n_sets_per_iteration;
     uint32_t threads_per_set;
     uint32_t factor = gpuqo_n_parallel / n_pending_sets;
-    uint32_t n_joins_per_set = iter-1; // it's a tree, thus #edges = #nodes-1
+    uint32_t n_joins_per_set = iter; 
 
-    // TODO: try to have multiple threads on same set
-    threads_per_set = 1;
+    threads_per_set = min(max(1, factor), n_joins_per_set);
     
-    n_joins_per_thread = n_joins_per_set;
+    n_joins_per_thread = ceil_div(n_joins_per_set, threads_per_set);
     n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, n_pending_sets);
 
     LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",

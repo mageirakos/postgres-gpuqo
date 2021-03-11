@@ -20,6 +20,8 @@ JoinRelation dpsubEnumerateTreeSimple::operator()(RelationID relid, uint32_t cid
     jr_out.id = BMS32_EMPTY;
     jr_out.cost = INFD;
 
+    uint32_t n_possible_joins = BMS32_SIZE(relid);
+
     int n_active = __popc(__activemask());
     __shared__ EdgeMask edge_table[32];
     for (int i = threadIdx.x; i < info->n_rels; i+=n_active){
@@ -27,9 +29,8 @@ JoinRelation dpsubEnumerateTreeSimple::operator()(RelationID relid, uint32_t cid
     }
     __syncthreads();
 
-    RelationID tmp = relid;
-    while (tmp != BMS32_EMPTY){
-        RelationID base_rel_id = BMS32_LOWEST(tmp);
+    for (uint32_t i = cid; i < n_possible_joins; i += n_splits){
+        RelationID base_rel_id = BMS32_EXPAND_TO_MASK(BMS32_NTH(i), relid);
         RelationID S = base_rel_id;
         RelationID N = S; 
         RelationID X = BMS32_CMP(BMS32_SET_ALL_LOWER(base_rel_id)); 
@@ -80,8 +81,7 @@ JoinRelation dpsubEnumerateTreeSimple::operator()(RelationID relid, uint32_t cid
 
             do_join(jr_out, *left_rel, *right_rel, info);
             do_join(jr_out, *right_rel, *left_rel, info);
-    }
-        tmp = BMS32_DIFFERENCE(tmp, base_rel_id);
+        }
     }
 
     return jr_out;
