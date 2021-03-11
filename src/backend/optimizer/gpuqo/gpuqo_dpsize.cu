@@ -147,11 +147,9 @@ public:
         );
         
         JoinRelation& left_rel = memo_vals.get()[idxs.x];
-        // JoinRelation& right_rel = memo_vals.get()[idxs.y];
-        RelationID& left_id = memo_keys.get()[idxs.x];
         RelationID& right_id = memo_keys.get()[idxs.y];
 
-        if (!is_disjoint(left_id, right_id)) // not disjoint
+        if (!is_disjoint(left_rel.id, right_id)) // not disjoint
             return true;
         else{
             return !are_connected(left_rel.edges, right_id, info);
