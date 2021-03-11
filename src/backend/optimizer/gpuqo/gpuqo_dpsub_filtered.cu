@@ -36,6 +36,7 @@
 #include "gpuqo_dpsub.cuh"
 #include "gpuqo_dpsub_enum_all_subs.cuh"
 #include "gpuqo_dpsub_csg.cuh"
+#include "gpuqo_dpsub_tree.cuh"
 
 // user-configured variables
 bool gpuqo_dpsub_filter_enable;
@@ -120,6 +121,182 @@ public:
     }
 };
 
+
+void dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
+                                    uint32_t offset, uint32_t n_pending_sets, 
+                                    dpsub_iter_param_t &params)
+{
+    uint32_t n_joins_per_thread;
+    uint32_t n_sets_per_iteration;
+    uint32_t threads_per_set;
+    uint32_t factor = gpuqo_n_parallel / n_pending_sets;
+
+    if (factor < 32 || params.n_joins_per_set <= 32){
+        threads_per_set = 32;
+    } else{
+        threads_per_set = BMS32_HIGHEST(min(factor, params.n_joins_per_set));
+    }
+    
+    n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
+    n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, n_pending_sets);
+
+    LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
+        n_joins_per_thread,
+        n_sets_per_iteration,
+        threads_per_set,
+        factor
+    );
+
+    bool use_csg = (gpuqo_dpsub_csg_enable && n_joins_per_thread >= gpuqo_dpsub_csg_threshold);
+
+    if (use_csg){
+        LOG_PROFILE("Using CSG enumeration\n");
+    } else{
+        LOG_PROFILE("Using all subsets enumeration\n");
+    }
+
+    // do not empty all pending sets if there are some sets still to 
+    // evaluate, since I will do them in the next iteration
+    // If no sets remain, then I will empty all pending
+    while (n_pending_sets >= gpuqo_n_parallel 
+        || (n_pending_sets > 0 && n_remaining_sets == 0)
+    ){
+        uint32_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);
+        uint32_t n_threads = n_eval_sets * threads_per_set;
+
+        START_TIMING(compute);
+        if (use_csg) {
+            thrust::tabulate(
+                thrust::make_zip_iterator(thrust::make_tuple(
+                    params.gpu_scratchpad_keys.begin(),
+                    params.gpu_scratchpad_vals.begin()
+                )),
+                thrust::make_zip_iterator(thrust::make_tuple(
+                    params.gpu_scratchpad_keys.begin()+n_threads,
+                    params.gpu_scratchpad_vals.begin()+n_threads
+                )),
+                evaluateFilteredDPSub<dpsubEnumerateCsg>(
+                    params.gpu_pending_keys.data()+offset,
+                    dpsubEnumerateCsg(
+                        params.gpu_memo_vals.data()+offset,
+                        params.info,
+                        threads_per_set
+                    ),
+                    params.info->n_rels,
+                    iter,
+                    n_pending_sets,
+                    threads_per_set
+                )                
+            );
+        } else {
+            thrust::tabulate(
+                thrust::make_zip_iterator(thrust::make_tuple(
+                    params.gpu_scratchpad_keys.begin(),
+                    params.gpu_scratchpad_vals.begin()
+                )),
+                thrust::make_zip_iterator(thrust::make_tuple(
+                    params.gpu_scratchpad_keys.begin()+n_threads,
+                    params.gpu_scratchpad_vals.begin()+n_threads
+                )),
+                evaluateFilteredDPSub<dpsubEnumerateAllSubs>(
+                    params.gpu_pending_keys.data()+offset,
+                    dpsubEnumerateAllSubs(
+                        params.gpu_memo_vals.data()+offset,
+                        params.info,
+                        threads_per_set
+                    ),
+                    params.info->n_rels,
+                    iter,
+                    n_pending_sets,
+                    threads_per_set
+                )             
+            );
+        }           
+        STOP_TIMING(compute);
+
+        LOG_DEBUG("After tabulate\n");
+        DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
+        DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
+
+        dpsub_prune_scatter(threads_per_set, n_threads, params);
+
+        n_pending_sets -= n_eval_sets;
+    }
+}
+
+
+void dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets, 
+                           uint32_t offset, uint32_t n_pending_sets, 
+                           dpsub_iter_param_t &params)
+{
+    uint32_t n_joins_per_thread;
+    uint32_t n_sets_per_iteration;
+    uint32_t threads_per_set;
+    uint32_t factor = gpuqo_n_parallel / n_pending_sets;
+    uint32_t n_joins_per_set = iter-1; // it's a tree, thus #edges = #nodes-1
+
+    // TODO: try to have multiple threads on same set
+    threads_per_set = 1;
+    
+    n_joins_per_thread = n_joins_per_set;
+    n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, n_pending_sets);
+
+    LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
+        n_joins_per_thread,
+        n_sets_per_iteration,
+        threads_per_set,
+        factor
+    );
+
+    LOG_PROFILE("Using tree enumeration\n");
+
+    // do not empty all pending sets if there are some sets still to 
+    // evaluate, since I will do them in the next iteration
+    // If no sets remain, then I will empty all pending
+    while (n_pending_sets >= gpuqo_n_parallel 
+        || (n_pending_sets > 0 && n_remaining_sets == 0)
+    ){
+        uint32_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);
+        uint32_t n_threads = n_eval_sets * threads_per_set;
+
+        START_TIMING(compute);
+        thrust::tabulate(
+            thrust::make_zip_iterator(thrust::make_tuple(
+                params.gpu_scratchpad_keys.begin(),
+                params.gpu_scratchpad_vals.begin()
+            )),
+            thrust::make_zip_iterator(thrust::make_tuple(
+                params.gpu_scratchpad_keys.begin()+n_threads,
+                params.gpu_scratchpad_vals.begin()+n_threads
+            )),
+            evaluateFilteredDPSub<dpsubEnumerateTreeSimple>(
+                params.gpu_pending_keys.data()+offset,
+                dpsubEnumerateTreeSimple(
+                    params.gpu_memo_vals.data()+offset,
+                    params.info,
+                    threads_per_set
+                ),
+                params.info->n_rels,
+                iter,
+                n_pending_sets,
+                threads_per_set
+            )             
+        );
+                    
+        STOP_TIMING(compute);
+
+        LOG_PROFILE("After tabulate\n");
+        DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
+        DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
+
+        dpsub_prune_scatter(threads_per_set, n_threads, params);
+
+        n_pending_sets -= n_eval_sets;
+    }
+
+}
+
+
 int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){   
     int n_iters = 0;
     uint32_t set_offset = 0;
@@ -189,105 +366,45 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
 
             set_offset += n_tab_sets;
             n_remaining_sets -= n_tab_sets;
-        }   
+        }  
+        
+        if (gpuqo_dpsub_tree_enable){
+            auto middle = thrust::partition(
+                params.gpu_pending_keys.begin(),
+                params.gpu_pending_keys.begin()+n_pending_sets,
+                findCycleInRelation(params.info)
+            );
 
-        uint32_t n_joins_per_thread;
-        uint32_t n_sets_per_iteration;
-        uint32_t threads_per_set;
-        uint32_t factor = gpuqo_n_parallel / n_pending_sets;
+            int n_cyclic = thrust::distance(
+                params.gpu_pending_keys.begin(),
+                middle
+            );
 
-        if (factor < 32 || params.n_joins_per_set <= 32){
-            threads_per_set = 32;
-        } else{
-            threads_per_set = BMS32_HIGHEST(min(factor, params.n_joins_per_set));
+            LOG_PROFILE("Cyclic: %d, Trees: %d, Tot: %d\n", 
+                n_cyclic, 
+                n_pending_sets - n_cyclic, 
+                n_pending_sets
+            );
+
+            // TODO: maybe I can run both kernels in parallel if I have few
+            //       relations
+            if (n_cyclic > 0){
+                dpsub_generic_graph_evaluation(iter, n_remaining_sets, 
+                                               0, n_cyclic, params);
+            }
+
+            if (n_pending_sets - n_cyclic > 0){
+                dpsub_tree_evaluation(iter, n_remaining_sets,
+                                      n_cyclic, n_pending_sets-n_cyclic, 
+                                      params);
+            }
+
+
+        } else {
+            dpsub_generic_graph_evaluation(iter, n_remaining_sets, 
+                                           0, n_pending_sets, params);
         }
         
-        n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
-        n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, n_pending_sets);
-
-        LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
-            n_joins_per_thread,
-            n_sets_per_iteration,
-            threads_per_set,
-            factor
-        );
-
-        bool use_csg = (gpuqo_dpsub_csg_enable && n_joins_per_thread >= gpuqo_dpsub_csg_threshold);
-
-        if (use_csg){
-            LOG_PROFILE("Using CSG enumeration\n");
-        } else{
-            LOG_PROFILE("Using all subsets enumeration\n");
-        }
-
-        // do not empty all pending sets if there are some sets still to 
-        // evaluate, since I will do them in the next iteration
-        // If no sets remain, then I will empty all pending
-        while (n_pending_sets >= gpuqo_n_parallel 
-            || (n_pending_sets > 0 && n_remaining_sets == 0)
-        ){
-            uint32_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);
-            uint32_t n_threads = n_eval_sets * threads_per_set;
-
-            START_TIMING(compute);
-            if (use_csg) {
-                thrust::tabulate(
-                    thrust::make_zip_iterator(thrust::make_tuple(
-                        params.gpu_scratchpad_keys.begin(),
-                        params.gpu_scratchpad_vals.begin()
-                    )),
-                    thrust::make_zip_iterator(thrust::make_tuple(
-                        params.gpu_scratchpad_keys.begin()+n_threads,
-                        params.gpu_scratchpad_vals.begin()+n_threads
-                    )),
-                    evaluateFilteredDPSub<dpsubEnumerateCsg>(
-                        params.gpu_pending_keys.data(),
-                        dpsubEnumerateCsg(
-                            params.gpu_memo_vals.data(),
-                            params.info,
-                            threads_per_set
-                        ),
-                        params.info->n_rels,
-                        iter,
-                        n_pending_sets,
-                        threads_per_set
-                    )                
-                );
-            } else {
-                thrust::tabulate(
-                    thrust::make_zip_iterator(thrust::make_tuple(
-                        params.gpu_scratchpad_keys.begin(),
-                        params.gpu_scratchpad_vals.begin()
-                    )),
-                    thrust::make_zip_iterator(thrust::make_tuple(
-                        params.gpu_scratchpad_keys.begin()+n_threads,
-                        params.gpu_scratchpad_vals.begin()+n_threads
-                    )),
-                    evaluateFilteredDPSub<dpsubEnumerateAllSubs>(
-                        params.gpu_pending_keys.data(),
-                        dpsubEnumerateAllSubs(
-                            params.gpu_memo_vals.data(),
-                            params.info,
-                            threads_per_set
-                        ),
-                        params.info->n_rels,
-                        iter,
-                        n_pending_sets,
-                        threads_per_set
-                    )             
-                );
-            }            
-            STOP_TIMING(compute);
-
-            LOG_DEBUG("After tabulate\n");
-            DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
-            DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
-
-            dpsub_prune_scatter(threads_per_set, n_threads, params);
-
-            n_pending_sets -= n_eval_sets;
-        }
-
         n_iters++;
     }
 

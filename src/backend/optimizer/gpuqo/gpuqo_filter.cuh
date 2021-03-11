@@ -88,6 +88,38 @@ bool is_connected(RelationID relid, EdgeMask* edge_table)
     return relid != BMS32_EMPTY && T == relid; 
 }
 
+/**
+ * Returns true if the subgraph contining the nodes in relid is cyclic.
+ * 
+ * NB: This algorithm relies on the BFS-order of base relation indices.
+ * TODO: improve by cycling only on present base relations.
+ */
+__host__ __device__
+__forceinline__
+bool is_cyclic(RelationID relid, GpuqoPlannerInfo *info)
+{
+    // for each base relation
+    for (int i=0; i<info->n_rels; i++){
+        RelationID r = BMS32_NTH(i+1);
+
+        // if it is in relid
+        if (BMS32_INTERSECTS(relid, r)){
+            // check that there is at most one backwards arc
+            if (BMS32_SIZE(BMS32_DIFFERENCE(
+                    info->edge_table[i],
+                    BMS32_SET_ALL_LOWER(r)
+                )) > 1
+            ){
+                // found a cycle
+                return true;
+            }
+        }
+    }
+
+    // no cycles
+    return false;
+}
+
 struct filterDisconnectedRelations : public thrust::unary_function<RelationID, bool>
 {
     GpuqoPlannerInfo* info;
@@ -101,6 +133,22 @@ public:
     bool operator()(RelationID relid) 
     {
         return !is_connected(relid, info->edge_table);
+    }
+};
+
+struct findCycleInRelation : public thrust::unary_function<RelationID, bool>
+{
+    GpuqoPlannerInfo* info;
+public:
+    findCycleInRelation(
+        GpuqoPlannerInfo* _info
+    ) : info(_info)
+    {}
+
+    __device__
+    bool operator()(RelationID relid) 
+    {
+        return is_cyclic(relid, info);
     }
 };
 	

@@ -35,6 +35,7 @@ extern bool gpuqo_dpsub_csg_enable;
 extern int gpuqo_dpsub_csg_threshold;
 extern int gpuqo_dpe_n_threads;
 extern int gpuqo_dpe_pairs_per_depbuf;
+extern bool gpuqo_dpsub_tree_enable;
 
 typedef Bitmapset32 EdgeMask;
 typedef Bitmapset32 RelationID;

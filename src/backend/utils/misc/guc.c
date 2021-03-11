@@ -1111,6 +1111,16 @@ static struct config_bool ConfigureNamesBool[] =
 		true,
 		NULL, NULL, NULL
 	},
+	{
+		{"gpuqo_dpsub_tree", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Enables tree optimization in DPsub."),
+			gettext_noop("Subgraphs that contain no cycles are separated and handled with a more efficient algorithm."),
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsub_tree_enable,
+		false,
+		NULL, NULL, NULL
+	},
 #endif
 	{
 		/* Not for general use --- used by SET SESSION AUTHORIZATION */
