@@ -96,6 +96,10 @@ public:
 
             uint32_t l = cid / partition_sizes[rp];
             uint32_t r = cid % partition_sizes[rp];
+            if (r % 2 == 0)
+                r = r/2;
+            else
+                r = ceil_div(partition_sizes[rp], 2) + r/2;
     
             RelationID relid;
             uint2 out = make_uint2(
@@ -143,12 +147,14 @@ public:
         );
         
         JoinRelation& left_rel = memo_vals.get()[idxs.x];
-        JoinRelation& right_rel = memo_vals.get()[idxs.y];
+        // JoinRelation& right_rel = memo_vals.get()[idxs.y];
+        RelationID& left_id = memo_keys.get()[idxs.x];
+        RelationID& right_id = memo_keys.get()[idxs.y];
 
-        if (!is_disjoint(left_rel, right_rel)) // not disjoint
+        if (!is_disjoint(left_id, right_id)) // not disjoint
             return true;
         else{
-            return !are_connected(left_rel, right_rel, info);
+            return !are_connected(left_rel.edges, right_id, info);
         }
     }
 };
