@@ -105,9 +105,9 @@ bool is_cyclic(RelationID relid, GpuqoPlannerInfo *info)
         // if it is in relid
         if (BMS32_INTERSECTS(relid, r)){
             // check that there is at most one backwards arc
-            if (BMS32_SIZE(BMS32_DIFFERENCE(
-                    info->edge_table[i],
-                    BMS32_SET_ALL_LOWER(r)
+            if (BMS32_SIZE(BMS32_INTERSECTION(
+                    BMS32_DIFFERENCE(relid, BMS32_SET_ALL_LOWER_INC(r)),
+                    info->edge_table[i]
                 )) > 1
             ){
                 // found a cycle
