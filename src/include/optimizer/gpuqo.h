@@ -31,4 +31,10 @@ extern bool gpuqo_check_can_run(PlannerInfo* root);
 extern void* gpuqo_malloc(size_t size);
 extern void gpuqo_free(void* p);
 
+extern void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlannerInfo* info);
+extern RelationID remap_relid(RelationID id, int *remap_table);
+extern void remapEdgeTable(EdgeMask* edge_table, int n, int* remap_table);
+extern void remapPlannerInfo(GpuqoPlannerInfo* info, int* remap_table);
+extern void remapQueryTree(QueryTree* qt, int* remap_table);
+
 #endif							/* GPUQO_H */

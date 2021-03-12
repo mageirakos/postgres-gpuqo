@@ -375,6 +375,12 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     info->edge_table = makeEdgeTable(root, n_rels);
     fillSelectivityInformation(root, initial_rels, info, n_rels);
 
+    int* remap_table_fw = (int*) malloc(n_rels*sizeof(int));
+    int* remap_table_bw = (int*) malloc(n_rels*sizeof(int));
+
+    makeBFSIndexRemapTables(remap_table_fw, remap_table_bw, info);
+    remapPlannerInfo(info, remap_table_fw);
+
 #ifdef OPTIMIZER_DEBUG
     printEdges(info);
 #endif
@@ -418,6 +424,10 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
 #ifdef OPTIMIZER_DEBUG
     printQueryTree(query_tree, 2);
 #endif
+
+    remapQueryTree(query_tree, remap_table_bw);
+    free(remap_table_fw);
+    free(remap_table_bw);
 
 	return queryTree2Plan(query_tree, n_rels, root, n_rels, initial_rels);
 }
