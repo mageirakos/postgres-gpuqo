@@ -28,7 +28,6 @@ void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlan
         if (!BMS32_INTERSECTS(seen, r->id)){
             remap_table_fw[base_rel_idx] = bfs_idx;
             remap_table_bw[bfs_idx] = base_rel_idx;
-            printf("idx   %d -> %d\n", base_rel_idx, bfs_idx);
             bfs_idx++;
         
             while (edges != BMS32_EMPTY){
@@ -49,7 +48,7 @@ RelationID remapRelid(RelationID id, int *remap_table){
         out = BMS32_UNION(out, BMS32_NTH(remap_table[pos]+1));
         id = BMS32_DIFFERENCE(id, BMS32_NTH(pos+1));
     }
-    printf("relid %u -> %u\n", in, out);
+
     return out;
 }
 
