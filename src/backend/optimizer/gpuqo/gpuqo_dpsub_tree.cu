@@ -33,26 +33,23 @@ JoinRelation dpsubEnumerateTreeSimple::operator()(RelationID relid, uint32_t cid
         RelationID base_rel_id = BMS32_EXPAND_TO_MASK(BMS32_NTH(i), relid);
         RelationID S = base_rel_id;
         RelationID N = S; 
-        RelationID X = BMS32_CMP(BMS32_SET_ALL_LOWER(base_rel_id)); 
-        RelationID cut = BMS32_DIFFERENCE(relid, X);
+        RelationID X = BMS32_SET_ALL_LOWER_INC(base_rel_id); 
 
-        LOG_DEBUG("%d %d: %u %u (%u of %u)\n", 
+        LOG_DEBUG("%d %d: %u (%u)\n", 
             blockIdx.x,
             threadIdx.x,
             base_rel_id,
-            cut,
-            tmp, 
             relid
         );
 
         while (N != BMS32_EMPTY){
             RelationID neigs = get_neighbours(N, edge_table);
-            N = BMS32_INTERSECTION(
-                BMS32_DIFFERENCE(
-                    get_neighbours(N, edge_table),
-                    S
+            N = BMS32_DIFFERENCE(
+                BMS32_INTERSECTION(
+                    BMS32_DIFFERENCE(relid, S),
+                    neigs
                 ),
-                cut
+                X
             );
 
             LOG_DEBUG("%d %d: %u %u %u\n", 
