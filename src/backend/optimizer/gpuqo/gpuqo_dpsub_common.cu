@@ -222,8 +222,8 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     params.gpu_pending_keys = uninit_device_vector_relid(PENDING_KEYS_SIZE(params));
     params.gpu_scratchpad_keys = uninit_device_vector_relid(params.scratchpad_size);
     params.gpu_scratchpad_vals = uninit_device_vector_joinrel(params.scratchpad_size);
-    params.gpu_reduced_keys = uninit_device_vector_relid(params.scratchpad_size/32);
-    params.gpu_reduced_vals = uninit_device_vector_joinrel(params.scratchpad_size/32);
+    params.gpu_reduced_keys = uninit_device_vector_relid(params.scratchpad_size);
+    params.gpu_reduced_vals = uninit_device_vector_joinrel(params.scratchpad_size);
 
     STOP_TIMING(init);
 
