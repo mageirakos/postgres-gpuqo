@@ -14,29 +14,36 @@
 #include "optimizer/gpuqo_common.h"
 
 void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlannerInfo* info){
-    int bfs_idx = 0;
-    Bitmapset32 seen = BMS32_EMPTY;
     int bfs_queue[32];
-    int bfs_queue_idx = 0;
-    
-    bfs_queue[bfs_queue_idx++] = 0;
+    int bfs_queue_front_idx = 0;
+    int bfs_queue_back_idx = 0;
 
-    while (bfs_queue_idx != 0 && bfs_idx < info->n_rels){
-        int base_rel_idx = bfs_queue[--bfs_queue_idx];
+    int bfs_idx = 0;
+    
+    bfs_queue[bfs_queue_back_idx++] = 0;
+
+    Bitmapset32 seen = BMS32_NTH(1);
+    while (bfs_queue_front_idx != bfs_queue_back_idx && bfs_idx < info->n_rels){
+        int base_rel_idx = bfs_queue[bfs_queue_front_idx++];
+        
         BaseRelation* r = &info->base_rels[base_rel_idx];
         EdgeMask edges = info->edge_table[base_rel_idx];
-        if (!BMS32_INTERSECTS(seen, r->id)){
-            remap_table_fw[base_rel_idx] = bfs_idx;
-            remap_table_bw[bfs_idx] = base_rel_idx;
-            bfs_idx++;
-        
-            while (edges != BMS32_EMPTY){
-                int next = BMS32_LOWEST_POS(edges) - 2;
-                bfs_queue[bfs_queue_idx++] = next;
-                edges = BMS32_DIFFERENCE(edges, BMS32_LOWEST(edges));
+
+        remap_table_fw[base_rel_idx] = bfs_idx;
+        remap_table_bw[bfs_idx] = base_rel_idx;
+        bfs_idx++;
+
+        while (edges != BMS32_EMPTY){
+            RelationID next_r = BMS32_LOWEST(edges);
+            int next = BMS32_LOWEST_POS(edges) - 2;
+
+            if (!BMS32_INTERSECTS(seen, next_r)){
+                bfs_queue[bfs_queue_back_idx++] = next;
             }
-            seen = BMS32_UNION(seen, r->id);
+            
+            edges = BMS32_DIFFERENCE(edges, BMS32_LOWEST(edges));
         }
+        seen = BMS32_UNION(seen, info->edge_table[base_rel_idx]);
     }
 }
 
