@@ -66,6 +66,7 @@ void printQueryTree(QueryTree* qt, int indent){
 }
 
 void printEdges(GpuqoPlannerInfo* info){
+    printf("\nEdges:\n");
     for (int i = 0; i < info->n_rels; i++){
         RelationID edges = info->edge_table[i];
         printf("%d:", i+1);
@@ -73,7 +74,7 @@ void printEdges(GpuqoPlannerInfo* info){
             int idx = BMS32_LOWEST_POS(edges)-1;
             EqClassInfo *ec = info->eq_classes;
             
-            printf(" %d", idx);
+            printf(" %d ", idx);
 
             if (ec != NULL){
                 printf("(");
@@ -96,7 +97,7 @@ void printEdges(GpuqoPlannerInfo* info){
                     }
                     ec = ec->next;
                 }
-                printf(") ");
+                printf(");");
             }
 
             edges = BMS32_UNSET(edges, idx);
