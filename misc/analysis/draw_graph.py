@@ -82,6 +82,21 @@ def color_blocks():
                     nodes[node]['blocks'].append(block_id)
                     nodes[n]['blocks'].append(block_id)
 
+    # TODO improve...
+    for n1 in nodes:
+        for n2 in nodes:
+            if n2 > n1:
+                s1 = set(nodes[n1]['blocks'])
+                s2 = set(nodes[n2]['blocks'])
+                inters = s1.intersection(s2)
+                if len(inters) > 1:
+                    b = min(inters)
+                    for n3 in nodes:
+                        s3 = set(nodes[n3]['blocks'])
+                        if s3.intersection(inters):
+                            nodes[n3]['blocks'] = list((s3-inters)|{b})
+
+
 def block2col(block_id):
     return str((block_id-1) % COLORSCHEME_CYCLE + 1)
 
