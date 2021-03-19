@@ -11,11 +11,11 @@ COLORSCHEME='dark28'
 COLORSCHEME_CYCLE = 8
 
 nodes = defaultdict(lambda: {
-    'visited': False, 
+    'visited': False,
     'depth': -1,
     'low': 1 << 30,
     'parent': None,
-    'articulation': False, 
+    'articulation': False,
     'blocks': []
 })
 edges = defaultdict(list)
@@ -65,64 +65,56 @@ def get_articulation_points(i, d, stack):
         elif ni != nodes[i]['parent'] and nodes[ni]['depth'] < nodes[i]['depth']:
             stack.append((i, ni))
             nodes[i]['low'] = min(nodes[i]['low'], nodes[ni]['depth'])
-    if ((nodes[i]['parent'] is not None and is_articulation) 
-        or (nodes[i]['parent'] is None and child_count > 1)
-    ):
+    if ((nodes[i]['parent'] is not None and is_articulation)
+            or (nodes[i]['parent'] is None and child_count > 1)
+            ):
         print(f"{i} is an articulation")
         nodes[i]['articulation'] = True
     else:
         print(f"{i} is not an articulation")
 
-def color_blocks():
-    block_id = 0
-    for node in nodes:
-        if nodes[node]['articulation']:
-            continue
-        if nodes[node]['blocks']:
-            continue
+def get_articulation_points_unrolled():
+    call_stack = []
+    stack = []
 
-        block_id += 1
-
-        stack = [node]
-        visited = {n:False for n in nodes}
-        while stack:
-            n = stack.pop() 
-
-            if visited[n]:
-                continue
-
-            visited[n] = True
-            nodes[n]['blocks'].append(block_id)
-
-            if not nodes[n]['articulation']:
-                stack += edges[n]
-
-    for node in nodes:
-        if not nodes[node]['articulation']:
-            continue
-        for n in edges[node]:
-            if nodes[n]['articulation']:
-                if not any(
-                    b in nodes[n]['blocks'] for b in nodes[node]['blocks']
+    call_stack.append((1, -1, False))
+    depth = 1
+    while call_stack:
+        u, idx, remain = call_stack.pop()
+        if idx == -1:
+            nodes[u]['visited'] = True
+            nodes[u]['depth'] = depth
+            print(f"visited {u} at depth {depth}")
+            depth += 1
+            call_stack.append((u, 0, False))
+        elif idx < len(edges[u]):
+            v = edges[u][idx]
+            print(f"edge {u:2d} {v:2d}: ", end='')
+            if remain:
+                if nodes[v]['low'] >= nodes[u]['depth']:
+                    output_comp(u, v, stack)
+                nodes[u]['low'] = min(nodes[u]['low'], nodes[v]['low'])
+                print(f"remain, update low of {u}: {nodes[u]['low']}")
+                call_stack.append((u, idx+1, False))
+            else:
+                if not nodes[v]['visited']:
+                    stack.append((u, v))
+                    nodes[v]['parent'] = u
+                    print(f"queue visit to {v}")
+                    call_stack.append((u, idx, True))
+                    call_stack.append((v, -1, False))
+                elif (nodes[u]['parent'] != v 
+                    and nodes[v]['depth'] < nodes[u]['depth']
                 ):
-                    block_id += 1
-                    nodes[node]['blocks'].append(block_id)
-                    nodes[n]['blocks'].append(block_id)
-
-    # TODO improve...
-    for n1 in nodes:
-        for n2 in nodes:
-            if n2 > n1:
-                s1 = set(nodes[n1]['blocks'])
-                s2 = set(nodes[n2]['blocks'])
-                inters = s1.intersection(s2)
-                if len(inters) > 1:
-                    b = min(inters)
-                    for n3 in nodes:
-                        s3 = set(nodes[n3]['blocks'])
-                        if s3.intersection(inters):
-                            nodes[n3]['blocks'] = list((s3-inters)|{b})
-
+                    stack.append((u,v))
+                    nodes[u]['low'] = min(nodes[u]['low'], nodes[v]['depth'])
+                    print(f"update low of {u}: {nodes[u]['low']}")
+                    call_stack.append((u, idx+1, False))
+                else:
+                    print(f"skip")
+                    call_stack.append((u, idx+1, False))
+        else:
+            print(f"end {u}")
 
 def block2col(block_id):
     return str((block_id-1) % COLORSCHEME_CYCLE + 1)
@@ -154,9 +146,11 @@ for line in stdin:
             edges[node_id].append(other_node_id)
 
 if edges:
-    get_articulation_points(1, 0, [])
+    get_articulation_points_unrolled()
+    # get_articulation_points(1, 0, [])
 
     pprint(nodes)
+    pprint(edges)
 
     for node in edges.keys():
         if len(nodes[node]["blocks"]) > 1:
