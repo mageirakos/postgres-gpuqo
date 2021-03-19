@@ -12,15 +12,39 @@ COLORSCHEME_CYCLE = 8
 
 nodes = defaultdict(lambda: {
     'visited': False, 
-    'depth': 0,
-    'low': 0,
+    'depth': -1,
+    'low': 1 << 30,
     'parent': None,
     'articulation': False, 
     'blocks': []
 })
 edges = defaultdict(list)
 
-def get_articulation_points(i, d):
+block_idx = 0
+
+
+def output_comp(u, v, stack):
+    global block_idx
+
+    print(f"output_comp({u}, {v}, {stack})")
+
+    comp = set()
+    while True:
+        eu, ev = stack.pop()
+        comp.add(eu)
+        comp.add(ev)
+
+        if eu == u and ev == v:
+            break
+
+    block_idx += 1
+    print(block_idx, comp)
+
+    for n in comp:
+        nodes[n]['blocks'].append(block_idx)
+
+
+def get_articulation_points(i, d, stack):
     nodes[i]['visited'] = True
     nodes[i]['depth'] = d
     nodes[i]['low'] = d
@@ -30,13 +54,16 @@ def get_articulation_points(i, d):
 
     for ni in edges[i]:
         if not nodes[ni]['visited']:
+            stack.append((i, ni))
             nodes[ni]['parent'] = i
-            get_articulation_points(ni, d+1)
+            get_articulation_points(ni, d+1, stack)
             child_count += 1
             if nodes[ni]['low'] >= nodes[i]['depth']:
                 is_articulation = True
+                output_comp(i, ni, stack)
             nodes[i]['low'] = min(nodes[i]['low'], nodes[ni]['low'])
-        elif ni != nodes[i]['parent']:
+        elif ni != nodes[i]['parent'] and nodes[ni]['depth'] < nodes[i]['depth']:
+            stack.append((i, ni))
             nodes[i]['low'] = min(nodes[i]['low'], nodes[ni]['depth'])
     if ((nodes[i]['parent'] is not None and is_articulation) 
         or (nodes[i]['parent'] is None and child_count > 1)
@@ -127,8 +154,7 @@ for line in stdin:
             edges[node_id].append(other_node_id)
 
 if edges:
-    get_articulation_points(1, 0)
-    color_blocks()
+    get_articulation_points(1, 0, [])
 
     pprint(nodes)
 
@@ -144,13 +170,19 @@ if edges:
             fillcolor = block2col(nodes[node]["blocks"][0])
         else:
             style = 'filled'
-            fillcolor = "white"
+            fillcolor = "black"
+
+        if nodes[node]['articulation']:
+            penwidth=2
+        else:
+            penwidth=1
 
         style_kwargs = {
             'style': style, 
             'colorscheme': COLORSCHEME,
             'fillcolor': fillcolor,
-            'fontcolor': 'white'
+            'fontcolor': 'white',
+            'penwidth': penwidth,
         }
         print(node, style_kwargs)
             
@@ -162,20 +194,22 @@ if edges:
     for node, other_nodes in edges.items():
         for other_node in other_nodes:
             if other_node > node: # do not add edges twice
-                common_block = [
+                common_blocks = [
                     b 
                     for b in nodes[node]['blocks'] 
                     if b in nodes[other_node]['blocks']
-                ][0]
+                ]
+                col = block2col(common_blocks[0]) if common_blocks else 'black'
                 graph.add_edge(pydot.Edge(
                     str(node), 
                     str(other_node),
                     colorscheme=COLORSCHEME,
-                    color=block2col(common_block)
+                    color=col
                 ))
 
     if len(argv) > 1:
-        out_file = argv[1]
+        out_filename = argv[1]
+        out_file = out_filename
     else:
         out_file, out_filename = mkstemp()
 
