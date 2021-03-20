@@ -178,7 +178,7 @@ void dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
                 evaluateFilteredDPSub<dpsubEnumerateCsg>(
                     params.gpu_pending_keys.data()+offset,
                     dpsubEnumerateCsg(
-                        params.gpu_memo_vals.data(),
+                        *params.memo,
                         params.info,
                         threads_per_set
                     ),
@@ -201,7 +201,7 @@ void dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
                 evaluateFilteredDPSub<dpsubEnumerateAllSubs>(
                     params.gpu_pending_keys.data()+offset,
                     dpsubEnumerateAllSubs(
-                        params.gpu_memo_vals.data(),
+                        *params.memo,
                         params.info,
                         threads_per_set
                     ),
@@ -271,7 +271,7 @@ void dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
             evaluateFilteredDPSub<dpsubEnumerateTreeSimple>(
                 params.gpu_pending_keys.data()+offset,
                 dpsubEnumerateTreeSimple(
-                    params.gpu_memo_vals.data(),
+                    *params.memo,
                     params.info,
                     threads_per_set
                 ),

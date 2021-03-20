@@ -14,6 +14,7 @@
 
 #include "gpuqo.cuh"
 #include "gpuqo_binomial.cuh"
+#include "gpuqo_hashtable.cuh"
 
 #define PENDING_KEYS_SIZE(params) ((params).scratchpad_size*gpuqo_dpsub_filter_keys_overprovisioning)
 
@@ -42,7 +43,7 @@ typedef struct ccc_stack_t<join_stack_elem_t> join_stack_t;
 typedef struct dpsub_iter_param_t{
     GpuqoPlannerInfo* info;
     RelationID out_relid;
-    thrust::device_vector<JoinRelation> gpu_memo_vals;
+    HashTable32bit* memo;
     thrust::host_vector<uint32_t> binoms;
     thrust::device_vector<uint32_t> gpu_binoms;
     uninit_device_vector_relid gpu_pending_keys;
@@ -97,22 +98,22 @@ RelationID dpsub_unrank_sid(uint32_t sid, uint32_t qss, uint32_t sq, uint32_t* b
 template<bool CHECK_LEFT>
 __device__
 __forceinline__
-bool check_join(JoinRelation &left_rel, JoinRelation &right_rel, 
+bool check_join(JoinRelation *left_rel, JoinRelation *right_rel, 
                 GpuqoPlannerInfo* info) {
     // make sure those subsets were valid in a previous iteration
-    if ((!CHECK_LEFT || left_rel.id != BMS32_EMPTY) && right_rel.id != BMS32_EMPTY){       
+    if (left_rel != NULL && right_rel != NULL){       
         // enumerator must generate disjoint sets
-        Assert(is_disjoint(left_rel.id, right_rel.id));
+        Assert(is_disjoint(left_rel->id, right_rel->id));
 
         // enumerator must generate self-connected sets
         if (CHECK_LEFT){
-            Assert(is_connected(left_rel.id, info->edge_table));
+            Assert(is_connected(left_rel->id, info->edge_table));
         } else{ 
             // if not checking left, it might happen that it is 0 
             // but it's being taken care of in try_join
-            Assert(left_rel.id == 0 || is_connected(left_rel.id, info->edge_table));
+            Assert(left_rel == NULL || is_connected(left_rel->id, info->edge_table));
         }
-        Assert(is_connected(right_rel.id, info->edge_table));
+        Assert(is_connected(right_rel->id, info->edge_table));
 
         // We know that:
         //  join rel, left rel and right rel are connected;
@@ -121,12 +122,15 @@ bool check_join(JoinRelation &left_rel, JoinRelation &right_rel,
         //  join_rel would not be connected
         // if left_rel.id == 0 then it is already taken care of so do 
         //  not trigger the assertion
-        Assert((!CHECK_LEFT && left_rel.id == 0) || are_connected(left_rel, right_rel, info));
+        Assert((!CHECK_LEFT && left_rel == NULL) || are_connected(*left_rel, *right_rel, info));
 
         return true;
     } else {
         LOG_DEBUG("[bid:%d tid:%d] Invalid subsets %u and %u\n", 
-                blockIdx.x, threadIdx.x, left_rel.id, right_rel.id);
+                blockIdx.x, threadIdx.x, 
+                left_rel != NULL ? left_rel->id : BMS32_EMPTY, 
+                right_rel != NULL ? right_rel->id : BMS32_EMPTY
+        );
         return false;
     }
 }
@@ -153,6 +157,6 @@ template<bool CHECK_LEFT>
 __device__
 void try_join(JoinRelation &jr_out, RelationID l, RelationID r, 
             bool additional_predicate, join_stack_t &stack, 
-            JoinRelation* memo_vals, GpuqoPlannerInfo* info);
+            HashTable32bit &memo, GpuqoPlannerInfo* info);
 
 #endif							/* GPUQO_DPSUB_CUH */

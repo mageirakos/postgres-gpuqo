@@ -34,7 +34,7 @@ void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
             RelationID emit_X, RelationID I, RelationID E,
             ext_loop_stack_elem_t* loop_stack, int &loop_stack_size,
             JoinRelation &jr_out, join_stack_t &join_stack, 
-            JoinRelation* memo_vals, GpuqoPlannerInfo* info, EdgeMask* edge_table){
+            HashTable32bit &memo, GpuqoPlannerInfo* info, EdgeMask* edge_table){
     // LOG_DEBUG("enumerate_sub_csg_emit(%u, %u, %u, %u, %u)\n",
     //         T, emit_S, emit_X, I, E);
     Assert(BMS32_IS_SUBSET(emit_S, T));
@@ -43,7 +43,7 @@ void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
 
     try_join<false>(jr_out, emit_S, BMS32_DIFFERENCE(T, emit_S), 
             emit_S != BMS32_EMPTY && BMS32_IS_SUBSET(I, emit_S), 
-            join_stack, memo_vals, info);
+            join_stack, memo, info);
 
     RelationID new_N = BMS32_INTERSECTION(
         BMS32_DIFFERENCE(
@@ -74,7 +74,7 @@ template<int MAX_RELS, int STACK_SIZE>
 __device__
 void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     JoinRelation &jr_out, join_stack_t &join_stack,
-                    JoinRelation* memo_vals, GpuqoPlannerInfo* info){
+                    HashTable32bit &memo, GpuqoPlannerInfo* info){
     RelationID R = BMS32_UNION(I, E);
 
     Assert(BMS32_IS_SUBSET(I, T));
@@ -170,7 +170,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
 
                 enumerate_sub_csg_emit<STACK_SIZE>(T, emit_S, emit_X, I, E, 
                                 loop_stack, loop_stack_size,
-                                jr_out, join_stack, memo_vals, info,
+                                jr_out, join_stack, memo, info,
                                 edge_table);
             } else{
                 int wScan = __popc(~pthBlt & LANE_MASK_LE);
@@ -211,7 +211,7 @@ void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
 
             enumerate_sub_csg_emit<STACK_SIZE>(T, emit_S, emit_X, I, E, 
                 loop_stack, loop_stack_size,
-                jr_out, join_stack, memo_vals, info, edge_table);
+                jr_out, join_stack, memo, info, edge_table);
 
             stack.stackTop = 0;
         }
@@ -247,8 +247,7 @@ JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint32_t cid)
     RelationID inc_set = BMS32_EXPAND_TO_MASK(cid, relid);
     RelationID exc_set = BMS32_EXPAND_TO_MASK(cmp_cid, relid);
     
-    enumerate_sub_csg<32,64>(relid, inc_set, exc_set, jr_out, join_stack,
-        memo_vals.get(), info);
+    enumerate_sub_csg<32,64>(relid, inc_set, exc_set, jr_out, join_stack, memo, info);
 
     if (LANE_ID < join_stack.stackTop){
         int pos = W_OFFSET + join_stack.stackTop - LANE_ID - 1;

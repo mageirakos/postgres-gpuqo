@@ -20,15 +20,15 @@
 
 struct dpsubEnumerateAllSubs : public pairs_enum_func_t 
 {
-    thrust::device_ptr<JoinRelation> memo_vals;
+    HashTable32bit memo;
     GpuqoPlannerInfo* info;
     int n_splits;
 public:
     dpsubEnumerateAllSubs(
-        thrust::device_ptr<JoinRelation> _memo_vals,
+        HashTable32bit _memo,
         GpuqoPlannerInfo* _info,
         int _n_splits
-    ) : memo_vals(_memo_vals), info(_info), n_splits(_n_splits)
+    ) : memo(_memo), info(_info), n_splits(_n_splits)
     {}
 
     __device__
@@ -56,7 +56,7 @@ public:
         for (int i = 0; i < n_pairs; i++){
             r = BMS32_DIFFERENCE(relid, l);
             
-            try_join<true>(jr_out, l, r, valid, stack, memo_vals.get(), info);
+            try_join<true>(jr_out, l, r, valid, stack, memo, info);
 
             l = BMS32_NEXT_SUBSET(l, relid);
 

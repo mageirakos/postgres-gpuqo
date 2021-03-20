@@ -65,8 +65,8 @@ JoinRelation dpsubEnumerateTreeSimple::operator()(RelationID relid, uint32_t cid
         RelationID r = BMS32_DIFFERENCE(relid, S);
 
         if (l != BMS32_EMPTY && r != BMS32_EMPTY){
-            JoinRelation *left_rel = &memo_vals.get()[l];
-            JoinRelation *right_rel = &memo_vals.get()[r];
+            JoinRelation *left_rel = memo.lookup(l);
+            JoinRelation *right_rel = memo.lookup(r);
 
             LOG_DEBUG("%d %d: %u %u (%u)\n", 
                 blockIdx.x,

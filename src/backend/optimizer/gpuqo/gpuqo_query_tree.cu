@@ -9,11 +9,23 @@
  */
 
 #include "gpuqo_query_tree.cuh"
+#include "gpuqo_hashtable.cuh"
+
+template <typename T>
+JoinRelation get(T v, uint32_t idx){
+    return v[idx];
+}
+
+template<> 
+JoinRelation get(HashTable32bit ht, uint32_t idx){
+    return ht.get(idx);
+}
+
 
 template<typename T>
 void buildQueryTree(uint32_t idx, T &gpu_memo_vals, QueryTree **qt)
 {
-    JoinRelation jr = gpu_memo_vals[idx];
+    JoinRelation jr = get(gpu_memo_vals, idx);
 
     (*qt) = (QueryTree*) malloc(sizeof(QueryTree));
     (*qt)->id = jr.id;
@@ -38,3 +50,4 @@ void buildQueryTree(uint32_t idx, T &gpu_memo_vals, QueryTree **qt)
 
 template void buildQueryTree< thrust::device_vector<JoinRelation> >(uint32_t idx, thrust::device_vector<JoinRelation> &gpu_memo_vals, QueryTree **qt);
 template void buildQueryTree<uninit_device_vector_joinrel>(uint32_t idx, uninit_device_vector_joinrel &gpu_memo_vals, QueryTree **qt);
+template void buildQueryTree<HashTable32bit>(uint32_t idx, HashTable32bit &gpu_memo_vals, QueryTree **qt);

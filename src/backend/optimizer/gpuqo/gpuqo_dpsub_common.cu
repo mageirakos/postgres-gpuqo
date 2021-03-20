@@ -51,23 +51,23 @@ template<bool CHECK_LEFT>
 __device__
 void try_join(JoinRelation &jr_out, RelationID l, RelationID r, 
                 bool additional_predicate, join_stack_t &stack, 
-                JoinRelation* memo_vals, GpuqoPlannerInfo* info)
+                HashTable32bit &memo, GpuqoPlannerInfo* info)
 {
     LOG_DEBUG("[%d, %d] try_join(%u, %u, %s)\n", 
                 blockIdx.x, threadIdx.x, l, r,
                 additional_predicate ? "true" : "false");
 
-    JoinRelation *left_rel = &memo_vals[l];
-    JoinRelation *right_rel = &memo_vals[r];
+    JoinRelation *left_rel = memo.lookup(l);
+    JoinRelation *right_rel = memo.lookup(r);
 
     Assert(__activemask() == WARP_MASK);
-    Assert(left_rel->id == BMS32_EMPTY || left_rel->id == l);
-    Assert(right_rel->id == BMS32_EMPTY || right_rel->id == r);
+    Assert(left_rel == NULL || left_rel->id == l);
+    Assert(right_rel == NULL || right_rel->id == r);
 
-    bool p = additional_predicate && check_join<CHECK_LEFT>(*left_rel, *right_rel, info);
+    bool p = additional_predicate && check_join<CHECK_LEFT>(left_rel, right_rel, info);
     
-    Assert(!p || left_rel->id != BMS32_EMPTY);
-    Assert(!p || right_rel->id != BMS32_EMPTY);
+    Assert(!p || left_rel != NULL);
+    Assert(!p || right_rel != NULL);
 
     unsigned pthBlt = __ballot_sync(WARP_MASK, !p);
     int reducedNTaken = __popc(pthBlt);
@@ -80,11 +80,21 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
         if (!p){
             left_rel = stack.ctxStack[pos].left_rel;
             right_rel = stack.ctxStack[pos].right_rel;
-            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, left_rel->id, right_rel->id);
+            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", 
+                W_OFFSET, LANE_ID, pos, 
+                left_rel != NULL ? left_rel->id : BMS32_EMPTY, 
+                right_rel != NULL ? right_rel->id : BMS32_EMPTY
+            );
         } else {
-            LOG_DEBUG("[%d: %d] Using local values: l=%u, r=%u\n", W_OFFSET, LANE_ID, left_rel->id, right_rel->id);
+            LOG_DEBUG("[%d: %d] Using local values: l=%u, r=%u\n", 
+                W_OFFSET, LANE_ID, 
+                left_rel != NULL ? left_rel->id : BMS32_EMPTY, 
+                right_rel != NULL ? right_rel->id : BMS32_EMPTY
+            );
         }
         stack.stackTop -= reducedNTaken;
+
+        Assert(left_rel != NULL && right_rel != NULL);
 
         do_join(jr_out, *left_rel, *right_rel, info);
 
@@ -102,8 +112,8 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
         LOG_DEBUG("[%d] new stackTop=%d\n", W_OFFSET, stack.stackTop);
     }
 }
-template __device__ void try_join<true>(JoinRelation &jr_out, RelationID l, RelationID r, bool additional_predicate, join_stack_t &stack,  JoinRelation* memo_vals, GpuqoPlannerInfo* info);
-template __device__ void try_join<false>(JoinRelation &jr_out, RelationID l, RelationID r, bool additional_predicate, join_stack_t &stack,  JoinRelation* memo_vals, GpuqoPlannerInfo* info);
+template __device__ void try_join<true>(JoinRelation &jr_out, RelationID l, RelationID r, bool additional_predicate, join_stack_t &stack,  HashTable32bit &memo, GpuqoPlannerInfo* info);
+template __device__ void try_join<false>(JoinRelation &jr_out, RelationID l, RelationID r, bool additional_predicate, join_stack_t &stack,  HashTable32bit &memo, GpuqoPlannerInfo* info);
 
 void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t &params){
     // give possibility to user to interrupt
@@ -145,11 +155,13 @@ void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t 
     DUMP_VECTOR(scatter_from_iters.second, scatter_to_iters.second);
 
     START_TIMING(scatter);
-    thrust::scatter(
-        scatter_from_iters.second,
-        scatter_to_iters.second,
-        scatter_from_iters.first,
-        params.gpu_memo_vals.begin()
+    params.memo->insert(
+        scatter_from_iters.first.base().get(),
+        scatter_from_iters.second.base().get(),
+        thrust::distance(
+            scatter_from_iters.first,
+            scatter_to_iters.first
+        )
     );
     STOP_TIMING(scatter);
 }
@@ -171,16 +183,16 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
     uint32_t max_memo_size = gpuqo_max_memo_size_mb * MB / RELSIZE;
     uint32_t req_memo_size = 1U<<(info->n_rels+1);
-    if (max_memo_size < req_memo_size){
-        printf("Insufficient memo size\n");
-        return NULL;
-    }
 
     uint32_t memo_size = std::min(req_memo_size, max_memo_size);
 
     dpsub_iter_param_t params;
     params.info = info;
-    params.gpu_memo_vals = thrust::device_vector<JoinRelation>(memo_size);
+    params.memo = new HashTable32bit(memo_size);
+    thrust::host_vector<RelationID> ini_memo_keys(info->n_rels+1);
+    thrust::host_vector<JoinRelation> ini_memo_vals(info->n_rels+1);
+    thrust::device_vector<RelationID> ini_memo_keys_gpu(info->n_rels+1);
+    thrust::device_vector<JoinRelation> ini_memo_vals_gpu(info->n_rels+1);
 
     QueryTree* out = NULL;
     params.out_relid = BMS32_EMPTY;
@@ -195,10 +207,22 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
         t.edges = info->edge_table[i];
-        params.gpu_memo_vals[info->base_rels[i].id] = t;
+        ini_memo_keys[i] = info->base_rels[i].id;
+        ini_memo_vals[i] = t;
 
         params.out_relid = BMS32_UNION(params.out_relid, info->base_rels[i].id);
     }
+    ini_memo_keys[info->n_rels] = 0;
+    ini_memo_vals[info->n_rels] = JoinRelation();
+
+    ini_memo_keys_gpu = ini_memo_keys;
+    ini_memo_vals_gpu = ini_memo_vals;
+
+    params.memo->insert(
+        thrust::raw_pointer_cast(ini_memo_keys_gpu.data()), 
+        thrust::raw_pointer_cast(ini_memo_vals_gpu.data()),
+        info->n_rels+1
+    );
 
     int binoms_size = (info->n_rels+1)*(info->n_rels+1);
     params.binoms = thrust::host_vector<uint32_t>(binoms_size);
@@ -279,7 +303,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
         START_TIMING(build_qt);
             
-        buildQueryTree(params.out_relid, params.gpu_memo_vals, &out);
+        buildQueryTree(params.out_relid, *params.memo, &out);
     
         STOP_TIMING(build_qt);
     
@@ -298,6 +322,9 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     PRINT_TIMING(gpuqo_dpsub);
     PRINT_TIMING(init);
     PRINT_TIMING(execute);
+
+    params.memo->free();
+    delete params.memo;
 
     return out;
 }
