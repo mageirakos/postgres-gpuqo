@@ -181,6 +181,8 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsub);
     START_TIMING(init);
 
+    // TODO make min configurable
+    uint32_t min_memo_size = MB / RELSIZE;
     uint32_t max_memo_size = gpuqo_max_memo_size_mb * MB / RELSIZE;
     uint32_t req_memo_size = 1U<<(info->n_rels+1);
 
@@ -188,7 +190,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
     dpsub_iter_param_t params;
     params.info = info;
-    params.memo = new HashTable32bit(memo_size);
+    params.memo = new HashTable32bit(min_memo_size, memo_size);
     thrust::host_vector<RelationID> ini_memo_keys(info->n_rels+1);
     thrust::host_vector<JoinRelation> ini_memo_vals(info->n_rels+1);
     thrust::device_vector<RelationID> ini_memo_keys_gpu(info->n_rels+1);

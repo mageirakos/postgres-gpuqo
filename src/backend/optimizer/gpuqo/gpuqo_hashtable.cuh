@@ -23,14 +23,28 @@ private:
     K* keys;
     V* values;
     size_t capacity;
-    static const K EMPTY = std::numeric_limits<K>::max();
+    size_t max_capacity;
+
+    // Upper bound on the number of stored elements
+    size_t n_elems_ub;
 
     __device__
     Kint hash(K key);
 
-public:
     __host__
-    HashTable(size_t capacity);
+    void debugDump();
+
+    __host__
+    void deviceMalloc();
+
+    __host__
+    void deviceErrorCheck();
+
+public:
+    static const K EMPTY = std::numeric_limits<K>::max();
+
+    __host__
+    HashTable(size_t initial_size, size_t max_capacity);
 
     __device__ 
     void insert(K key, V value);
@@ -49,6 +63,9 @@ public:
 
     __host__ __device__ __forceinline__
     size_t getCapacity(){ return capacity; }
+
+    __host__
+    void resize(size_t capacity);
 
     __host__
     void free();
