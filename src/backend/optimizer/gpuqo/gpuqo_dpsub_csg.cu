@@ -252,11 +252,13 @@ JoinRelation dpsubEnumerateCsg::operator()(RelationID relid, uint32_t cid)
     if (LANE_ID < join_stack.stackTop){
         int pos = W_OFFSET + join_stack.stackTop - LANE_ID - 1;
         Assert(pos >= W_OFFSET && pos < W_OFFSET + WARP_SIZE);
-        JoinRelation *left_rel = join_stack.ctxStack[pos].left_rel;
-        JoinRelation *right_rel = join_stack.ctxStack[pos].right_rel;
+        RelationID l = join_stack.ctxStack[pos];
+        RelationID r = BMS32_DIFFERENCE(relid, l);
 
-        LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, left_rel->id, right_rel->id);
+        LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
 
+        JoinRelation *left_rel = memo.lookup(l);
+        JoinRelation *right_rel = memo.lookup(r);
         do_join(jr_out, *left_rel, *right_rel, info);
     }
     

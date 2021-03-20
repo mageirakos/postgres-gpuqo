@@ -67,11 +67,13 @@ public:
 
         if (LANE_ID < stack.stackTop){
             int pos = W_OFFSET + stack.stackTop - LANE_ID - 1;
-            JoinRelation *left_rel = stack.ctxStack[pos].left_rel;
-            JoinRelation *right_rel = stack.ctxStack[pos].right_rel;
+            RelationID l = stack.ctxStack[pos];
+            RelationID r = BMS32_DIFFERENCE(relid, l);
 
-            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, left_rel->id, right_rel->id);
+            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
 
+            JoinRelation *left_rel = memo.lookup(l);
+            JoinRelation *right_rel = memo.lookup(r);
             do_join(jr_out, *left_rel, *right_rel, info);
         }
 

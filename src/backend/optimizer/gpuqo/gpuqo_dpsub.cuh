@@ -26,11 +26,7 @@
 #define W_OFFSET WARP_ID
 #define LANE_MASK_LE (WARP_MASK >> (WARP_SIZE-1-LANE_ID))
 
-typedef struct join_stack_elem_t{
-    JoinRelation *left_rel;
-    JoinRelation *right_rel;
-    // int padding;
-} join_stack_elem_t;
+typedef RelationID join_stack_elem_t;
 
 template <typename stack_elem_t>
 struct ccc_stack_t{
@@ -98,38 +94,28 @@ RelationID dpsub_unrank_sid(uint32_t sid, uint32_t qss, uint32_t sq, uint32_t* b
 template<bool CHECK_LEFT>
 __device__
 __forceinline__
-bool check_join(JoinRelation *left_rel, JoinRelation *right_rel, 
+bool check_join(RelationID left_id, RelationID right_id, 
                 GpuqoPlannerInfo* info) {
-    // make sure those subsets were valid in a previous iteration
-    if (left_rel != NULL && right_rel != NULL){       
+    // make sure those subsets are valid
+    if ((!CHECK_LEFT || is_connected(left_id, info->edge_table)) 
+        && is_connected(right_id, info->edge_table)){       
         // enumerator must generate disjoint sets
-        Assert(is_disjoint(left_rel->id, right_rel->id));
+        Assert(is_disjoint(left_id, right_id));
 
         // enumerator must generate self-connected sets
-        if (CHECK_LEFT){
-            Assert(is_connected(left_rel->id, info->edge_table));
-        } else{ 
-            // if not checking left, it might happen that it is 0 
-            // but it's being taken care of in try_join
-            Assert(left_rel == NULL || is_connected(left_rel->id, info->edge_table));
-        }
-        Assert(is_connected(right_rel->id, info->edge_table));
+        Assert(!CHECK_LEFT || is_connected(left_id, info->edge_table));
+        Assert(is_connected(right_id, info->edge_table));
 
         // We know that:
         //  join rel, left rel and right rel are connected;
         //  left_rel | right_rel = join_rel; left_rel & right_rel = 0 
         // Therefore left_rel must be connected to right_rel, otherwise
         //  join_rel would not be connected
-        // if left_rel.id == 0 then it is already taken care of so do 
-        //  not trigger the assertion
-        Assert((!CHECK_LEFT && left_rel == NULL) || are_connected(*left_rel, *right_rel, info));
 
         return true;
     } else {
         LOG_DEBUG("[bid:%d tid:%d] Invalid subsets %u and %u\n", 
-                blockIdx.x, threadIdx.x, 
-                left_rel != NULL ? left_rel->id : BMS32_EMPTY, 
-                right_rel != NULL ? right_rel->id : BMS32_EMPTY
+                blockIdx.x, threadIdx.x, left_id, right_id
         );
         return false;
     }

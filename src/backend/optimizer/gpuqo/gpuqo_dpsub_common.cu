@@ -57,17 +57,11 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
                 blockIdx.x, threadIdx.x, l, r,
                 additional_predicate ? "true" : "false");
 
-    JoinRelation *left_rel = memo.lookup(l);
-    JoinRelation *right_rel = memo.lookup(r);
+    RelationID jr = BMS32_UNION(l, r);
+
+    bool p = additional_predicate && check_join<CHECK_LEFT>(l, r, info);
 
     Assert(__activemask() == WARP_MASK);
-    Assert(left_rel == NULL || left_rel->id == l);
-    Assert(right_rel == NULL || right_rel->id == r);
-
-    bool p = additional_predicate && check_join<CHECK_LEFT>(left_rel, right_rel, info);
-    
-    Assert(!p || left_rel != NULL);
-    Assert(!p || right_rel != NULL);
 
     unsigned pthBlt = __ballot_sync(WARP_MASK, !p);
     int reducedNTaken = __popc(pthBlt);
@@ -78,33 +72,30 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
         int wScan = __popc(pthBlt & LANE_MASK_LE);
         int pos = W_OFFSET + stack.stackTop - wScan;
         if (!p){
-            left_rel = stack.ctxStack[pos].left_rel;
-            right_rel = stack.ctxStack[pos].right_rel;
+            l = stack.ctxStack[pos];
+            r = BMS32_DIFFERENCE(jr, l);
             LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", 
-                W_OFFSET, LANE_ID, pos, 
-                left_rel != NULL ? left_rel->id : BMS32_EMPTY, 
-                right_rel != NULL ? right_rel->id : BMS32_EMPTY
+                W_OFFSET, LANE_ID, pos, l, r
             );
         } else {
             LOG_DEBUG("[%d: %d] Using local values: l=%u, r=%u\n", 
-                W_OFFSET, LANE_ID, 
-                left_rel != NULL ? left_rel->id : BMS32_EMPTY, 
-                right_rel != NULL ? right_rel->id : BMS32_EMPTY
+                W_OFFSET, LANE_ID, l, r
             );
         }
         stack.stackTop -= reducedNTaken;
 
-        Assert(left_rel != NULL && right_rel != NULL);
+        Assert(l != BMS32_EMPTY && r != BMS32_EMPTY);
 
+        JoinRelation *left_rel = memo.lookup(l);
+        JoinRelation *right_rel = memo.lookup(r);
         do_join(jr_out, *left_rel, *right_rel, info);
 
     } else{
         int wScan = __popc(~pthBlt & LANE_MASK_LE);
         int pos = W_OFFSET + stack.stackTop + wScan - 1;
         if (p){
-            LOG_DEBUG("[%d: %d] Accumulating stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, left_rel->id, right_rel->id);
-            stack.ctxStack[pos].left_rel = left_rel;
-            stack.ctxStack[pos].right_rel = right_rel;
+            LOG_DEBUG("[%d: %d] Accumulating stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
+            stack.ctxStack[pos] = l;
         }
         stack.stackTop += WARP_SIZE - reducedNTaken;
     }
