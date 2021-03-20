@@ -402,6 +402,7 @@
 #gpuqo_threshold = 8
 #gpuqo_scratchpad_size_mb = 100
 #gpuqo_max_memo_size_mb = 1024
+#gpuqo_min_memo_size_mb = 1
 #gpuqo_n_parallel = 10240
 #gpuqo_dpsub_filter = on
 #gpuqo_dpsub_filter_threshold = 16

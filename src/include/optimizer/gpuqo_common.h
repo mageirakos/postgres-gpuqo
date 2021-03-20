@@ -26,6 +26,7 @@ typedef enum GpuqoAlgorithm {
 extern int gpuqo_algorithm;
 extern int gpuqo_scratchpad_size_mb;
 extern int gpuqo_max_memo_size_mb;
+extern int gpuqo_min_memo_size_mb;
 extern int gpuqo_n_parallel;
 extern bool gpuqo_dpsub_filter_enable;
 extern int gpuqo_dpsub_filter_threshold;

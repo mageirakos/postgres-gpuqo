@@ -2119,6 +2119,16 @@ static struct config_int ConfigureNamesInt[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"gpuqo_min_memo_size_mb", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the minimum allocated memory for the memo."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_min_memo_size_mb,
+		1, 1, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
 		{"gpuqo_n_parallel", PGC_USERSET, QUERY_TUNING_GPUQO,
 			gettext_noop("Sets the number of operations to perform in parallel. It's used to find the best work division in dpsub and to decide when to stop pruning on dpsize."),
 			NULL,

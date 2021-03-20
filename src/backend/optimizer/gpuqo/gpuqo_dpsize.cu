@@ -41,6 +41,7 @@
 
 int gpuqo_scratchpad_size_mb;
 int gpuqo_max_memo_size_mb;
+int gpuqo_min_memo_size_mb;
 
 /* unrankDPSize
  *
