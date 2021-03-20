@@ -39,11 +39,13 @@ template <typename K, typename V, typename Kint>
 __device__
 V* HashTable<K,V,Kint>::lookup(K key){
     Kint slot = hash(key);
-    while (true){
+    Kint first_slot = slot;
+    do {
         if (keys[slot] == key){
             LOG_DEBUG("%u: found %u (%u)\n", key, slot, hash(key));
             return &values[slot];
         } else if (keys[slot] == EMPTY){
+            // NB: elements cannot be deleted!
             LOG_DEBUG("%u: not found %u (%u)\n", key, slot, hash(key));
             return NULL;
         }
@@ -51,14 +53,18 @@ V* HashTable<K,V,Kint>::lookup(K key){
         LOG_DEBUG("%u: inc %u (%u)\n", key, slot, hash(key));
 
         slot = (slot + 1) & (capacity-1);
-    }
+    } while (slot != first_slot);
+
+    // I checked all available positions
+    return NULL;
 }
 
 template <typename K, typename V, typename Kint>
 __device__
 void HashTable<K,V,Kint>::insert(K key, V value){
     Kint slot = hash(key);
-    while (true){
+    Kint first_slot = slot;
+    do {
         K prev = atomicCAS(&keys[slot], EMPTY, key);
         if (prev == EMPTY || prev == key){
             LOG_DEBUG("%u: found %u (%u)\n", key, slot, hash(key));
@@ -69,7 +75,11 @@ void HashTable<K,V,Kint>::insert(K key, V value){
         LOG_DEBUG("%u: inc %u (%u)\n", key, slot, hash(key));
 
         slot = (slot + 1) & (capacity-1);
-    }
+    } while (slot != first_slot);
+
+    // I checked all available positions
+    // table is full
+    assert(false);
 }
 
 // KERNELS IMPLEMENTATION
