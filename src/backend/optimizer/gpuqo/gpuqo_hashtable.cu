@@ -121,8 +121,8 @@ template <typename K, typename V, typename Kint>
 __host__
 HashTable<K,V,Kint>::HashTable(size_t _initial_capacity, size_t _max_capacity){
     // capacity must be a multiple of 2
-    capacity = ceilPow2(_initial_capacity);
     max_capacity = floorPow2(_max_capacity);
+    capacity = min(ceilPow2(_initial_capacity),max_capacity);
     n_elems_ub = 0;
 
     deviceMalloc();
