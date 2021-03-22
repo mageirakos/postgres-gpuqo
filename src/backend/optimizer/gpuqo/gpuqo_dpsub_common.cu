@@ -205,9 +205,22 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
         params.out_relid = BMS32_UNION(params.out_relid, info->base_rels[i].id);
     }
+    
+    // add dummy relation
+    JoinRelation dummy_jr;
+    dummy_jr.id = BMS32_EMPTY;
+	dummy_jr.edges = BMS32_EMPTY;
+	dummy_jr.left_relation_id = BMS32_EMPTY;
+	dummy_jr.right_relation_id = BMS32_EMPTY;
+    dummy_jr.left_relation_ptr = NULL;
+    dummy_jr.right_relation_ptr = NULL;
+    dummy_jr.rows = 0.0;
+	dummy_jr.cost = 0.0;
+    
     ini_memo_keys[info->n_rels] = 0;
-    ini_memo_vals[info->n_rels] = JoinRelation();
+    ini_memo_vals[info->n_rels] = dummy_jr;
 
+    // transfer base relations to GPU
     ini_memo_keys_gpu = ini_memo_keys;
     ini_memo_vals_gpu = ini_memo_vals;
 
