@@ -172,12 +172,11 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsub);
     START_TIMING(init);
 
-    // TODO make min configurable
-    uint32_t min_memo_cap = gpuqo_min_memo_size_mb * MB / RELSIZE;
-    uint32_t max_memo_cap = gpuqo_max_memo_size_mb * MB / RELSIZE;
-    uint32_t req_memo_size = 1U<<(info->n_rels);
+    size_t min_memo_cap = (size_t) gpuqo_min_memo_size_mb * MB / RELSIZE;
+    size_t max_memo_cap = (size_t) gpuqo_max_memo_size_mb * MB / RELSIZE;
+    size_t req_memo_size = 1ULL<<(info->n_rels);
 
-    uint32_t memo_cap = std::min(req_memo_size*2, min_memo_cap);
+    size_t memo_cap = std::min(req_memo_size*2, min_memo_cap);
 
     dpsub_iter_param_t params;
     params.info = info;
