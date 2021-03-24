@@ -1121,6 +1121,16 @@ static struct config_bool ConfigureNamesBool[] =
 		false,
 		NULL, NULL, NULL
 	},
+	{
+		{"gpuqo_spanning_tree", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Enables minimum spanning tree approximation."),
+			gettext_noop("The graph is replaced by its minimum spannign tree before optimization."),
+			GUC_EXPLAIN
+		},
+		&gpuqo_spanning_tree_enable,
+		false,
+		NULL, NULL, NULL
+	},
 #endif
 	{
 		/* Not for general use --- used by SET SESSION AUTHORIZATION */

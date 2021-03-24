@@ -376,6 +376,10 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     info->edge_table = makeEdgeTable(root, n_rels);
     fillSelectivityInformation(root, initial_rels, info, n_rels);
 
+    if (gpuqo_spanning_tree_enable){
+        minimumSpanningTree(info);
+    }
+
     int* remap_table_fw = (int*) malloc(n_rels*sizeof(int));
     int* remap_table_bw = (int*) malloc(n_rels*sizeof(int));
 

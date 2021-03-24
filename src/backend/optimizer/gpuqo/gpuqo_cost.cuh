@@ -21,6 +21,16 @@ extern __host__ __device__
 float baserel_cost(BaseRelation &base_rel);
 
 extern __host__ __device__
+float 
+estimate_join_selectivity(JoinRelation &left_rel, JoinRelation &right_rel, 
+                   GpuqoPlannerInfo* info);
+
+extern __host__ __device__
+float 
+estimate_join_rows(JoinRelation &left_rel, JoinRelation &right_rel, 
+                   GpuqoPlannerInfo* info);
+
+extern __host__ __device__
 void compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info
 );

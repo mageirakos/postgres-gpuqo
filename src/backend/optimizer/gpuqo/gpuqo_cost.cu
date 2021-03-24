@@ -75,7 +75,6 @@ sm_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
 }
 
 __host__ __device__
-__forceinline__
 float 
 calc_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info)
@@ -100,10 +99,9 @@ calc_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
 }
 
 __host__ __device__
-__forceinline__
 float 
-estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
-                    JoinRelation &right_rel, GpuqoPlannerInfo* info) 
+estimate_join_selectivity(JoinRelation &left_rel, JoinRelation &right_rel, 
+                            GpuqoPlannerInfo* info) 
 {
     float sel = 1.0;
 
@@ -114,10 +112,7 @@ estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
         float fksel = info->fk_selecs[left_rel_idx * info->n_rels + right_rel_idx];
 
         if(!isnan(fksel)){
-            float rows = fksel * left_rel.rows * right_rel.rows;
-    
-            // clamp the number of rows
-            return rows > 1 ? round(rows) : 1;
+            return fksel;
         }
     }
     
@@ -153,6 +148,14 @@ estimate_join_rows(JoinRelation &join_rel, JoinRelation &left_rel,
         ec = ec->next;
     }
     
+    return sel;
+}
+
+__host__ __device__
+float 
+estimate_join_rows(JoinRelation &left_rel, JoinRelation &right_rel, GpuqoPlannerInfo* info) 
+{
+    float sel = estimate_join_selectivity(left_rel, right_rel, info);
     float rows = sel * left_rel.rows * right_rel.rows;
 
     // clamp the number of rows
@@ -165,7 +168,7 @@ void
 _compute_join_cost(JoinRelation &join_rel, JoinRelation &left_rel,
                     JoinRelation &right_rel, GpuqoPlannerInfo* info)
 {    
-    join_rel.rows = estimate_join_rows(join_rel, left_rel, right_rel, info);
+    join_rel.rows = estimate_join_rows(left_rel, right_rel, info);
     join_rel.cost = calc_join_cost(join_rel, left_rel, right_rel, info);
 }
 

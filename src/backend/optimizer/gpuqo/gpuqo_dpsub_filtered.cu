@@ -374,11 +374,17 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
         }  
         
         if (gpuqo_dpsub_tree_enable){
-            auto middle = thrust::partition(
+            auto middle = params.gpu_pending_keys.begin();
+
+            if (!gpuqo_spanning_tree_enable){
+                // if I'm not forcing spanning trees, I need to partition the 
+                // subsets in cycles and treed
+                middle = thrust::partition(
                 params.gpu_pending_keys.begin(),
                 params.gpu_pending_keys.begin()+n_pending_sets,
                 findCycleInRelation(params.info)
             );
+            } // otherwise "middle" is just the beginning (all trees)
 
             int n_cyclic = thrust::distance(
                 params.gpu_pending_keys.begin(),
