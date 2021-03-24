@@ -67,6 +67,9 @@ public:
     RelationID operator()(uint32_t tid)
     {
         uint32_t sid = tid + offset;
+
+        // why not use shared memory?
+        // I tried but improvements are small
         RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
         
         LOG_DEBUG("[%u] s=%u\n", tid, s);
