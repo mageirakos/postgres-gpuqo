@@ -122,7 +122,7 @@ public:
 };
 
 
-void dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
+uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
                                     uint32_t offset, uint32_t n_pending_sets, 
                                     dpsub_iter_param_t &params)
 {
@@ -222,10 +222,12 @@ void dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
 
         n_pending_sets -= n_eval_sets;
     }
+
+    return n_pending_sets;
 }
 
 
-void dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets, 
+uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets, 
                            uint32_t offset, uint32_t n_pending_sets, 
                            dpsub_iter_param_t &params)
 {
@@ -293,6 +295,7 @@ void dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
         n_pending_sets -= n_eval_sets;
     }
 
+    return n_pending_sets;
 }
 
 
@@ -385,22 +388,36 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                 n_pending_sets
             );
 
+            uint32_t graph_pending = 0;
+            uint32_t tree_pending = 0;
+
             // TODO: maybe I can run both kernels in parallel if I have few
             //       relations
             if (n_cyclic > 0){
-                dpsub_generic_graph_evaluation(iter, n_remaining_sets, 
+                graph_pending = dpsub_generic_graph_evaluation(
+                                    iter, n_remaining_sets, 
                                                0, n_cyclic, params);
             }
 
             if (n_pending_sets - n_cyclic > 0){
-                dpsub_tree_evaluation(iter, n_remaining_sets,
+                tree_pending = dpsub_tree_evaluation(iter, n_remaining_sets,
                                       n_cyclic, n_pending_sets-n_cyclic, 
                                       params);
             }
 
+            // recompact
+            if (n_cyclic > 0 && tree_pending != 0){
+                thrust::copy(middle, middle + tree_pending, 
+                            params.gpu_pending_keys.begin() + graph_pending
+                );
+            }
+
+            n_pending_sets = graph_pending + tree_pending;
+
 
         } else {
-            dpsub_generic_graph_evaluation(iter, n_remaining_sets, 
+            n_pending_sets = dpsub_generic_graph_evaluation(
+                                        iter, n_remaining_sets, 
                                            0, n_pending_sets, params);
         }
         
