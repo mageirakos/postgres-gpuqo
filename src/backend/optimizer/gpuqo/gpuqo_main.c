@@ -378,6 +378,7 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
 
     if (gpuqo_spanning_tree_enable){
         minimumSpanningTree(info);
+        info->subtrees = buildSubTrees(info);
     }
 
     int* remap_table_fw = (int*) malloc(n_rels*sizeof(int));
@@ -424,6 +425,8 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     
     gpuqo_free(info->base_rels);
     gpuqo_free(info->edge_table);
+    if (gpuqo_spanning_tree_enable)
+        gpuqo_free(info->subtrees);
     gpuqo_free(info);
     
 #ifdef OPTIMIZER_DEBUG

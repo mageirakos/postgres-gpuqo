@@ -56,14 +56,14 @@ void unrankFilteredDPSubKernel(int sq, int qss,
 {
     uint32_t threadid = blockIdx.x*blockDim.x + threadIdx.x;
     uint32_t n_threads = blockDim.x * gridDim.x;
- 
+
     int n_active = __popc(__activemask());
     __shared__ EdgeMask edge_table[32];
     for (int i = threadIdx.x; i < sq; i+=n_active){
         edge_table[i] = gobal_edge_table[i];
     }
     __syncthreads();
-
+    
     if (threadid < n_tab_sets){
         uint32_t sets_per_thread = ceil_div(n_tab_sets, n_threads);
         uint32_t n_excess = n_tab_sets % n_threads;
@@ -103,7 +103,7 @@ void launchUnrankFilteredDPSubKernel(int sq, int qss,
 {
     int blocksize = 512;
     int gridsize = ceil_div(min(n_tab_sets, gpuqo_n_parallel), blocksize);
-        
+
     unrankFilteredDPSubKernel<<<gridsize, blocksize>>>(
         sq, qss, 
         offset, n_tab_sets,
@@ -111,8 +111,8 @@ void launchUnrankFilteredDPSubKernel(int sq, int qss,
         global_edge_table,
         out_relids
     );
-    }
- 
+}
+
  /* evaluateDPSub
   *
   *	 evaluation algorithm for DPsub GPU variant with partial pruning
@@ -298,28 +298,53 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
         uint32_t n_threads = n_eval_sets * threads_per_set;
 
         START_TIMING(compute);
-        thrust::tabulate(
-            thrust::make_zip_iterator(thrust::make_tuple(
-                params.gpu_scratchpad_keys.begin(),
-                params.gpu_scratchpad_vals.begin()
-            )),
-            thrust::make_zip_iterator(thrust::make_tuple(
-                params.gpu_scratchpad_keys.begin()+n_threads,
-                params.gpu_scratchpad_vals.begin()+n_threads
-            )),
-            evaluateFilteredDPSub<dpsubEnumerateTreeSimple>(
-                params.gpu_pending_keys.data()+offset,
-                dpsubEnumerateTreeSimple(
-                    *params.memo,
-                    params.info,
+        if (gpuqo_spanning_tree_enable){
+            thrust::tabulate(
+                thrust::make_zip_iterator(thrust::make_tuple(
+                    params.gpu_scratchpad_keys.begin(),
+                    params.gpu_scratchpad_vals.begin()
+                )),
+                thrust::make_zip_iterator(thrust::make_tuple(
+                    params.gpu_scratchpad_keys.begin()+n_threads,
+                    params.gpu_scratchpad_vals.begin()+n_threads
+                )),
+                evaluateFilteredDPSub<dpsubEnumerateTreeWithSubtrees>(
+                    params.gpu_pending_keys.data()+offset,
+                    dpsubEnumerateTreeWithSubtrees(
+                        *params.memo,
+                        params.info,
+                        threads_per_set
+                    ),
+                    params.info->n_rels,
+                    iter,
+                    n_pending_sets,
                     threads_per_set
-                ),
-                params.info->n_rels,
-                iter,
-                n_pending_sets,
-                threads_per_set
-            )             
-        );
+                )             
+            );
+        } else {
+            thrust::tabulate(
+                thrust::make_zip_iterator(thrust::make_tuple(
+                    params.gpu_scratchpad_keys.begin(),
+                    params.gpu_scratchpad_vals.begin()
+                )),
+                thrust::make_zip_iterator(thrust::make_tuple(
+                    params.gpu_scratchpad_keys.begin()+n_threads,
+                    params.gpu_scratchpad_vals.begin()+n_threads
+                )),
+                    evaluateFilteredDPSub<dpsubEnumerateTreeSimple>(
+                        params.gpu_pending_keys.data()+offset,
+                        dpsubEnumerateTreeSimple(
+                            *params.memo,
+                            params.info,
+                            threads_per_set
+                    ),
+                    params.info->n_rels,
+                    iter,
+                    n_pending_sets,
+                    threads_per_set
+                )             
+            );
+        }
                     
         STOP_TIMING(compute);
 

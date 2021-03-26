@@ -69,6 +69,7 @@ typedef struct GpuqoPlannerInfo{
 	EdgeMask* indexed_edge_table;
 	EqClassInfo* eq_classes;
 	float* fk_selecs;
+	RelationID* subtrees;
 } GpuqoPlannerInfo;
 
 #endif							/* GPUQO_COMMON_H */

@@ -71,3 +71,31 @@ void minimumSpanningTree(GpuqoPlannerInfo *info){
     memcpy(info->edge_table, out_edges, info->n_rels * sizeof(EdgeMask));
 }
 
+
+static
+RelationID buildSubTreesDFS(int idx, int parent_idx, 
+                            RelationID* subtrees, EdgeMask* edge_table){
+    RelationID subtree = BMS32_NTH(idx+1);
+    RelationID N = edge_table[idx];
+    while (N != BMS32_EMPTY){
+        int child_idx = BMS32_LOWEST_POS(N)-2;
+        if (child_idx != parent_idx){
+            subtree = BMS32_UNION(subtree, 
+                buildSubTreesDFS(child_idx, idx, subtrees, edge_table)
+            );
+        }
+        N = BMS32_UNSET(N, child_idx+1);
+    }
+
+    subtrees[idx] = subtree;
+    return subtree;
+}
+
+extern "C"
+RelationID* buildSubTrees(GpuqoPlannerInfo *info){
+    RelationID* subtrees = (RelationID*) gpuqo_malloc(info->n_rels*sizeof(RelationID));
+
+    buildSubTreesDFS(0, -1, subtrees, info->edge_table);
+
+    return subtrees;
+}

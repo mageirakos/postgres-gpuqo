@@ -124,4 +124,5 @@ typedef thrust::device_vector<uint2, uninitialized_allocator<uint2> > uninit_dev
 extern "C" void* gpuqo_malloc(size_t size);
 extern "C" void gpuqo_free(void* p);
 
+extern "C" RelationID* buildSubTrees(GpuqoPlannerInfo *info);
 #endif							/* GPUQO_CUH */

@@ -34,4 +34,21 @@ public:
     JoinRelation operator()(RelationID relid, uint32_t cid);
 };
 
+struct dpsubEnumerateTreeWithSubtrees : public pairs_enum_func_t 
+{
+    HashTable32bit memo;
+    GpuqoPlannerInfo* info;
+    int n_splits;
+public:
+    dpsubEnumerateTreeWithSubtrees(
+        HashTable32bit _memo,
+        GpuqoPlannerInfo* _info,
+        int _n_splits
+    ) : memo(_memo), info(_info), n_splits(_n_splits)
+    {}
+
+    __device__
+    JoinRelation operator()(RelationID relid, uint32_t cid);
+};
+
 #endif              // GPUQO_DPSUB_ENUM_TREE_CUH

@@ -38,4 +38,6 @@ extern void remapPlannerInfo(GpuqoPlannerInfo* info, int* remap_table);
 extern void remapQueryTree(QueryTree* qt, int* remap_table);
 
 extern void minimumSpanningTree(GpuqoPlannerInfo *info);
+extern RelationID* buildSubTrees(GpuqoPlannerInfo *info);
+
 #endif							/* GPUQO_H */
