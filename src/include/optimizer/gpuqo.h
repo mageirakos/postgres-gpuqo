@@ -12,6 +12,7 @@
 
 #include "optimizer/gpuqo_common.h"
 
+#include "postgres.h"
 #include "nodes/pathnodes.h"
 
 /* routines in gpuqo_main.c */

@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include "optimizer/gpuqo_common.h"
+#include "optimizer/gpuqo.h"
 
 void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlannerInfo* info){
     int bfs_queue[32];
