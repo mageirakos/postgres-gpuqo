@@ -69,26 +69,41 @@ EXTERN_PROTOTYPE_TIMING(prune);
 EXTERN_PROTOTYPE_TIMING(scatter);
 EXTERN_PROTOTYPE_TIMING(iteration);
 
+/**
+ * Unrank the id of the set (sid) to the corresponding set relationID
+ *
+ * Note: the unranked sets are in lexicographical order
+ */
 __host__ __device__
 __forceinline__
 RelationID dpsub_unrank_sid(uint32_t sid, uint32_t qss, uint32_t sq, uint32_t* binoms){
-    RelationID s = BMS32_EMPTY;
-    int t = 0;
+    RelationID s = BMS32_SET_ALL_LOWER(BMS32_NTH(sq));
     int qss_tmp = qss, sq_tmp = sq;
 
-    while (sq_tmp > 0 && qss_tmp > 0){
-        uint32_t o = BINOM(binoms, sq, sq_tmp-1, qss_tmp-1);
+    while (sq_tmp > 0 && sq_tmp > qss_tmp){
+        uint32_t o = BINOM(binoms, sq, sq_tmp-1, sq_tmp-qss_tmp-1);
         if (sid < o){
-            s = BMS32_UNION(s, BMS32_NTH(t));
-            qss_tmp--;
+            s = BMS32_UNSET(s, sq_tmp-1);
         } else {
+            qss_tmp--;
             sid -= o;
         }
-        t++;
         sq_tmp--;
     }
 
     return s;
+}
+
+/**
+ * Compute the lexicographically next bit permutation
+ *
+ * https://graphics.stanford.edu/~seander/bithacks.html#NextBitPermutation
+ */
+__host__ __device__
+__forceinline__
+RelationID dpsub_unrank_next(RelationID v){
+    unsigned int t = (v | (v - 1)) + 1;  
+    return t | ((((t & -t) / (v & -v)) >> 1) - 1);  
 }
 
 template<bool CHECK_LEFT>

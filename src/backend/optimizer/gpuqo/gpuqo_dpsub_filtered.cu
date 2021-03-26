@@ -44,40 +44,74 @@ int gpuqo_dpsub_filter_threshold;
 int gpuqo_dpsub_filter_cpu_enum_threshold;
 int gpuqo_dpsub_filter_keys_overprovisioning;
 
-/* unrankDPSub
- *
- *	 unrank algorithm for DPsub GPU variant. 
+/**
+    Faster dpsub enumeration using bit magic to compute next set.
  */
-struct unrankFilteredDPSub : public thrust::unary_function< uint32_t, RelationID >
+__global__
+void unrankFilteredDPSubKernel(int sq, int qss, 
+                               uint32_t offset, uint32_t n_tab_sets,
+                               uint32_t* binoms,
+                               EdgeMask* gobal_edge_table,
+                               RelationID* out_relids)
 {
-    thrust::device_ptr<uint32_t> binoms;
-    int sq;
-    int qss;
-    uint32_t offset;
-public:
-    unrankFilteredDPSub(
-        int _sq,
-        thrust::device_ptr<uint32_t> _binoms,
-        int _qss,
-        uint32_t _offset
-    ) : sq(_sq), binoms(_binoms), qss(_qss), offset(_offset)
-    {}
+    uint32_t threadid = blockIdx.x*blockDim.x + threadIdx.x;
+    uint32_t n_threads = blockDim.x * gridDim.x;
  
-    __device__
-    RelationID operator()(uint32_t tid)
-    {
-        uint32_t sid = tid + offset;
-
-        // why not use shared memory?
-        // I tried but improvements are small
-        RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
-        
-        LOG_DEBUG("[%u] s=%u\n", tid, s);
-        
-        RelationID relid = s<<1;
-        return relid;
+    int n_active = __popc(__activemask());
+    __shared__ EdgeMask edge_table[32];
+    for (int i = threadIdx.x; i < sq; i+=n_active){
+        edge_table[i] = gobal_edge_table[i];
     }
- };
+    __syncthreads();
+
+    if (threadid < n_tab_sets){
+        uint32_t sets_per_thread = ceil_div(n_tab_sets, n_threads);
+        uint32_t n_excess = n_tab_sets % n_threads;
+        uint32_t idx;
+        if (threadid < n_excess){
+            idx = threadid * sets_per_thread + offset;
+        } else {
+            idx = n_excess * sets_per_thread 
+                    + (threadid - n_excess) * (sets_per_thread-1) 
+                    + offset;
+        }
+        
+        
+        RelationID s = dpsub_unrank_sid(idx, qss, sq, binoms);
+
+        for (uint32_t tid = threadid; tid < n_tab_sets; tid += n_threads){
+            RelationID relid = s << 1;
+            
+            if (!is_connected(relid, edge_table))
+                relid = BMS32_EMPTY;
+            
+            LOG_DEBUG("[%u,%u] tid=%u idx=%u s=%u relid=%u\n", 
+                        blockIdx.x, threadIdx.x, 
+                        tid, idx++, s, relid);
+            out_relids[tid] = relid;
+
+            s = dpsub_unrank_next(s);
+        }
+    }
+}
+
+void launchUnrankFilteredDPSubKernel(int sq, int qss, 
+                                     uint32_t offset, uint32_t n_tab_sets,
+                                     uint32_t* binoms,
+                                     EdgeMask* global_edge_table,
+                                     RelationID* out_relids)
+{
+    int blocksize = 512;
+    int gridsize = ceil_div(min(n_tab_sets, gpuqo_n_parallel), blocksize);
+        
+    unrankFilteredDPSubKernel<<<gridsize, blocksize>>>(
+        sq, qss, 
+        offset, n_tab_sets,
+        binoms,
+        global_edge_table,
+        out_relids
+    );
+    }
  
  /* evaluateDPSub
   *
@@ -330,11 +364,13 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                 START_TIMING(unrank);
                 thrust::host_vector<RelationID> relids(n_tab_sets);
                 uint32_t n_valid_relids = 0;
+                RelationID s = dpsub_unrank_sid(0, iter, params.info->n_rels, params.binoms.data());
                 for (uint32_t sid=0; sid < n_tab_sets; sid++){
-                    RelationID relid = dpsub_unrank_sid(sid, iter, params.info->n_rels, params.binoms.data()) << 1;
+                    RelationID relid = s << 1;
                     if (is_connected(relid, params.info->edge_table)){
                         relids[n_valid_relids++] = relid; 
                     }
+                    s = dpsub_unrank_next(s);
                 }
                 thrust::copy(relids.begin(), relids.begin()+n_valid_relids, params.gpu_pending_keys.begin()+n_pending_sets);
 
@@ -343,23 +379,23 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
             } else {
                 // fill pending keys and filter on GPU 
                 START_TIMING(unrank);
-                thrust::tabulate(
-                    params.gpu_pending_keys.begin()+n_pending_sets,
-                    params.gpu_pending_keys.begin()+(n_pending_sets+n_tab_sets),
-                    unrankFilteredDPSub(
-                        params.info->n_rels,
-                        params.gpu_binoms.data(),
-                        iter,
-                        set_offset
-                    ) 
+                LOG_DEBUG("Unranking %u sets from offset %u\n", 
+                            n_tab_sets, set_offset);
+                launchUnrankFilteredDPSubKernel(
+                    params.info->n_rels, iter,
+                    set_offset, n_tab_sets,
+                    thrust::raw_pointer_cast(params.gpu_binoms.data()),
+                    params.info->edge_table,
+                    thrust::raw_pointer_cast(params.gpu_pending_keys.data())+n_pending_sets
+
                 );
                 STOP_TIMING(unrank);
 
                 START_TIMING(filter);
-                auto keys_end_iter = thrust::remove_if(
+                auto keys_end_iter = thrust::remove(
                     params.gpu_pending_keys.begin()+n_pending_sets,
                     params.gpu_pending_keys.begin()+(n_pending_sets+n_tab_sets),
-                    filterDisconnectedRelations(params.info)
+                    BMS32_EMPTY
                 );
                 STOP_TIMING(filter);
 
