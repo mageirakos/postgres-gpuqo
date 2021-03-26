@@ -67,12 +67,20 @@ RelationID get_neighbours(RelationID set, EdgeMask* edge_table){
     return BMS32_DIFFERENCE(neigs, set);
 }
 
+
+/**
+ * Grow `from` following all its neighbours within `subset`.
+ * 
+ * NB: `from` must be included in `subset`.
+ */
 __host__ __device__
 __forceinline__
-bool is_connected(RelationID relid, EdgeMask* edge_table)
+RelationID grow(RelationID from, RelationID subset, EdgeMask* edge_table)
 {
     RelationID V = BMS32_EMPTY;
-    RelationID N = BMS32_LOWEST(relid);
+    RelationID N = from;
+
+    Assert(BMS32_IS_SUBSET(from, subset));
 
     // as long as there are nodes to visit
     while (N != BMS32_EMPTY) {
@@ -87,16 +95,25 @@ bool is_connected(RelationID relid, EdgeMask* edge_table)
         // add his neighbours to the nodes to visit
         N = BMS32_UNION(N, edge_table[baserel_idx]);
 
-        // keep only interesting nodes 
-        N = BMS32_INTERSECTION(N, relid);
+        // keep only permitted nodes 
+        N = BMS32_INTERSECTION(N, subset);
 
         // remove already visited nodes (including baserel_idx)
         N = BMS32_DIFFERENCE(N, V);
     };
 
-    // if I managed to visit all nodes, then subgraph is connected
-    // empty set is always invalid
-    return relid != BMS32_EMPTY && V == relid; 
+    return V;
+}
+
+__host__ __device__
+__forceinline__
+bool is_connected(RelationID relid, EdgeMask* edge_table)
+{
+    if (relid == BMS32_EMPTY){
+        return false;
+    }
+
+    return grow(BMS32_LOWEST(relid), relid, edge_table) == relid;
 }
 
 /**

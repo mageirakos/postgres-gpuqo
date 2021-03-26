@@ -31,9 +31,10 @@ JoinRelation dpsubEnumerateTreeSimple::operator()(RelationID relid, uint32_t cid
 
     for (uint32_t i = cid; i < n_possible_joins; i += n_splits){
         RelationID base_rel_id = BMS32_EXPAND_TO_MASK(BMS32_NTH(i), relid);
-        RelationID S = base_rel_id;
-        RelationID N = S; 
-        RelationID X = BMS32_SET_ALL_LOWER_INC(base_rel_id); 
+        RelationID permitted = BMS32_DIFFERENCE(
+            relid, 
+            BMS32_SET_ALL_LOWER(base_rel_id)
+        );
 
         LOG_DEBUG("%d %d: %u (%u)\n", 
             blockIdx.x,
@@ -42,27 +43,8 @@ JoinRelation dpsubEnumerateTreeSimple::operator()(RelationID relid, uint32_t cid
             relid
         );
 
-        while (N != BMS32_EMPTY){
-            RelationID neigs = get_neighbours(N, edge_table);
-            N = BMS32_DIFFERENCE(
-                BMS32_INTERSECTION(
-                    BMS32_DIFFERENCE(relid, S),
-                    neigs
-                ),
-                X
-            );
-
-            LOG_DEBUG("%d %d: %u %u %u\n", 
-                blockIdx.x,
-                threadIdx.x,
-                S, N, neigs
-            );
-
-            S = BMS32_UNION(S, N);
-        }
-
-        RelationID l = S;
-        RelationID r = BMS32_DIFFERENCE(relid, S);
+        RelationID l = grow(base_rel_id, permitted, edge_table);
+        RelationID r = BMS32_DIFFERENCE(relid, l);
 
         if (l != BMS32_EMPTY && r != BMS32_EMPTY){
             JoinRelation *left_rel = memo.lookup(l);
