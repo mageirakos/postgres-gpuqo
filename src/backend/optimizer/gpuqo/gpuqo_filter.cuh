@@ -71,21 +71,32 @@ __host__ __device__
 __forceinline__
 bool is_connected(RelationID relid, EdgeMask* edge_table)
 {
-    RelationID T = BMS32_LOWEST(relid);
-    RelationID N = T;
-    do {
-        // explore only from newly found nodes that are missing
-        N = BMS32_INTERSECTION(
-            BMS32_DIFFERENCE(relid, T), 
-            get_neighbours(N, edge_table)
-        );
-        // add new nodes to set
-        T = BMS32_UNION(T, N);
-    } while (T != relid && N != BMS32_EMPTY);
-    // either all nodes have been found or no new connected node exists
+    RelationID V = BMS32_EMPTY;
+    RelationID N = BMS32_LOWEST(relid);
+
+    // as long as there are nodes to visit
+    while (N != BMS32_EMPTY) {
+        // pop one of the not visited neighbours 
+        int baserel_idx = BMS32_LOWEST_POS(N)-2;
+
+        LOG_DEBUG("[%u] N=%u V=%u i=%d\n", relid, N, V, baserel_idx);
+
+        // mark as visited
+        V = BMS32_SET(V, baserel_idx+1);
+        
+        // add his neighbours to the nodes to visit
+        N = BMS32_UNION(N, edge_table[baserel_idx]);
+
+        // keep only interesting nodes 
+        N = BMS32_INTERSECTION(N, relid);
+
+        // remove already visited nodes (including baserel_idx)
+        N = BMS32_DIFFERENCE(N, V);
+    };
 
     // if I managed to visit all nodes, then subgraph is connected
-    return relid != BMS32_EMPTY && T == relid; 
+    // empty set is always invalid
+    return relid != BMS32_EMPTY && V == relid; 
 }
 
 /**
