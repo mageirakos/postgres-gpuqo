@@ -318,7 +318,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
         PRINT_TOTAL_TIMING(prune);
         PRINT_TOTAL_TIMING(scatter);
     } catch(thrust::system_error err){
-        printf("Thrust %d: %s", err.code().value(), err.what());
+        printf("Thrust %d: %s\n", err.code().value(), err.what());
     }
 
     STOP_TIMING(execute);
