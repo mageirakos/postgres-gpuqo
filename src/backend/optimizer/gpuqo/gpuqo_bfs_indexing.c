@@ -77,7 +77,8 @@ void remapPlannerInfo(GpuqoPlannerInfo* info, int* remap_table){
     remapEdgeTable(info->indexed_edge_table, info->n_rels, remap_table);
 
     // even though it's not an edge_table, it has the same format
-    remapEdgeTable(info->subtrees, info->n_rels, remap_table);
+    if (gpuqo_spanning_tree_enable)
+        remapEdgeTable(info->subtrees, info->n_rels, remap_table);
 
     EqClassInfo* p = info->eq_classes;
     while (p != NULL){
