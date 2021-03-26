@@ -16,6 +16,7 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "optimizer/optimizer.h"
 #include "optimizer/cost.h"
 #include "optimizer/gpuqo.h"
 #include "optimizer/pathnode.h"
