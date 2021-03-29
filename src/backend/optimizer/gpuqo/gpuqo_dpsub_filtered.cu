@@ -118,35 +118,16 @@ void launchUnrankFilteredDPSubKernel(int sq, int qss,
   *	 evaluation algorithm for DPsub GPU variant with partial pruning
   */
 template<typename BinaryFunction>
-struct evaluateFilteredDPSub : public thrust::unary_function< uint32_t, thrust::tuple<RelationID, JoinRelation> >
-{
-    thrust::device_ptr<RelationID> pending_keys;
-    int sq;
-    int qss;
-    uint32_t n_pending_sets;
-    int n_splits;
-    BinaryFunction enum_functor;
-public:
-    evaluateFilteredDPSub(
-        thrust::device_ptr<RelationID> _pending_keys,
-        BinaryFunction _enum_functor,
-        int _sq,
-        int _qss,
-        uint32_t _n_pending_sets,
-        int _n_splits
-    ) : pending_keys(_pending_keys), 
-        enum_functor(_enum_functor), sq(_sq), 
-        qss(_qss), n_pending_sets(_n_pending_sets), n_splits(_n_splits)
-    {}
+__global__
+void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_threads, BinaryFunction enum_functor){
+    uint32_t tid = blockIdx.x*blockDim.x + threadIdx.x;
 
-    __device__
-    thrust::tuple<RelationID, JoinRelation>  operator()(uint32_t tid)
-    {
+    if (tid < n_threads){
         uint32_t rid = n_pending_sets - 1 - (tid / n_splits);
         uint32_t cid = tid % n_splits;
 
         Assert(n_pending_sets-1 <= 0xFFFFFFFF - tid / n_splits);
-    
+
         RelationID relid = pending_keys[rid];
 
         LOG_DEBUG("[%u] n_splits=%d, rid=%u, cid=%u, relid=%u\n", 
@@ -154,9 +135,27 @@ public:
         
         JoinRelation jr_out = enum_functor(relid, cid);
         Assert(jr_out.id == BMS32_EMPTY || jr_out.id == relid);
-        return thrust::make_tuple<RelationID, JoinRelation>(relid, jr_out);
+
+        scratchpad_keys[tid] = relid;
+        scratchpad_vals[tid] = jr_out;
     }
-};
+}
+
+template<typename BinaryFunction>
+void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_threads, BinaryFunction enum_functor)
+{
+    int blocksize = 256;
+    int gridsize = ceil_div(n_threads, blocksize);
+
+    cudaFuncSetCacheConfig(evaluateFilteredDPSubKernel<BinaryFunction>, cudaFuncCachePreferL1);
+
+    evaluateFilteredDPSubKernel<<<gridsize, blocksize>>>(
+        pending_keys, scratchpad_keys, scratchpad_vals,
+        sq, qss, 
+        n_pending_sets, n_splits, n_threads,
+        enum_functor
+    );
+}
 
 
 uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
@@ -203,50 +202,36 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
 
         START_TIMING(compute);
         if (use_csg) {
-            thrust::tabulate(
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    params.gpu_scratchpad_keys.begin(),
-                    params.gpu_scratchpad_vals.begin()
-                )),
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    params.gpu_scratchpad_keys.begin()+n_threads,
-                    params.gpu_scratchpad_vals.begin()+n_threads
-                )),
-                evaluateFilteredDPSub<dpsubEnumerateCsg>(
-                    params.gpu_pending_keys.data()+offset,
-                    dpsubEnumerateCsg(
-                        *params.memo,
-                        params.info,
-                        threads_per_set
-                    ),
-                    params.info->n_rels,
-                    iter,
-                    n_pending_sets,
+            launchEvaluateFilteredDPSubKernel(
+                thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
+                thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
+                thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
+                params.info->n_rels,
+                iter,
+                n_pending_sets,
+                threads_per_set,
+                n_threads,
+                dpsubEnumerateCsg(
+                    *params.memo,
+                    params.info,
                     threads_per_set
-                )                
+                )
             );
         } else {
-            thrust::tabulate(
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    params.gpu_scratchpad_keys.begin(),
-                    params.gpu_scratchpad_vals.begin()
-                )),
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    params.gpu_scratchpad_keys.begin()+n_threads,
-                    params.gpu_scratchpad_vals.begin()+n_threads
-                )),
-                evaluateFilteredDPSub<dpsubEnumerateAllSubs>(
-                    params.gpu_pending_keys.data()+offset,
-                    dpsubEnumerateAllSubs(
-                        *params.memo,
-                        params.info,
-                        threads_per_set
-                    ),
-                    params.info->n_rels,
-                    iter,
-                    n_pending_sets,
+            launchEvaluateFilteredDPSubKernel(
+                thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
+                thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
+                thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
+                params.info->n_rels,
+                iter,
+                n_pending_sets,
+                threads_per_set,
+                n_threads,
+                dpsubEnumerateAllSubs(
+                    *params.memo,
+                    params.info,
                     threads_per_set
-                )             
+                )  
             );
         }           
         STOP_TIMING(compute);
@@ -299,50 +284,36 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
 
         START_TIMING(compute);
         if (gpuqo_spanning_tree_enable){
-            thrust::tabulate(
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    params.gpu_scratchpad_keys.begin(),
-                    params.gpu_scratchpad_vals.begin()
-                )),
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    params.gpu_scratchpad_keys.begin()+n_threads,
-                    params.gpu_scratchpad_vals.begin()+n_threads
-                )),
-                evaluateFilteredDPSub<dpsubEnumerateTreeWithSubtrees>(
-                    params.gpu_pending_keys.data()+offset,
-                    dpsubEnumerateTreeWithSubtrees(
-                        *params.memo,
-                        params.info,
-                        threads_per_set
-                    ),
-                    params.info->n_rels,
-                    iter,
-                    n_pending_sets,
+            launchEvaluateFilteredDPSubKernel(
+                thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
+                thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
+                thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
+                params.info->n_rels,
+                iter,
+                n_pending_sets,
+                threads_per_set,
+                n_threads,
+                dpsubEnumerateTreeWithSubtrees(                
+                    *params.memo,
+                    params.info,
                     threads_per_set
-                )             
+                ) 
             );
         } else {
-            thrust::tabulate(
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    params.gpu_scratchpad_keys.begin(),
-                    params.gpu_scratchpad_vals.begin()
-                )),
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    params.gpu_scratchpad_keys.begin()+n_threads,
-                    params.gpu_scratchpad_vals.begin()+n_threads
-                )),
-                    evaluateFilteredDPSub<dpsubEnumerateTreeSimple>(
-                        params.gpu_pending_keys.data()+offset,
-                        dpsubEnumerateTreeSimple(
-                            *params.memo,
-                            params.info,
-                            threads_per_set
-                    ),
-                    params.info->n_rels,
-                    iter,
-                    n_pending_sets,
+            launchEvaluateFilteredDPSubKernel(
+                thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
+                thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
+                thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
+                params.info->n_rels,
+                iter,
+                n_pending_sets,
+                threads_per_set,
+                n_threads,
+                dpsubEnumerateTreeSimple(
+                    *params.memo,
+                    params.info,
                     threads_per_set
-                )             
+                )
             );
         }
                     
