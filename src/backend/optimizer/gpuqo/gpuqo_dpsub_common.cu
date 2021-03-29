@@ -132,14 +132,10 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
     for(int i=0; i<info->n_rels; i++){
         JoinRelation t;
-        t.id = info->base_rels[i].id;
-        t.left_relation_idx = 0; 
-        t.left_relation_id = 0; 
-        t.right_relation_idx = 0; 
-        t.right_relation_id = 0; 
+        t.left_rel_id = BMS32_EMPTY; 
+        t.left_rel_id = BMS32_EMPTY; 
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
-        t.edges = info->edge_table[i];
         ini_memo_keys[i] = info->base_rels[i].id;
         ini_memo_vals[i] = t;
 
@@ -148,12 +144,8 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     
     // add dummy relation
     JoinRelation dummy_jr;
-    dummy_jr.id = BMS32_EMPTY;
-	dummy_jr.edges = BMS32_EMPTY;
-	dummy_jr.left_relation_id = BMS32_EMPTY;
-	dummy_jr.right_relation_id = BMS32_EMPTY;
-    dummy_jr.left_relation_ptr = NULL;
-    dummy_jr.right_relation_ptr = NULL;
+	dummy_jr.left_rel_id = BMS32_EMPTY;
+	dummy_jr.right_rel_id = BMS32_EMPTY;
     dummy_jr.rows = 0.0;
 	dummy_jr.cost = 0.0;
     
@@ -249,7 +241,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
         START_TIMING(build_qt);
             
-        buildQueryTree(params.out_relid, *params.memo, &out);
+        dpsub_buildQueryTree(params.out_relid, *params.memo, &out);
     
         STOP_TIMING(build_qt);
     

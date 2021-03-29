@@ -35,7 +35,6 @@ public:
     JoinRelation operator()(RelationID relid, uint32_t cid)
     {
         JoinRelation jr_out;
-        jr_out.id = BMS32_EMPTY;
         jr_out.cost = INFD;
         int qss = BMS32_SIZE(relid);
         uint32_t n_possible_joins = 1U<<qss;
@@ -72,9 +71,9 @@ public:
 
             LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
 
-            JoinRelation *left_rel = memo.lookup(l);
-            JoinRelation *right_rel = memo.lookup(r);
-            do_join(jr_out, *left_rel, *right_rel, info);
+            JoinRelation left_rel = *memo.lookup(l);
+            JoinRelation right_rel = *memo.lookup(r);
+            do_join(jr_out, l, left_rel, r, right_rel, info);
         }
 
         return jr_out;

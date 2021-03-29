@@ -388,9 +388,9 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     makeBFSIndexRemapTables(remap_table_fw, remap_table_bw, info);
     remapPlannerInfo(info, remap_table_fw);
 
-#ifdef OPTIMIZER_DEBUG
+// #ifdef OPTIMIZER_DEBUG
     printEdges(info);
-#endif
+// #endif
 
     switch (gpuqo_algorithm)
     {

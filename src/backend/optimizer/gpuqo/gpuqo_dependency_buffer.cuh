@@ -16,8 +16,9 @@
 #include <atomic>
 
 #include "gpuqo.cuh"
+#include "gpuqo_cpu_common.cuh"
 
-struct JoinRelationDPE : JoinRelation{
+struct JoinRelationDPE : public JoinRelationCPU {
     std::atomic_int num_entry;
 };
 

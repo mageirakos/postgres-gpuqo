@@ -34,7 +34,6 @@ public:
     JoinRelation operator()(RelationID relid, uint32_t cid)
     {
         JoinRelation jr_out;
-        jr_out.id = BMS32_EMPTY;
         jr_out.cost = INFD;
 
         uint32_t n_possible_joins = BMS32_SIZE(relid);
@@ -64,8 +63,8 @@ public:
             RelationID r = BMS32_DIFFERENCE(relid, l);
 
             if (l != BMS32_EMPTY && r != BMS32_EMPTY){
-                JoinRelation *left_rel = memo.lookup(l);
-                JoinRelation *right_rel = memo.lookup(r);
+                JoinRelation left_rel = *memo.lookup(l);
+                JoinRelation right_rel = *memo.lookup(r);
 
                 LOG_DEBUG("%d %d: %u %u (%u)\n", 
                     blockIdx.x,
@@ -75,8 +74,8 @@ public:
                     relid
                 );
 
-                do_join(jr_out, *left_rel, *right_rel, info);
-                do_join(jr_out, *right_rel, *left_rel, info);
+                do_join(jr_out, l, left_rel, r, right_rel, info);
+                do_join(jr_out, r, right_rel, l, left_rel, info);
             }
         }
 
@@ -101,7 +100,6 @@ public:
     JoinRelation operator()(RelationID relid, uint32_t cid)
     { 
         JoinRelation jr_out;
-        jr_out.id = BMS32_EMPTY;
         jr_out.cost = INFD;
     
         uint32_t n_possible_joins = BMS32_SIZE(relid);
@@ -121,8 +119,8 @@ public:
             RelationID r = BMS32_DIFFERENCE(relid, S);
     
             if (l != BMS32_EMPTY && r != BMS32_EMPTY){
-                JoinRelation *left_rel = memo.lookup(l);
-                JoinRelation *right_rel = memo.lookup(r);
+                JoinRelation left_rel = *memo.lookup(l);
+                JoinRelation right_rel = *memo.lookup(r);
     
                 LOG_DEBUG("%d %d: %u %u (%u)\n", 
                     blockIdx.x,
@@ -132,8 +130,8 @@ public:
                     relid
                 );
     
-                do_join(jr_out, *left_rel, *right_rel, info);
-                do_join(jr_out, *right_rel, *left_rel, info);
+                do_join(jr_out, l, left_rel, r, right_rel, info);
+                do_join(jr_out, r, right_rel, l, left_rel, info);
             }
         }
     

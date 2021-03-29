@@ -65,16 +65,16 @@ void gpuqo_cpu_dpsize_enumerate(GpuqoPlannerInfo* info, join_f join_function, me
 
 }
 
-bool gpuqo_cpu_dpsize_check_join(int level, JoinRelation &left_rel,             
-                            JoinRelation &right_rel, GpuqoPlannerInfo* info,
+bool gpuqo_cpu_dpsize_check_join(int level, JoinRelationCPU &left_rel,             
+                            JoinRelationCPU &right_rel, GpuqoPlannerInfo* info,
                             memo_t &memo, extra_t extra){
 
     return (is_disjoint(left_rel, right_rel) 
         && are_connected(left_rel, right_rel, info));
 }
 
-void gpuqo_cpu_dpsize_post_join(int level, bool newrel, JoinRelation &join_rel, 
-                            JoinRelation &left_rel, JoinRelation &right_rel,
+void gpuqo_cpu_dpsize_post_join(int level, bool newrel, JoinRelationCPU &join_rel, 
+                            JoinRelationCPU &left_rel, JoinRelationCPU &right_rel,
                             GpuqoPlannerInfo* info, memo_t &memo, 
                             extra_t extra){
     struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) extra.alg;

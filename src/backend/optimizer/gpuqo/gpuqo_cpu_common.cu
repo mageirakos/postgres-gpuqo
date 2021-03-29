@@ -25,7 +25,7 @@
 #include "gpuqo_cpu_common.cuh"
 #include "gpuqo_dependency_buffer.cuh"
 
-void build_query_tree(JoinRelation *jr, memo_t &memo, QueryTree **qt)
+void build_query_tree(JoinRelationCPU *jr, memo_t &memo, QueryTree **qt)
 {
     if (jr == NULL){
         (*qt) = NULL;
@@ -39,8 +39,8 @@ void build_query_tree(JoinRelation *jr, memo_t &memo, QueryTree **qt)
     (*qt)->rows = jr->rows;
     (*qt)->cost = jr->cost;
 
-    build_query_tree(jr->left_relation_ptr, memo, &((*qt)->left));
-    build_query_tree(jr->right_relation_ptr, memo, &((*qt)->right));
+    build_query_tree(jr->left_rel_ptr, memo, &((*qt)->left));
+    build_query_tree(jr->right_rel_ptr, memo, &((*qt)->right));
 }
 
 /* build_join_relation
@@ -57,10 +57,10 @@ T* build_join_relation(T &left_rel,T &right_rel){
     T* join_rel = new T;
 
     join_rel->id = BMS32_UNION(left_rel.id, right_rel.id);
-    join_rel->left_relation_id = left_rel.id;
-    join_rel->left_relation_ptr = &left_rel;
-    join_rel->right_relation_id = right_rel.id;
-    join_rel->right_relation_ptr = &right_rel;
+    join_rel->left_rel_id = left_rel.id;
+    join_rel->left_rel_ptr = &left_rel;
+    join_rel->right_rel_id = right_rel.id;
+    join_rel->right_rel_ptr = &right_rel;
     join_rel->edges = BMS32_UNION(left_rel.edges, right_rel.edges);
     join_rel->cost = INFF;
     join_rel->rows = INFF;
@@ -74,7 +74,7 @@ T* build_join_relation(T &left_rel,T &right_rel){
 
 // explicitly instantiate template implementations
 // by doing so I avoid defining the template in the header file
-template JoinRelation *build_join_relation<JoinRelation>(JoinRelation &, JoinRelation &);
+template JoinRelationCPU *build_join_relation<JoinRelationCPU>(JoinRelationCPU &, JoinRelationCPU &);
 template JoinRelationDPE *build_join_relation<JoinRelationDPE>(JoinRelationDPE &, JoinRelationDPE &);
 
 /* make_join_relation
@@ -90,14 +90,15 @@ T* make_join_relation(T &left_rel,T &right_rel, GpuqoPlannerInfo* info){
 #endif
 
     T* join_rel = build_join_relation<T>(left_rel, right_rel);
-    compute_join_cost(*join_rel, left_rel, right_rel, info);
+    join_rel->rows = estimate_join_rows(left_rel.id, left_rel, right_rel.id, right_rel, info);
+    join_rel->cost = calc_join_cost(left_rel.id, left_rel, right_rel.id, right_rel, join_rel->rows, info);
 
     return join_rel;
 }
 
 // explicitly instantiate template implementations
 // by doing so I avoid defining the template in the header file
-template JoinRelation *make_join_relation<JoinRelation>(JoinRelation &, JoinRelation &, GpuqoPlannerInfo*);
+template JoinRelationCPU *make_join_relation<JoinRelationCPU>(JoinRelationCPU &, JoinRelationCPU &, GpuqoPlannerInfo*);
 template JoinRelationDPE *make_join_relation<JoinRelationDPE>(JoinRelationDPE &, JoinRelationDPE &, GpuqoPlannerInfo*);
 
 template<typename T>
@@ -107,7 +108,7 @@ bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel,
 
     auto find_iter = memo.find(join_rel->id);
     if (find_iter != memo.end()){
-        JoinRelation* old_jr = find_iter->second;  
+        JoinRelationCPU* old_jr = find_iter->second;  
 
 #ifdef USE_ASSERT_CHECKING
         Assert(!old_jr->referenced);
@@ -125,5 +126,5 @@ bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel,
 
 // explicitly instantiate template implementations
 // by doing so I avoid defining the template in the header file
-template bool do_join<JoinRelation>(int, JoinRelation *&, JoinRelation &, JoinRelation &, GpuqoPlannerInfo*, memo_t &, extra_t);
+template bool do_join<JoinRelationCPU>(int, JoinRelationCPU *&, JoinRelationCPU &, JoinRelationCPU &, GpuqoPlannerInfo*, memo_t &, extra_t);
 template bool do_join<JoinRelationDPE>(int, JoinRelationDPE *&, JoinRelationDPE &, JoinRelationDPE &, GpuqoPlannerInfo*, memo_t &, extra_t);

@@ -134,7 +134,6 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
                 tid, n_splits, rid, cid, relid);
         
         JoinRelation jr_out = enum_functor(relid, cid);
-        Assert(jr_out.id == BMS32_EMPTY || jr_out.id == relid);
 
         scratchpad_keys[tid] = relid;
         scratchpad_vals[tid] = jr_out;

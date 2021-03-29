@@ -47,8 +47,8 @@ void gpuqo_cpu_dpsub_enumerate(GpuqoPlannerInfo* info, join_f join_function, mem
                 auto right = memo.find(right_id);
 
                 if (left != memo.end() && right != memo.end()){
-                    JoinRelation *left_rel = left->second;
-                    JoinRelation *right_rel = right->second;
+                    JoinRelationCPU *left_rel = left->second;
+                    JoinRelationCPU *right_rel = right->second;
                     int level = BMS32_SIZE(join_id);
 
                     join_function(level, false, *right_rel, *left_rel, info,    
@@ -62,8 +62,8 @@ void gpuqo_cpu_dpsub_enumerate(GpuqoPlannerInfo* info, join_f join_function, mem
     }
 }
 
-bool gpuqo_cpu_dpsub_check_join(int level, JoinRelation &left_rel,
-    JoinRelation &right_rel, GpuqoPlannerInfo* info, 
+bool gpuqo_cpu_dpsub_check_join(int level, JoinRelationCPU &left_rel,
+    JoinRelationCPU &right_rel, GpuqoPlannerInfo* info, 
     memo_t &memo, extra_t extra){
 
     // I do not need to check self-connectedness of the single joinrels since 
@@ -78,8 +78,8 @@ bool gpuqo_cpu_dpsub_check_join(int level, JoinRelation &left_rel,
 
     return is_disjoint(left_rel, right_rel);
 }
-void gpuqo_cpu_dpsub_post_join(int level, bool newrel, JoinRelation &join_rel, 
-                            JoinRelation &left_rel, JoinRelation &right_rel,
+void gpuqo_cpu_dpsub_post_join(int level, bool newrel, JoinRelationCPU &join_rel, 
+                            JoinRelationCPU &left_rel, JoinRelationCPU &right_rel,
                             GpuqoPlannerInfo* info, memo_t &memo, 
                             extra_t extra){
     // nothing to do

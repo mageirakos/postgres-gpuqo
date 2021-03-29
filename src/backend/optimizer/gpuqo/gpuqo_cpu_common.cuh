@@ -23,8 +23,16 @@
 #include "gpuqo_cost.cuh"
 #include "gpuqo_filter.cuh"
 
-typedef std::vector< std::list<JoinRelation*> > vector_list_t;
-typedef std::unordered_map<RelationID, JoinRelation*> memo_t;
+struct JoinRelationCPU : public JoinRelationDetailed{
+	struct JoinRelationCPU* left_rel_ptr;
+	struct JoinRelationCPU* right_rel_ptr;
+#ifdef USE_ASSERT_CHECKING
+	bool referenced;
+#endif
+};
+
+typedef std::vector< std::list<JoinRelationCPU*> > vector_list_t;
+typedef std::unordered_map<RelationID, JoinRelationCPU*> memo_t;
 
 typedef struct extra_t{
 	// algorithm extras 
@@ -36,15 +44,15 @@ typedef struct extra_t{
 
 struct DPCPUAlgorithm;
 
-typedef void (*join_f)(int level, bool try_swap, JoinRelation &left_rel,
-					JoinRelation &right_rel, GpuqoPlannerInfo* info, 
+typedef void (*join_f)(int level, bool try_swap, JoinRelationCPU &left_rel,
+					JoinRelationCPU &right_rel, GpuqoPlannerInfo* info, 
 					memo_t &memo, extra_t extra, 
 					struct DPCPUAlgorithm algorithm);
-typedef bool (*check_join_f)(int level, JoinRelation &left_rel,
- 					JoinRelation &right_rel, GpuqoPlannerInfo* info, 
+typedef bool (*check_join_f)(int level, JoinRelationCPU &left_rel,
+ 					JoinRelationCPU &right_rel, GpuqoPlannerInfo* info, 
 					memo_t &memo, extra_t extra);
-typedef void (*post_join_f)(int level,  bool new_rel, JoinRelation &join_rel,
-					JoinRelation &left_rel, JoinRelation &right_rel,
+typedef void (*post_join_f)(int level,  bool new_rel, JoinRelationCPU &join_rel,
+					JoinRelationCPU &left_rel, JoinRelationCPU &right_rel,
 					GpuqoPlannerInfo* info, memo_t &memo, extra_t extra);
 typedef void (*enumerate_f)(GpuqoPlannerInfo* info, join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm);
 typedef void (*init_f)(GpuqoPlannerInfo* info, memo_t &memo, extra_t &extra);
@@ -58,7 +66,7 @@ typedef struct DPCPUAlgorithm{
 	teardown_f teardown_function;
 } DPCPUAlgorithm;
 
-extern void build_query_tree(JoinRelation *jr, memo_t &memo, QueryTree **qt);
+extern void build_query_tree(JoinRelationCPU *jr, memo_t &memo, QueryTree **qt);
 
 template<typename T>
 T* build_join_relation(T &left_rel,T &right_rel);

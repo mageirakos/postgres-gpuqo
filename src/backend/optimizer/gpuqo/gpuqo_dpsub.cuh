@@ -138,19 +138,24 @@ bool check_join(RelationID left_id, RelationID right_id,
 
 __device__
 __forceinline__
-void do_join(JoinRelation &jr_out, JoinRelation &left_rel, 
-             JoinRelation &right_rel, GpuqoPlannerInfo* info) {
+void do_join(JoinRelation &jr_out, 
+             RelationID left_rel_id, JoinRelation &left_rel, 
+             RelationID right_rel_id, JoinRelation &right_rel, 
+             GpuqoPlannerInfo* info) {
     LOG_DEBUG("[%u] Joining %u and %u\n", 
-            BMS32_UNION(left_rel.id, right_rel.id), left_rel.id, right_rel.id);
+            BMS32_UNION(left_rel_id, right_rel_id), left_rel_id, right_rel_id);
 
-    Assert(left_rel.id != BMS32_EMPTY);
-    Assert(right_rel.id != BMS32_EMPTY);
+    Assert(left_rel_id != BMS32_EMPTY);
+    Assert(right_rel_id != BMS32_EMPTY);
 
-    JoinRelation jr;
-    make_join_rel(jr, left_rel, right_rel, info);
+    float jr_rows = estimate_join_rows(left_rel_id, left_rel, right_rel_id, right_rel, info);
+    float jr_cost = calc_join_cost(left_rel_id, left_rel, right_rel_id, right_rel, jr_rows, info);
 
-    if (jr.cost < jr_out.cost){
-        jr_out = jr;
+    if (jr_cost < jr_out.cost){
+        jr_out.cost = jr_cost;
+        jr_out.rows = jr_rows;
+        jr_out.left_rel_id = left_rel_id;
+        jr_out.right_rel_id = right_rel_id;
     }
 }
 
@@ -193,9 +198,9 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
 
         Assert(l != BMS32_EMPTY && r != BMS32_EMPTY);
 
-        JoinRelation *left_rel = memo.lookup(l);
-        JoinRelation *right_rel = memo.lookup(r);
-        do_join(jr_out, *left_rel, *right_rel, info);
+        JoinRelation left_rel = *memo.lookup(l);
+        JoinRelation right_rel = *memo.lookup(r);
+        do_join(jr_out, l, left_rel, r, right_rel, info);
 
     } else{
         int wScan = __popc(~pthBlt & LANE_MASK_LE);

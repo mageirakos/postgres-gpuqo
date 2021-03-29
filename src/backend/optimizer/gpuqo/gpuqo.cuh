@@ -61,27 +61,10 @@ do { \
 // structure representing join of two relations used by CUDA and CPU code 
 // of GPUQO
 struct JoinRelation{
-	RelationID id;
-	EdgeMask edges;
-
-	RelationID left_relation_id;
-	RelationID right_relation_id;
-
-	union{
-		uint32_t left_relation_idx;
-		struct JoinRelation* left_relation_ptr;
-	};
-	union{
-		uint32_t right_relation_idx;
-		struct JoinRelation* right_relation_ptr;
-	};
-
+	RelationID left_rel_id;
+	RelationID right_rel_id;
 	float rows;
 	float cost;
-	
-#ifdef USE_ASSERT_CHECKING
-	bool referenced;
-#endif
 
 public:
 	__host__ __device__
@@ -115,10 +98,29 @@ public:
 	}
 };
 
+struct JoinRelationDetailed : public JoinRelation{
+	RelationID id;
+	EdgeMask edges;
+
+
+	union{
+		struct JoinRelation* left_rel_ptr;
+	};
+	union{
+		struct JoinRelation* right_rel_ptr;
+	};
+};
+
+struct JoinRelationDpsize : public JoinRelationDetailed {
+	uint32_t left_rel_idx;
+	uint32_t right_rel_idx;
+};
+
 extern std::ostream & operator<<(std::ostream &os, const JoinRelation& jr);
 
 typedef thrust::device_vector<RelationID, uninitialized_allocator<RelationID> > uninit_device_vector_relid;
 typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation> > uninit_device_vector_joinrel;
+typedef thrust::device_vector<JoinRelationDpsize, uninitialized_allocator<JoinRelationDpsize> > uninit_device_vector_joinrel_dpsize;
 typedef thrust::device_vector<uint2, uninitialized_allocator<uint2> > uninit_device_vector_uint2;
 
 extern "C" void* gpuqo_malloc(size_t size);

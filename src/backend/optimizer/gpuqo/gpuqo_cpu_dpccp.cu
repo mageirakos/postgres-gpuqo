@@ -113,8 +113,8 @@ void gpuqo_cpu_dpccp_emit(RelationID left_id, RelationID right_id,
 
         Assert(left != memo.end() && right != memo.end());
 
-        JoinRelation *left_rel = left->second;
-        JoinRelation *right_rel = right->second;
+        JoinRelationCPU *left_rel = left->second;
+        JoinRelationCPU *right_rel = right->second;
         RelationID joinset = BMS32_UNION(left_id, right_id);
         int level = BMS32_SIZE(joinset);
 
@@ -138,8 +138,8 @@ void gpuqo_cpu_dpccp_enumerate(GpuqoPlannerInfo* info, join_f join_function, mem
     enumerate_csg(info, gpuqo_cpu_dpccp_emit, memo, extra,  algorithm);
 }
 
-bool gpuqo_cpu_dpccp_check_join(int level, JoinRelation &left_rel,
-                            JoinRelation &right_rel, GpuqoPlannerInfo* info, 
+bool gpuqo_cpu_dpccp_check_join(int level, JoinRelationCPU &left_rel,
+                            JoinRelationCPU &right_rel, GpuqoPlannerInfo* info, 
                             memo_t &memo, extra_t extra){
     
     // No check is necessary since dpccp guarantees all joinpairs are valid
@@ -148,8 +148,8 @@ bool gpuqo_cpu_dpccp_check_join(int level, JoinRelation &left_rel,
     return true;
 }
 
-void gpuqo_cpu_dpccp_post_join(int level, bool newrel, JoinRelation &join_rel, 
-                            JoinRelation &left_rel, JoinRelation &right_rel,
+void gpuqo_cpu_dpccp_post_join(int level, bool newrel, JoinRelationCPU &join_rel, 
+                            JoinRelationCPU &left_rel, JoinRelationCPU &right_rel,
                             GpuqoPlannerInfo* info, 
                             memo_t &memo, extra_t extra){
     // nothing to do

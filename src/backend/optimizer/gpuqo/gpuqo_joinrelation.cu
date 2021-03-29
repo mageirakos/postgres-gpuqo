@@ -23,9 +23,10 @@
 __host__
 std::ostream & operator<<(std::ostream &os, const JoinRelation& jr)
 {
-	os<<"["<<std::bitset<N_TO_SHOW>(jr.id)<<"] ";
-	os<<"("<<std::bitset<N_TO_SHOW>(jr.left_relation_id);
-	os<<","<<std::bitset<N_TO_SHOW>(jr.right_relation_id)<<"):";
+	RelationID jr_id = BMS32_UNION(jr.left_rel_id, jr.right_rel_id);
+	os<<"["<<std::bitset<N_TO_SHOW>(jr_id)<<"] ";
+	os<<"("<<std::bitset<N_TO_SHOW>(jr.left_rel_id);
+	os<<","<<std::bitset<N_TO_SHOW>(jr.right_rel_id)<<"):";
 	os<<"rows="<<jr.rows<<", cost="<<jr.cost;
 	return os;
 }

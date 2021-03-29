@@ -25,19 +25,19 @@
 #include "gpuqo_cpu_sequential.cuh"
 
 void gpuqo_cpu_sequential_join(int level, bool try_swap,
-                            JoinRelation &left_rel, JoinRelation &right_rel,
+                            JoinRelationCPU &left_rel, JoinRelationCPU &right_rel,
                             GpuqoPlannerInfo* info, memo_t &memo, 
                             extra_t extra, struct DPCPUAlgorithm algorithm){
     if (algorithm.check_join_function(level, left_rel, right_rel,
                             info, memo, extra)){
-        JoinRelation *join_rel1, *join_rel2;
+        JoinRelationCPU *join_rel1, *join_rel2;
         bool new_joinrel;
-        new_joinrel = do_join<JoinRelation>(level, join_rel1, 
+        new_joinrel = do_join<JoinRelationCPU>(level, join_rel1, 
                             left_rel, right_rel, info, memo, extra);
         algorithm.post_join_function(level, new_joinrel, *join_rel1, 
                             left_rel,  right_rel, info, memo, extra);
         if (try_swap){
-            new_joinrel = do_join<JoinRelation>(level, join_rel2, right_rel, 
+            new_joinrel = do_join<JoinRelationCPU>(level, join_rel2, right_rel, 
                                 left_rel, info, memo, extra);
             algorithm.post_join_function(level, new_joinrel, *join_rel2,
                                 left_rel, right_rel, info, memo, extra);
@@ -55,12 +55,12 @@ QueryTree* gpuqo_cpu_sequential(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm
     QueryTree* out = NULL;
 
     for(int i=0; i<info->n_rels; i++){
-        JoinRelation *jr = new JoinRelation;
+        JoinRelationCPU *jr = new JoinRelationCPU;
         jr->id = info->base_rels[i].id; 
-        jr->left_relation_id = 0; 
-        jr->left_relation_ptr = NULL; 
-        jr->right_relation_id = 0; 
-        jr->right_relation_ptr = NULL; 
+        jr->left_rel_id = 0; 
+        jr->left_rel_ptr = NULL; 
+        jr->right_rel_id = 0; 
+        jr->right_rel_ptr = NULL; 
         jr->cost = baserel_cost(info->base_rels[i]); 
         jr->rows = info->base_rels[i].rows; 
         jr->edges = info->edge_table[i];

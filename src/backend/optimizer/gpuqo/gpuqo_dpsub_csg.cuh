@@ -68,7 +68,6 @@ public:
         Bitmapset32 cmp_cid = (n_splits_bms)-1 - cid;
     
         JoinRelation jr_out;
-        jr_out.id = BMS32_EMPTY;
         jr_out.cost = INFD;
     
         volatile __shared__ join_stack_elem_t ctxStack[BLOCK_DIM];
@@ -96,9 +95,9 @@ public:
     
             LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
     
-            JoinRelation *left_rel = memo.lookup(l);
-            JoinRelation *right_rel = memo.lookup(r);
-            do_join(jr_out, *left_rel, *right_rel, info);
+            JoinRelation left_rel = *memo.lookup(l);
+            JoinRelation right_rel = *memo.lookup(r);
+            do_join(jr_out, l, left_rel, r, right_rel, info);
         }
         
         return jr_out;

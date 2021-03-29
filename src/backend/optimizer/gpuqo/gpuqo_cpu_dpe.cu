@@ -84,8 +84,8 @@ void process_depbuf(DependencyBuffer* depbuf, GpuqoPlannerInfo* info){
             );
             
             if (join_rel->cost < memo_join_rel->cost){
-                // copy only the JoinRelation part, not num_entry
-                *((JoinRelation*)memo_join_rel) = *((JoinRelation*)join_rel);
+                // copy only the JoinRelationCPU part, not num_entry
+                *((JoinRelationCPU*)memo_join_rel) = *((JoinRelationCPU*)join_rel);
             }
 
             delete join_rel;
@@ -170,7 +170,7 @@ bool submit_join(int level, JoinRelationDPE* &join_rel,
 
 // instead of join it is more of a distribution of jobs
 void gpuqo_cpu_dpe_join(int level, bool try_swap,
-                            JoinRelation &left_rel, JoinRelation &right_rel,
+                            JoinRelationCPU &left_rel, JoinRelationCPU &right_rel,
                             GpuqoPlannerInfo* info, memo_t &memo, 
                             extra_t extra, struct DPCPUAlgorithm algorithm){
     if (algorithm.check_join_function(level, left_rel, right_rel, info, memo, extra)){
@@ -181,7 +181,7 @@ void gpuqo_cpu_dpe_join(int level, bool try_swap,
                 info, memo, extra
         );
         algorithm.post_join_function(level, new_joinrel, 
-                            *((JoinRelation*)join_rel1), 
+                            *((JoinRelationCPU*)join_rel1), 
                             left_rel,  right_rel, info, memo, extra);
         if (try_swap){
             new_joinrel = submit_join(level, join_rel2, 
@@ -189,7 +189,7 @@ void gpuqo_cpu_dpe_join(int level, bool try_swap,
                 info, memo, extra
             );
             algorithm.post_join_function(level, new_joinrel, 
-                                *((JoinRelation*)join_rel2), 
+                                *((JoinRelationCPU*)join_rel2), 
                                 left_rel, right_rel, info, memo, extra);
         }
     }
@@ -276,15 +276,15 @@ QueryTree* gpuqo_cpu_dpe(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm){
     for(int i=0; i<info->n_rels; i++){
         JoinRelationDPE *jr = new JoinRelationDPE;
         jr->id = info->base_rels[i].id; 
-        jr->left_relation_id = 0; 
-        jr->left_relation_ptr = NULL; 
-        jr->right_relation_id = 0; 
-        jr->right_relation_ptr = NULL; 
+        jr->left_rel_id = 0; 
+        jr->left_rel_ptr = NULL; 
+        jr->right_rel_id = 0; 
+        jr->right_rel_ptr = NULL; 
         jr->cost = baserel_cost(info->base_rels[i]); 
         jr->rows = info->base_rels[i].rows; 
         jr->edges = info->edge_table[i];
         jr->num_entry.store(0, std::memory_order_consume);
-        memo.insert(std::make_pair(info->base_rels[i].id, (JoinRelation*) jr));
+        memo.insert(std::make_pair(info->base_rels[i].id, (JoinRelationCPU*) jr));
     }
 
     algorithm.init_function(info, memo, extra);

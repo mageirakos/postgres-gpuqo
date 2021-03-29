@@ -23,7 +23,7 @@ bool is_disjoint(RelationID left_rel_id, RelationID right_rel_id)
 
 __host__ __device__
 __forceinline__
-bool is_disjoint(JoinRelation &left_rel, JoinRelation &right_rel)
+bool is_disjoint(JoinRelationDetailed &left_rel, JoinRelationDetailed &right_rel)
 { 
     return is_disjoint(left_rel.id, right_rel.id);
 }
@@ -33,8 +33,8 @@ __forceinline__
 bool is_disjoint(JoinRelation &join_rel)
 {
     return is_disjoint(
-        join_rel.left_relation_id, 
-        join_rel.right_relation_id
+        join_rel.left_rel_id, 
+        join_rel.right_rel_id
     );
 }
 
@@ -48,8 +48,9 @@ bool are_connected(EdgeMask left_edges, RelationID right_id,
 
 __host__ __device__
 __forceinline__
-bool are_connected(JoinRelation &left_rel, JoinRelation &right_rel,
-                GpuqoPlannerInfo* info)
+bool are_connected(JoinRelationDetailed &left_rel, 
+                    JoinRelationDetailed &right_rel,
+                    GpuqoPlannerInfo* info)
 {
     return are_connected(left_rel.edges, right_rel.id, info);
 }

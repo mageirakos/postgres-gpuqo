@@ -36,7 +36,7 @@
 #define KB 1024ULL
 #define MB (KB*1024)
 #define GB (MB*1024)
-#define RELSIZE (sizeof(JoinRelation)+sizeof(RelationID))
+#define RELSIZE (sizeof(JoinRelationDpsize)+sizeof(RelationID))
 #define SCR_ENTRY_SIZE (sizeof(uint2)+sizeof(RelationID))
 
 int gpuqo_scratchpad_size_mb;
@@ -50,7 +50,7 @@ int gpuqo_min_memo_size_mb;
 struct unrankDPSize : public thrust::unary_function< uint32_t,thrust::tuple<RelationID, uint2> >
 {
     thrust::device_ptr<RelationID> memo_keys;
-    thrust::device_ptr<JoinRelation> memo_vals;
+    thrust::device_ptr<JoinRelationDpsize> memo_vals;
     thrust::device_ptr<uint32_t> partition_offsets;
     thrust::device_ptr<uint32_t> partition_sizes;
     int iid;
@@ -58,7 +58,7 @@ struct unrankDPSize : public thrust::unary_function< uint32_t,thrust::tuple<Rela
 public:
     unrankDPSize(
         thrust::device_ptr<RelationID> _memo_keys,
-        thrust::device_ptr<JoinRelation> _memo_vals,
+        thrust::device_ptr<JoinRelationDpsize> _memo_vals,
         thrust::device_ptr<uint32_t> _partition_offsets,
         thrust::device_ptr<uint32_t> _partition_sizes,
         int _iid,
@@ -124,12 +124,12 @@ public:
 struct filterJoinedDisconnected : public thrust::unary_function<thrust::tuple<RelationID, uint2>, bool>
 {
     thrust::device_ptr<RelationID> memo_keys;
-    thrust::device_ptr<JoinRelation> memo_vals;
+    thrust::device_ptr<JoinRelationDpsize> memo_vals;
     GpuqoPlannerInfo* info;
 public:
     filterJoinedDisconnected(
         thrust::device_ptr<RelationID> _memo_keys,
-        thrust::device_ptr<JoinRelation> _memo_vals,
+        thrust::device_ptr<JoinRelationDpsize> _memo_vals,
         GpuqoPlannerInfo* _info
     ) : memo_keys(_memo_keys), memo_vals(_memo_vals), info(_info)
     {}
@@ -147,7 +147,7 @@ public:
             idxs.y
         );
         
-        JoinRelation& left_rel = memo_vals.get()[idxs.x];
+        JoinRelationDpsize& left_rel = memo_vals.get()[idxs.x];
         RelationID& right_id = memo_keys.get()[idxs.y];
 
         if (!is_disjoint(left_rel.id, right_id)) // not disjoint
@@ -159,46 +159,50 @@ public:
 };
 
 
-struct joinCost : public thrust::unary_function<uint2,JoinRelation>
+struct joinCost : public thrust::unary_function<uint2,JoinRelationDpsize>
 {
     thrust::device_ptr<RelationID> memo_keys;
-    thrust::device_ptr<JoinRelation> memo_vals;
+    thrust::device_ptr<JoinRelationDpsize> memo_vals;
     GpuqoPlannerInfo* info;
 public:
     joinCost(
         thrust::device_ptr<RelationID> _memo_keys,
-        thrust::device_ptr<JoinRelation> _memo_vals,
+        thrust::device_ptr<JoinRelationDpsize> _memo_vals,
         GpuqoPlannerInfo* _info
     ) : memo_keys(_memo_keys), memo_vals(_memo_vals), info(_info)
     {}
 
     __device__
-    JoinRelation operator()(uint2 idxs){
-        JoinRelation jr;
+    JoinRelationDpsize operator()(uint2 idxs){
+        JoinRelationDpsize jr;
 
-        make_join_rel(jr, 
-            idxs.x,
-            memo_vals.get()[idxs.x], 
-            idxs.y,
-            memo_vals.get()[idxs.y], 
-            info
-        );
+        JoinRelationDpsize& left_rel = memo_vals.get()[idxs.x];
+        JoinRelationDpsize& right_rel = memo_vals.get()[idxs.y];
+
+        jr.id = BMS32_UNION(left_rel.id, right_rel.id);
+        jr.left_rel_id = left_rel.id;
+        jr.left_rel_idx = idxs.x;
+        jr.right_rel_id = right_rel.id;
+        jr.right_rel_idx = idxs.y;
+        jr.edges = BMS32_UNION(left_rel.edges, right_rel.edges);
+        jr.rows = estimate_join_rows(left_rel.id, left_rel, right_rel.id, right_rel, info);
+        jr.cost = calc_join_cost(left_rel.id, left_rel, right_rel.id, right_rel, jr.rows, info);
 
         return jr;
     }
 };
 
-struct joinRelToUint2 : public thrust::unary_function<thrust::tuple<RelationID,JoinRelation>,thrust::tuple<RelationID,uint2> >
+struct joinRelToUint2 : public thrust::unary_function<thrust::tuple<RelationID,JoinRelationDpsize>,thrust::tuple<RelationID,uint2> >
 {
 public:
     joinRelToUint2() {}
 
     __device__
-    thrust::tuple<RelationID,uint2> operator()(thrust::tuple<RelationID,JoinRelation> t){
-        JoinRelation& jr = t.get<1>();
+    thrust::tuple<RelationID,uint2> operator()(thrust::tuple<RelationID,JoinRelationDpsize> t){
+        JoinRelationDpsize& jr = t.get<1>();
         return thrust::make_tuple(
             t.get<0>(),
-            make_uint2(jr.left_relation_idx, jr.right_relation_idx)
+            make_uint2(jr.left_rel_idx, jr.right_rel_idx)
         );
     }
 };
@@ -231,7 +235,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
         scratchpad_size, prune_threshold);
     
     uninit_device_vector_relid gpu_memo_keys(memo_size);
-    uninit_device_vector_joinrel gpu_memo_vals(memo_size);
+    uninit_device_vector_joinrel_dpsize gpu_memo_vals(memo_size);
     thrust::host_vector<uint32_t> partition_offsets(info->n_rels);
     thrust::host_vector<uint32_t> partition_sizes(info->n_rels);
     thrust::device_vector<uint32_t> gpu_partition_offsets(info->n_rels);
@@ -241,12 +245,12 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
     for(int i=0; i<info->n_rels; i++){
         gpu_memo_keys[i] = info->base_rels[i].id;
 
-        JoinRelation t;
+        JoinRelationDpsize t;
         t.id = info->base_rels[i].id;
-        t.left_relation_idx = 0; 
-        t.left_relation_id = 0; 
-        t.right_relation_idx = 0; 
-        t.right_relation_id = 0; 
+        t.left_rel_idx = 0; 
+        t.left_rel_id = 0; 
+        t.right_rel_idx = 0; 
+        t.right_rel_id = 0; 
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
         t.edges = info->edge_table[i];
@@ -477,7 +481,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                     gpu_memo_keys.begin()+partition_offsets[i-1],
                     gpu_memo_vals.begin()+partition_offsets[i-1],
                     thrust::equal_to<RelationID>(),
-                    thrust::minimum<JoinRelation>()
+                    thrust::minimum<JoinRelationDpsize>()
                 );
     
                 STOP_TIMING(compute_prune);
@@ -524,7 +528,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
 
         START_TIMING(build_qt);
             
-        buildQueryTree(partition_offsets[info->n_rels-1], gpu_memo_vals, &out);
+        dpsize_buildQueryTree(partition_offsets[info->n_rels-1], gpu_memo_vals, &out);
     
         STOP_TIMING(build_qt);
     
