@@ -40,6 +40,9 @@ private:
     __host__
     void deviceErrorCheck();
 
+    __host__ 
+    void _insert(K* keys, V* values, size_t n);
+
 public:
     static const K EMPTY = std::numeric_limits<K>::max();
 

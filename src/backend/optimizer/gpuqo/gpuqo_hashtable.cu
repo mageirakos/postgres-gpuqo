@@ -148,17 +148,7 @@ void HashTable<K,V,Kint>::lookup(K* in_keys, V* out_values, size_t n){
 
 template <typename K, typename V, typename Kint>
 __host__
-void HashTable<K,V,Kint>::insert(K* in_keys, V* in_values, size_t n){
-    LOG_DEBUG("HashTable::insert(%llx, %llx, %u)\n", in_keys, in_values, n);
-
-    debugDump();
-
-    // check if I need to grow the hashtable
-    n_elems_ub += n;
-    if (n_elems_ub > capacity/2 && capacity < max_capacity){
-        resize(min(ceilPow2(n_elems_ub)*2, max_capacity));
-    }
-    
+void HashTable<K,V,Kint>::_insert(K* in_keys, V* in_values, size_t n){
     // Have CUDA calculate the thread block size
     int mingridsize;
     int threadblocksize;
@@ -171,6 +161,21 @@ void HashTable<K,V,Kint>::insert(K* in_keys, V* in_values, size_t n){
     deviceErrorCheck();
 }
 
+template <typename K, typename V, typename Kint>
+__host__
+void HashTable<K,V,Kint>::insert(K* in_keys, V* in_values, size_t n){
+    LOG_DEBUG("HashTable::insert(%llx, %llx, %u)\n", in_keys, in_values, n);
+
+    debugDump();
+
+    // check if I need to grow the hashtable
+    n_elems_ub += n;
+    if (n_elems_ub > capacity/2 && capacity < max_capacity){
+        resize(min(ceilPow2(n_elems_ub)*2, max_capacity));
+    }
+
+    _insert(in_keys, in_values, n);
+}
 
 template <typename K, typename V, typename Kint>
 __host__
@@ -184,7 +189,7 @@ void HashTable<K,V,Kint>::resize(size_t _capacity){
 
     deviceMalloc();
 
-    insert(old_keys, old_values, old_capacity);
+    _insert(old_keys, old_values, old_capacity);
 
     cudaFree(old_keys);
     cudaFree(old_values);
