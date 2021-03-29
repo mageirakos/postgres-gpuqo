@@ -87,7 +87,7 @@ RelationID grow(RelationID from, RelationID subset, EdgeMask* edge_table)
         // pop one of the not visited neighbours 
         int baserel_idx = BMS32_LOWEST_POS(N)-2;
 
-        LOG_DEBUG("[%u] N=%u V=%u i=%d\n", relid, N, V, baserel_idx);
+        LOG_DEBUG("[%u] N=%u V=%u i=%d\n", from, N, V, baserel_idx);
 
         // mark as visited
         V = BMS32_SET(V, baserel_idx+1);
