@@ -101,14 +101,6 @@ public:
 struct JoinRelationDetailed : public JoinRelation{
 	RelationID id;
 	EdgeMask edges;
-
-
-	union{
-		struct JoinRelation* left_rel_ptr;
-	};
-	union{
-		struct JoinRelation* right_rel_ptr;
-	};
 };
 
 struct JoinRelationDpsize : public JoinRelationDetailed {
