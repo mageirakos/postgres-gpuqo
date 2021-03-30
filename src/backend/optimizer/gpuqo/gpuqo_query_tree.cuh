@@ -51,7 +51,7 @@ void dpsize_buildQueryTree(uint32_t idx, Container &gpu_memo_vals, QueryTree **q
     }
 
     dpsize_buildQueryTree<Container>(jr.left_rel_idx, gpu_memo_vals, &((*qt)->left));
-    dpsize_buildQueryTree<Container>(jr.left_rel_idx, gpu_memo_vals, &((*qt)->right));
+    dpsize_buildQueryTree<Container>(jr.right_rel_idx, gpu_memo_vals, &((*qt)->right));
 }
 
 template <typename Container>
