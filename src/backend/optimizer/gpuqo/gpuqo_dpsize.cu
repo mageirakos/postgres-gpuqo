@@ -248,9 +248,9 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
         JoinRelationDpsize t;
         t.id = info->base_rels[i].id;
         t.left_rel_idx = 0; 
-        t.left_rel_id = 0; 
+        t.left_rel_id = BMS32_EMPTY; 
         t.right_rel_idx = 0; 
-        t.right_rel_id = 0; 
+        t.right_rel_id = BMS32_EMPTY; 
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
         t.edges = info->edge_table[i];
