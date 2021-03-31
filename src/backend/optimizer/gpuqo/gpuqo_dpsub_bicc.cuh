@@ -97,7 +97,7 @@ static void bfs_bicc_bfs(RelationID relid, const EdgeMask* edges,
 
     __syncwarp();
 
-    for (int i=0; i<31; i++){
+    for (int i=0; i<BMS32_SIZE(relid); i++){
         if (BMS32_INTERSECTS(BMS32_NTH(LANE_ID), LQ[i])){
             int x = LANE_ID;
 
@@ -157,7 +157,7 @@ static int bfs_bicc(RelationID relid, const EdgeMask* edges, RelationID *blocks)
 
     LOG_DEBUG("L[%d]=%u\tP[%d]=%u\n", LANE_ID, L[LANE_ID], LANE_ID, P[LANE_ID]);
 
-    for (int i = 31; i>0; i--){
+    for (int i = BMS32_SIZE(relid)-1; i>0; i--){
         bfs_bicc_bfs_lv_ret s;
         uint32_t u = LANE_ID;
         uint32_t v = P[u];
