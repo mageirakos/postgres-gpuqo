@@ -169,13 +169,19 @@ __device__ void blockReduceMin(volatile int* s_indexes,
   *
   *	 evaluation algorithm for DPsub GPU variant with partial pruning
   */
-template<int n_splits, typename BinaryFunction>
+template<int n_splits, dpsub_filtered_evaluate_t Function>
 __global__
-void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, BinaryFunction enum_functor){
+void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, HashTable32bit memo, GpuqoPlannerInfo *info){
     uint32_t n_threads_cuda = blockDim.x * gridDim.x;
 
     __shared__ volatile float shared_costs[BLOCK_DIM];
     __shared__ volatile int shared_idxs[BLOCK_DIM];
+
+    __shared__ EdgeMask edge_table[32];
+    for (int i = threadIdx.x; i < info->n_rels; i+=n_threads_cuda){
+        edge_table[i] = info->edge_table[i];
+    }
+    __syncthreads();
     
     for (uint32_t tid = blockIdx.x*blockDim.x + threadIdx.x; 
         tid < n_splits*n_sets; 
@@ -191,7 +197,8 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
         LOG_DEBUG("[%u] n_splits=%d, rid=%u, cid=%u, relid=%u\n", 
                 tid, n_splits, rid, cid, relid);
         
-        JoinRelation jr_out = enum_functor(relid, cid);
+        JoinRelation jr_out = Function(relid, cid, n_splits, edge_table, 
+                                        memo, info);
         shared_idxs[threadIdx.x] = threadIdx.x;
         shared_costs[threadIdx.x] = jr_out.cost;
 
@@ -211,66 +218,66 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
     }
 }
 
-template<int n_splits, typename BinaryFunction>
-void _launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, BinaryFunction enum_functor)
+template<int n_splits, dpsub_filtered_evaluate_t Function>
+void _launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, HashTable32bit &memo, GpuqoPlannerInfo *info)
 {
     int blocksize = BLOCK_DIM;
     
     int mingridsize;
     int threadblocksize;
     cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, 
-        evaluateFilteredDPSubKernel<n_splits, BinaryFunction>, 0, blocksize);
+        evaluateFilteredDPSubKernel<n_splits, Function>, 0, blocksize);
 
     int gridsize = min(mingridsize, ceil_div(n_sets*n_splits, blocksize));
         
-    cudaFuncSetCacheConfig(evaluateFilteredDPSubKernel<n_splits, BinaryFunction>, cudaFuncCachePreferL1);
+    cudaFuncSetCacheConfig(evaluateFilteredDPSubKernel<n_splits, Function>, cudaFuncCachePreferL1);
 
     // n_splits is a power of 2 and is lower than or equal to BLOCK_DIM
     Assert(BMS32_SIZE(n_splits) == 1 && n_splits <= BLOCK_DIM);
 
-    evaluateFilteredDPSubKernel<n_splits, BinaryFunction><<<gridsize, blocksize>>>(
+    evaluateFilteredDPSubKernel<n_splits, Function><<<gridsize, blocksize>>>(
         pending_keys, scratchpad_keys, scratchpad_vals,
         sq, qss, 
         n_pending_sets, n_sets,
-        enum_functor
+        memo, info
     );
 }
 
-template<typename BinaryFunction>
-void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_sets, BinaryFunction enum_functor){
+template<dpsub_filtered_evaluate_t Function>
+void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_sets, HashTable32bit &memo, GpuqoPlannerInfo *info){
     switch(n_splits){
     case    1:
-        _launchEvaluateFilteredDPSubKernel<   1, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel<   1, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     case    2:
-        _launchEvaluateFilteredDPSubKernel<   2, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel<   2, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     case    4:
-        _launchEvaluateFilteredDPSubKernel<   4, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel<   4, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     case    8:
-        _launchEvaluateFilteredDPSubKernel<   8, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel<   8, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     case   16:
-        _launchEvaluateFilteredDPSubKernel<  16, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel<  16, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     case   32:
-        _launchEvaluateFilteredDPSubKernel<  32, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel<  32, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     case   64:
-        _launchEvaluateFilteredDPSubKernel<  64, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel<  64, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     case  128:
-        _launchEvaluateFilteredDPSubKernel< 128, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel< 128, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     case  256:
-        _launchEvaluateFilteredDPSubKernel< 256, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel< 256, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     case  512:
-        _launchEvaluateFilteredDPSubKernel< 512, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel< 512, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     case 1024:
-        _launchEvaluateFilteredDPSubKernel<1024, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        _launchEvaluateFilteredDPSubKernel<1024, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
     }
 }
@@ -317,7 +324,7 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
 
         START_TIMING(compute);
         if (use_csg) {
-            launchEvaluateFilteredDPSubKernel(
+            launchEvaluateFilteredDPSubKernel<dpsubEnumerateCsg>(
                 thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
                 thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
                 thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
@@ -326,14 +333,11 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
                 n_pending_sets,
                 threads_per_set,
                 n_eval_sets,
-                dpsubEnumerateCsg(
-                    *params.memo,
-                    params.info,
-                    threads_per_set
-                )
+                *params.memo,
+                params.info
             );
         } else {
-            launchEvaluateFilteredDPSubKernel(
+            launchEvaluateFilteredDPSubKernel<dpsubEnumerateAllSubs>(
                 thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
                 thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
                 thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
@@ -342,11 +346,8 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
                 n_pending_sets,
                 threads_per_set,
                 n_eval_sets,
-                dpsubEnumerateAllSubs(
-                    *params.memo,
-                    params.info,
-                    threads_per_set
-                )  
+                *params.memo,
+                params.info
             );
         }           
         STOP_TIMING(compute);
@@ -395,7 +396,7 @@ uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
         uint32_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);
 
         START_TIMING(compute);
-        launchEvaluateFilteredDPSubKernel(
+        launchEvaluateFilteredDPSubKernel<dpsubEnumerateBiCC>(
             thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
             thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
             thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
@@ -404,11 +405,8 @@ uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
             n_pending_sets,
             threads_per_set,
             n_eval_sets,
-            dpsubEnumerateBiCC(
-                *params.memo,
-                params.info,
-                threads_per_set
-            )
+            *params.memo,
+            params.info
         );     
         STOP_TIMING(compute);
 
@@ -460,7 +458,7 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
 
         START_TIMING(compute);
         if (gpuqo_spanning_tree_enable){
-            launchEvaluateFilteredDPSubKernel(
+            launchEvaluateFilteredDPSubKernel<dpsubEnumerateTreeWithSubtrees>(
                 thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
                 thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
                 thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
@@ -469,14 +467,11 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
                 n_pending_sets,
                 threads_per_set,
                 n_eval_sets,
-                dpsubEnumerateTreeWithSubtrees(                
-                    *params.memo,
-                    params.info,
-                    threads_per_set
-                ) 
+                *params.memo,
+                params.info
             );
         } else {
-            launchEvaluateFilteredDPSubKernel(
+            launchEvaluateFilteredDPSubKernel<dpsubEnumerateTreeSimple>(
                 thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
                 thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
                 thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
@@ -485,11 +480,8 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
                 n_pending_sets,
                 threads_per_set,
                 n_eval_sets,
-                dpsubEnumerateTreeSimple(
-                    *params.memo,
-                    params.info,
-                    threads_per_set
-                )
+                *params.memo,
+                params.info
             );
         }
                     

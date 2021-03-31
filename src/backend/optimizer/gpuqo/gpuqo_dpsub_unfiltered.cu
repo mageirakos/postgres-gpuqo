@@ -36,6 +36,32 @@
 #include "gpuqo_dpsub.cuh"
 #include "gpuqo_dpsub_enum_all_subs.cuh"
 
+struct dpsubEnumerateAllSubsFunctor : public pairs_enum_func_t 
+{
+    HashTable32bit memo;
+    GpuqoPlannerInfo* info;
+    int n_splits;
+public:
+    dpsubEnumerateAllSubsFunctor(
+        HashTable32bit _memo,
+        GpuqoPlannerInfo* _info,
+        int _n_splits
+    ) : memo(_memo), info(_info), n_splits(_n_splits)
+    {}
+
+    __device__
+    JoinRelation operator()(RelationID relid, uint32_t cid)
+    {
+        int n_active = __popc(__activemask());
+        __shared__ EdgeMask edge_table[32];
+        for (int i = threadIdx.x; i < info->n_rels; i+=n_active){
+            edge_table[i] = info->edge_table[i];
+        }
+        __syncthreads();
+        return dpsubEnumerateAllSubs(relid, cid, n_splits, edge_table, 
+            memo, info);
+    }
+};
 /* unrankEvaluateDPSub
  *
  *	 unrank algorithm for DPsub GPU variant with embedded evaluation and 
@@ -127,8 +153,8 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
                 params.gpu_scratchpad_keys.begin()+n_threads,
                 params.gpu_scratchpad_vals.begin()+n_threads
             )),
-            unrankEvaluateDPSub<dpsubEnumerateAllSubs>(
-                dpsubEnumerateAllSubs(
+            unrankEvaluateDPSub<dpsubEnumerateAllSubsFunctor>(
+                dpsubEnumerateAllSubsFunctor(
                     *params.memo,
                     params.info,
                     threads_per_set

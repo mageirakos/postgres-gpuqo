@@ -36,6 +36,7 @@ template<int MAX_RELS, int STACK_SIZE>
 __device__
 static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     JoinRelation &jr_out, join_stack_t &join_stack,
+                    EdgeMask* edge_table, 
                     HashTable32bit &memo, GpuqoPlannerInfo* info);
 
 template<int STACK_SIZE>
@@ -46,63 +47,53 @@ static void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
             JoinRelation &jr_out, join_stack_t &join_stack, 
             HashTable32bit &memo, GpuqoPlannerInfo* info, EdgeMask* edge_table);
 
-struct dpsubEnumerateCsg : public pairs_enum_func_t 
-{
-    HashTable32bit memo;
-    GpuqoPlannerInfo* info;
-    int n_splits;
-public:
-    dpsubEnumerateCsg(
-        HashTable32bit _memo,
-        GpuqoPlannerInfo* _info,
-        int _n_splits
-    ) : memo(_memo), info(_info), n_splits(_n_splits)
-    {}
+__device__
+static JoinRelation dpsubEnumerateCsg(RelationID relid, uint32_t cid, 
+                                int n_splits, EdgeMask* edge_table,
+                                HashTable32bit &memo, GpuqoPlannerInfo* info)
+{ 
+    Assert(n_splits % 32 == 0 && BMS32_SIZE((Bitmapset32) n_splits) == 1);
 
-    __device__
-    JoinRelation operator()(RelationID relid, uint32_t cid)
-    { 
-        Assert(n_splits % 32 == 0 && BMS32_SIZE((Bitmapset32) n_splits) == 1);
+    Bitmapset32 n_splits_bms = BMS32_HIGHEST((Bitmapset32) n_splits);
+    Bitmapset32 cmp_cid = (n_splits_bms)-1 - cid;
+
+    JoinRelation jr_out;
+    jr_out.cost = INFD;
+
+    volatile __shared__ join_stack_elem_t ctxStack[BLOCK_DIM];
+    join_stack_t join_stack;
+    join_stack.ctxStack = ctxStack;
+    join_stack.stackTop = 0;
+
+    Assert(BMS32_HIGHEST_POS(n_splits_bms)-1 <= BMS32_SIZE(relid));
+    LOG_DEBUG("[%u, %u] n_splits_bms=%u, cmp_cid=%u\n", 
+        relid, cid, n_splits_bms, cmp_cid);
+
+    Assert(BMS32_UNION(cid, cmp_cid) == n_splits_bms-1);
+    Assert(!BMS32_INTERSECTS(cid, cmp_cid));
+
+    RelationID inc_set = BMS32_EXPAND_TO_MASK(cid, relid);
+    RelationID exc_set = BMS32_EXPAND_TO_MASK(cmp_cid, relid);
     
-        Bitmapset32 n_splits_bms = BMS32_HIGHEST((Bitmapset32) n_splits);
-        Bitmapset32 cmp_cid = (n_splits_bms)-1 - cid;
-    
-        JoinRelation jr_out;
-        jr_out.cost = INFD;
-    
-        volatile __shared__ join_stack_elem_t ctxStack[BLOCK_DIM];
-        join_stack_t join_stack;
-        join_stack.ctxStack = ctxStack;
-        join_stack.stackTop = 0;
-    
-        Assert(BMS32_HIGHEST_POS(n_splits_bms)-1 <= BMS32_SIZE(relid));
-        LOG_DEBUG("[%u, %u] n_splits_bms=%u, cmp_cid=%u\n", 
-            relid, cid, n_splits_bms, cmp_cid);
-    
-        Assert(BMS32_UNION(cid, cmp_cid) == n_splits_bms-1);
-        Assert(!BMS32_INTERSECTS(cid, cmp_cid));
-    
-        RelationID inc_set = BMS32_EXPAND_TO_MASK(cid, relid);
-        RelationID exc_set = BMS32_EXPAND_TO_MASK(cmp_cid, relid);
-        
-        enumerate_sub_csg<32,64>(relid, inc_set, exc_set, jr_out, join_stack, memo, info);
-    
-        if (LANE_ID < join_stack.stackTop){
-            int pos = W_OFFSET + join_stack.stackTop - LANE_ID - 1;
-            Assert(pos >= W_OFFSET && pos < W_OFFSET + WARP_SIZE);
-            RelationID l = join_stack.ctxStack[pos];
-            RelationID r = BMS32_DIFFERENCE(relid, l);
-    
-            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
-    
-            JoinRelation left_rel = *memo.lookup(l);
-            JoinRelation right_rel = *memo.lookup(r);
-            do_join(jr_out, l, left_rel, r, right_rel, info);
-        }
-        
-        return jr_out;
+    enumerate_sub_csg<32,64>(relid, inc_set, exc_set, jr_out, join_stack, edge_table,
+        memo, info);
+
+    if (LANE_ID < join_stack.stackTop){
+        int pos = W_OFFSET + join_stack.stackTop - LANE_ID - 1;
+        Assert(pos >= W_OFFSET && pos < W_OFFSET + WARP_SIZE);
+        RelationID l = join_stack.ctxStack[pos];
+        RelationID r = BMS32_DIFFERENCE(relid, l);
+
+        LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", 
+                W_OFFSET, LANE_ID, pos, l, r);
+
+        JoinRelation left_rel = *memo.lookup(l);
+        JoinRelation right_rel = *memo.lookup(r);
+        do_join(jr_out, l, left_rel, r, right_rel, info);
     }
-};
+    
+    return jr_out;
+}
 
 template<int STACK_SIZE>
 __device__ 
@@ -150,7 +141,8 @@ template<int MAX_RELS, int STACK_SIZE>
 __device__
 static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     JoinRelation &jr_out, join_stack_t &join_stack,
-                    HashTable32bit &memo, GpuqoPlannerInfo* info){
+                    EdgeMask* edge_table, HashTable32bit &memo, 
+                    GpuqoPlannerInfo* info){
     RelationID R = BMS32_UNION(I, E);
 
     Assert(BMS32_IS_SUBSET(I, T));
@@ -165,12 +157,6 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
     stack.stackTop = 0;
 
     LOG_DEBUG("[%d: %d] lanemask_le=%u\n", W_OFFSET, LANE_ID, LANE_MASK_LE);
-
-    __shared__ EdgeMask edge_table[STACK_SIZE];
-    for (int i = threadIdx.x; i < info->n_rels; i+=blockDim.x){
-        edge_table[i] = info->edge_table[i];
-    }
-    __syncthreads();
 
     RelationID temp;
     if (I != BMS32_EMPTY){

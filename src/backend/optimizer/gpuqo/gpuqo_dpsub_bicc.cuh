@@ -207,109 +207,90 @@ static int bfs_bicc(RelationID relid, const EdgeMask* edges, RelationID *blocks)
     return n_blocks;
 }
 
-struct dpsubEnumerateBiCC : public pairs_enum_func_t 
-{
-    HashTable32bit memo;
-    GpuqoPlannerInfo* info;
-    int n_splits;
-public:
-    dpsubEnumerateBiCC(
-        HashTable32bit _memo,
-        GpuqoPlannerInfo* _info,
-        int _n_splits
-    ) : memo(_memo), info(_info), n_splits(_n_splits)
-    {}
+__device__
+static JoinRelation dpsubEnumerateBiCC(RelationID relid, 
+                        uint32_t cid, int n_splits, EdgeMask* edge_table,
+                        HashTable32bit &memo, GpuqoPlannerInfo* info)
+{ 
+    JoinRelation jr_out;
+    jr_out.cost = INFD;
 
-    __device__
-    JoinRelation operator()(RelationID relid, uint32_t cid)
-    { 
-        JoinRelation jr_out;
-        jr_out.cost = INFD;
-    
-        Assert(n_splits == 32);
+    Assert(n_splits == 32);
 
-        int t_off = threadIdx.x >> 5;
+    int t_off = threadIdx.x >> 5;
 
-        int n_active = __popc(__activemask());
-        __shared__ EdgeMask edge_table[32];
-        for (int i = threadIdx.x; i < info->n_rels; i+=n_active){
-            edge_table[i] = info->edge_table[i];
-        }
-        __syncthreads();
+    Assert(blockDim.x == BLOCK_DIM);
+    volatile __shared__ join_stack_elem_t ctxStack[BLOCK_DIM];
+    join_stack_t stack;
+    stack.ctxStack = ctxStack;
+    stack.stackTop = 0;
 
-        Assert(blockDim.x == BLOCK_DIM);
-        volatile __shared__ join_stack_elem_t ctxStack[BLOCK_DIM];
-        join_stack_t stack;
-        stack.ctxStack = ctxStack;
-        stack.stackTop = 0;
+    __shared__ RelationID shared_blocks[32*BLOCK_DIM/32];
+    RelationID* blocks = shared_blocks + t_off*32;
 
-        __shared__ RelationID shared_blocks[32*BLOCK_DIM/32];
-        RelationID* blocks = shared_blocks + t_off*32;
+    int n_blocks = bfs_bicc(relid, edge_table, blocks);
 
-        int n_blocks = bfs_bicc(relid, edge_table, blocks);
+    LOG_DEBUG("%u has %d blocks\n", relid, n_blocks);
 
-        LOG_DEBUG("%u has %d blocks\n", relid, n_blocks);
+    uint32_t n_possible_joins = 0;
+    for (int i=0; i<n_blocks; i++){
+        n_possible_joins += (1 << BMS32_SIZE(blocks[i])) - 2;
+    }
 
-        uint32_t n_possible_joins = 0;
-        for (int i=0; i<n_blocks; i++){
-            n_possible_joins += (1 << BMS32_SIZE(blocks[i])) - 2;
-        }
+    LOG_DEBUG("relid=%u: n_possible_joins=%u\n", relid, n_possible_joins);
 
-        LOG_DEBUG("relid=%u: n_possible_joins=%u\n", relid, n_possible_joins);
+    uint32_t n_joins = ceil_div(n_possible_joins, n_splits);
+    uint32_t from_i = cid*n_joins;
+    uint32_t to_i   = (cid+1)*n_joins;
+    uint32_t i_block = 0;
+    uint32_t psum = (1 << BMS32_SIZE(blocks[i_block])) - 2;
+    uint32_t prev_psum = 0;
 
-        uint32_t n_joins = ceil_div(n_possible_joins, n_splits);
-        uint32_t from_i = cid*n_joins;
-        uint32_t to_i   = (cid+1)*n_joins;
-        uint32_t i_block = 0;
-        uint32_t psum = (1 << BMS32_SIZE(blocks[i_block])) - 2;
-        uint32_t prev_psum = 0;
-    
-        for (uint32_t i = from_i; i < to_i; i++){
-            RelationID l, r;
-            bool valid = false;
+    for (uint32_t i = from_i; i < to_i; i++){
+        RelationID l, r;
+        bool valid = false;
 
-            if (i < n_possible_joins){
-                while (i >= psum){
-                    prev_psum = psum;
-                    psum += (1 << BMS32_SIZE(blocks[++i_block])) - 2;
-                }
-                
-                RelationID id = i - prev_psum + 1;
-                RelationID block_left_id = BMS32_EXPAND_TO_MASK(id,blocks[i_block]);
-                RelationID block_right_id = BMS32_DIFFERENCE(blocks[i_block], block_left_id);
-
-                LOG_DEBUG("relid=%u, i=%u: id=%u, block[%d]=%u, bl=%u, br=%u\n",
-                            relid, i, id, i_block, blocks[i_block], 
-                            block_left_id, block_right_id);
-
-                l = grow(BMS32_LOWEST(block_left_id), 
-                                BMS32_DIFFERENCE(relid, block_right_id), 
-                                edge_table);
-                r = grow(BMS32_LOWEST(block_right_id), 
-                                BMS32_DIFFERENCE(relid, block_left_id), 
-                                edge_table);
-                
-                valid = BMS32_UNION(l, r) == relid;
+        if (i < n_possible_joins){
+            while (i >= psum){
+                prev_psum = psum;
+                psum += (1 << BMS32_SIZE(blocks[++i_block])) - 2;
             }
             
-            try_join<false,false>(relid, jr_out, l, r, valid, stack, memo, info);
+            RelationID id = i - prev_psum + 1;
+            RelationID block_left_id = BMS32_EXPAND_TO_MASK(id,blocks[i_block]);
+            RelationID block_right_id = BMS32_DIFFERENCE(blocks[i_block], block_left_id);
+
+            LOG_DEBUG("relid=%u, i=%u: id=%u, block[%d]=%u, bl=%u, br=%u\n",
+                        relid, i, id, i_block, blocks[i_block], 
+                        block_left_id, block_right_id);
+
+            l = grow(BMS32_LOWEST(block_left_id), 
+                            BMS32_DIFFERENCE(relid, block_right_id), 
+                            edge_table);
+            r = grow(BMS32_LOWEST(block_right_id), 
+                            BMS32_DIFFERENCE(relid, block_left_id), 
+                            edge_table);
+            
+            valid = BMS32_UNION(l, r) == relid;
         }
-
-        if (LANE_ID < stack.stackTop){
-            int pos = W_OFFSET + stack.stackTop - LANE_ID - 1;
-            RelationID l = stack.ctxStack[pos];
-            RelationID r = BMS32_DIFFERENCE(relid, l);
-
-            LOG_DEBUG("[%d: %d] Emptying stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
-
-            JoinRelation left_rel = *memo.lookup(l);
-            JoinRelation right_rel = *memo.lookup(r);
-            do_join(jr_out, l, left_rel, r, right_rel, info);
-        }
-
-    
-        return jr_out;
+        
+        try_join<false,false>(relid, jr_out, l, r, valid, stack, memo, info);
     }
-};
+
+    if (LANE_ID < stack.stackTop){
+        int pos = W_OFFSET + stack.stackTop - LANE_ID - 1;
+        RelationID l = stack.ctxStack[pos];
+        RelationID r = BMS32_DIFFERENCE(relid, l);
+
+        LOG_DEBUG("[%d: %d] Emptying stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
+
+        JoinRelation left_rel = *memo.lookup(l);
+        JoinRelation right_rel = *memo.lookup(r);
+        do_join(jr_out, l, left_rel, r, right_rel, info);
+    }
+
+
+    return jr_out;
+}
 
 #endif              // GPUQO_DPSUB_ENUM_BICC_CUH
