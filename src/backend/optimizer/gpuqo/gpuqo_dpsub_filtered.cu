@@ -113,7 +113,13 @@ void launchUnrankFilteredDPSubKernel(int sq, int qss,
                                      RelationID* out_relids)
 {
     int blocksize = 512;
-    int gridsize = ceil_div(min(n_tab_sets, gpuqo_n_parallel), blocksize);
+    
+    int mingridsize;
+    int threadblocksize;
+    cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, 
+        unrankFilteredDPSubKernel, 0, blocksize);
+
+    int gridsize = min(mingridsize, ceil_div(n_tab_sets, blocksize));
 
     unrankFilteredDPSubKernel<<<gridsize, blocksize>>>(
         sq, qss, 
@@ -131,9 +137,11 @@ void launchUnrankFilteredDPSubKernel(int sq, int qss,
 template<typename BinaryFunction>
 __global__
 void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_threads, BinaryFunction enum_functor){
-    uint32_t tid = blockIdx.x*blockDim.x + threadIdx.x;
-
-    if (tid < n_threads){
+    uint32_t n_threads_cuda = blockDim.x * gridDim.x;
+    for (uint32_t tid = blockIdx.x*blockDim.x + threadIdx.x; 
+        tid < n_threads; 
+        tid += n_threads_cuda) 
+    {
         uint32_t rid = n_pending_sets - 1 - (tid / n_splits);
         uint32_t cid = tid % n_splits;
 
@@ -154,9 +162,15 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
 template<typename BinaryFunction>
 void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_threads, BinaryFunction enum_functor)
 {
-    int blocksize = 256;
-    int gridsize = ceil_div(n_threads, blocksize);
+    int blocksize = BLOCK_DIM;
+    
+    int mingridsize;
+    int threadblocksize;
+    cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, 
+        evaluateFilteredDPSubKernel<BinaryFunction>, 0, blocksize);
 
+    int gridsize = min(mingridsize, ceil_div(n_threads, blocksize));
+        
     cudaFuncSetCacheConfig(evaluateFilteredDPSubKernel<BinaryFunction>, cudaFuncCachePreferL1);
 
     evaluateFilteredDPSubKernel<<<gridsize, blocksize>>>(
