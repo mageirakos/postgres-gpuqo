@@ -74,8 +74,8 @@ calc_join_cost(RelationID left_rel_id, JoinRelation &left_rel,
 
     // explicit sort merge
     sm_cost = left_rel.cost + right_rel.cost
-        + SORT_COEFF * left_rel.rows * log(left_rel.rows)
-        + SORT_COEFF * right_rel.rows * log(right_rel.rows);
+        + SORT_COEFF * left_rel.rows * logf(left_rel.rows)
+        + SORT_COEFF * right_rel.rows * logf(right_rel.rows);
     min_cost = min(min_cost, sm_cost);
 
     return min_cost;
