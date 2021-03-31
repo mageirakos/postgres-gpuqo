@@ -117,7 +117,7 @@ static void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
     Assert(BMS32_IS_SUBSET(I, T));
     Assert(emit_S == BMS32_EMPTY || is_connected(emit_S, edge_table));
 
-    try_join<false>(jr_out, emit_S, BMS32_DIFFERENCE(T, emit_S), 
+    try_join<false,true>(T, jr_out, emit_S, BMS32_DIFFERENCE(T, emit_S), 
             emit_S != BMS32_EMPTY && BMS32_IS_SUBSET(I, emit_S), 
             join_stack, memo, info);
 

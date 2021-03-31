@@ -106,19 +106,20 @@ RelationID dpsub_unrank_next(RelationID v){
     return t | ((((t & -t) / (v & -v)) >> 1) - 1);  
 }
 
-template<bool CHECK_LEFT>
+template<bool CHECK_LEFT, bool CHECK_RIGHT>
 __device__
 __forceinline__
 bool check_join(RelationID left_id, RelationID right_id, 
                 GpuqoPlannerInfo* info) {
     // make sure those subsets are valid
     if ((!CHECK_LEFT || is_connected(left_id, info->edge_table)) 
-        && is_connected(right_id, info->edge_table)){       
+        && (!CHECK_RIGHT || is_connected(right_id, info->edge_table))
+    ){
         // enumerator must generate disjoint sets
         Assert(is_disjoint(left_id, right_id));
 
         // enumerator must generate self-connected sets
-        Assert(!CHECK_LEFT || is_connected(left_id, info->edge_table));
+        Assert(is_connected(left_id, info->edge_table));
         Assert(is_connected(right_id, info->edge_table));
 
         // We know that:
@@ -161,9 +162,9 @@ void do_join(JoinRelation &jr_out,
     }
 }
 
-template<bool CHECK_LEFT>
+template<bool CHECK_LEFT, bool CHECK_RIGHT>
 __device__
-void try_join(JoinRelation &jr_out, RelationID l, RelationID r, 
+void try_join(RelationID jr, JoinRelation &jr_out, RelationID l, RelationID r, 
                 bool additional_predicate, join_stack_t &stack, 
                 HashTable32bit &memo, GpuqoPlannerInfo* info)
 {
@@ -171,9 +172,12 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
                 blockIdx.x, threadIdx.x, l, r,
                 additional_predicate ? "true" : "false");
 
-    RelationID jr = BMS32_UNION(l, r);
-
-    bool p = additional_predicate && check_join<CHECK_LEFT>(l, r, info);
+    bool p;
+    if (CHECK_LEFT || CHECK_RIGHT){
+        p = additional_predicate && check_join<CHECK_LEFT, CHECK_RIGHT>(l, r, info);
+    } else {
+        p = additional_predicate;
+    }
 
     Assert(__activemask() == WARP_MASK);
 
@@ -188,8 +192,8 @@ void try_join(JoinRelation &jr_out, RelationID l, RelationID r,
         if (!p){
             l = stack.ctxStack[pos];
             r = BMS32_DIFFERENCE(jr, l);
-            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", 
-                W_OFFSET, LANE_ID, pos, l, r
+            LOG_DEBUG("[%d: %d] Consuming stack (%d=%d+%d-%d): l=%u, r=%u\n", 
+                W_OFFSET, LANE_ID, pos, W_OFFSET, stack.stackTop, wScan, l, r
             );
         } else {
             LOG_DEBUG("[%d: %d] Using local values: l=%u, r=%u\n", 
