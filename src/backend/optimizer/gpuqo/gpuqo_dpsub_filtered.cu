@@ -248,6 +248,68 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
 }
 
 
+uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
+                                    uint32_t offset, uint32_t n_pending_sets, 
+                                    dpsub_iter_param_t &params)
+{
+    uint32_t n_joins_per_thread;
+    uint32_t n_sets_per_iteration;
+    uint32_t threads_per_set;
+    uint32_t factor = gpuqo_n_parallel / n_pending_sets;
+
+    threads_per_set = 32;
+    
+    n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
+    n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, n_pending_sets);
+
+    LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
+        n_joins_per_thread,
+        n_sets_per_iteration,
+        threads_per_set,
+        factor
+    );
+    LOG_PROFILE("Using BiCC enumeration\n");
+
+    // do not empty all pending sets if there are some sets still to 
+    // evaluate, since I will do them in the next iteration
+    // If no sets remain, then I will empty all pending
+    while (n_pending_sets >= gpuqo_n_parallel 
+        || (n_pending_sets > 0 && n_remaining_sets == 0)
+    ){
+        uint32_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);
+        uint32_t n_threads = n_eval_sets * threads_per_set;
+
+        START_TIMING(compute);
+        launchEvaluateFilteredDPSubKernel(
+            thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
+            thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
+            thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
+            params.info->n_rels,
+            iter,
+            n_pending_sets,
+            threads_per_set,
+            n_threads,
+            dpsubEnumerateBiCC(
+                *params.memo,
+                params.info,
+                threads_per_set
+            )
+        );     
+        STOP_TIMING(compute);
+
+        LOG_DEBUG("After tabulate\n");
+        DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
+        DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
+
+        dpsub_prune_scatter(threads_per_set, n_threads, params);
+
+        n_pending_sets -= n_eval_sets;
+    }
+
+    return n_pending_sets;
+}
+
+
 uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets, 
                            uint32_t offset, uint32_t n_pending_sets, 
                            dpsub_iter_param_t &params)
@@ -318,7 +380,7 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
                     
         STOP_TIMING(compute);
 
-        LOG_PROFILE("After tabulate\n");
+        LOG_DEBUG("After tabulate\n");
         DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
         DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
 
@@ -455,6 +517,10 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
             n_pending_sets = graph_pending + tree_pending;
 
 
+        } else if (gpuqo_dpsub_bicc_enable){
+            n_pending_sets = dpsub_bicc_evaluation(
+                                        iter, n_remaining_sets, 
+                                           0, n_pending_sets, params);
         } else {
             n_pending_sets = dpsub_generic_graph_evaluation(
                                         iter, n_remaining_sets, 

@@ -11,3 +11,4 @@
 
 // user-defined variables
 bool gpuqo_dpsub_tree_enable;
+bool gpuqo_dpsub_bicc_enable;

@@ -81,6 +81,8 @@ RelationID grow(RelationID from, RelationID subset, EdgeMask* edge_table)
     RelationID V = BMS32_EMPTY;
     RelationID N = from;
 
+    LOG_DEBUG("grow(%u, %u)\n", from, subset);
+
     Assert(BMS32_IS_SUBSET(from, subset));
 
     // as long as there are nodes to visit

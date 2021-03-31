@@ -142,8 +142,10 @@ void do_join(JoinRelation &jr_out,
              RelationID left_rel_id, JoinRelation &left_rel, 
              RelationID right_rel_id, JoinRelation &right_rel, 
              GpuqoPlannerInfo* info) {
-    LOG_DEBUG("[%u] Joining %u and %u\n", 
-            BMS32_UNION(left_rel_id, right_rel_id), left_rel_id, right_rel_id);
+    LOG_DEBUG("[%3d,%3d] Joining %u and %u (%u)\n", 
+                blockIdx.x, threadIdx.x,
+                left_rel_id, right_rel_id,
+                BMS32_UNION(left_rel_id, right_rel_id));
 
     Assert(left_rel_id != BMS32_EMPTY);
     Assert(right_rel_id != BMS32_EMPTY);

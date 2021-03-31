@@ -1122,6 +1122,16 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"gpuqo_dpsub_bicc", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Enables biconnected component optimization in DPsub."),
+			gettext_noop("Subgraphs are split into their biconnected components and then handled as cycles."),
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsub_bicc_enable,
+		false,
+		NULL, NULL, NULL
+	},
+	{
 		{"gpuqo_spanning_tree", PGC_USERSET, QUERY_TUNING_GPUQO,
 			gettext_noop("Enables minimum spanning tree approximation."),
 			gettext_noop("The graph is replaced by its minimum spannign tree before optimization."),
