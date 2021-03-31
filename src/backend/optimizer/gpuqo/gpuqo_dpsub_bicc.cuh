@@ -237,6 +237,12 @@ public:
         }
         __syncthreads();
 
+        Assert(blockDim.x == BLOCK_DIM);
+        volatile __shared__ join_stack_elem_t ctxStack[BLOCK_DIM];
+        join_stack_t stack;
+        stack.ctxStack = ctxStack;
+        stack.stackTop = 0;
+
         __shared__ RelationID shared_blocks[32*BLOCK_DIM/32];
         RelationID* blocks = shared_blocks + t_off*32;
 
@@ -253,53 +259,54 @@ public:
 
         uint32_t n_joins = ceil_div(n_possible_joins, n_splits);
         uint32_t from_i = cid*n_joins;
+        uint32_t to_i   = (cid+1)*n_joins;
         uint32_t i_block = 0;
         uint32_t psum = (1 << BMS32_SIZE(blocks[i_block])) - 2;
         uint32_t prev_psum = 0;
     
-        for (uint32_t off_i = 0; 
-            off_i < n_joins && (from_i+off_i) < n_possible_joins; 
-            off_i++
-        ){
-            uint32_t i = from_i + off_i;
-            while (i >= psum){
-                prev_psum = psum;
-                psum += (1 << BMS32_SIZE(blocks[++i_block])) - 2;
-            }
-            
-            RelationID id = i - prev_psum + 1;
-            RelationID block_left_id = BMS32_EXPAND_TO_MASK(id,blocks[i_block]);
-            RelationID block_right_id = BMS32_DIFFERENCE(blocks[i_block], block_left_id);
-            RelationID permitted = BMS32_DIFFERENCE(relid, block_right_id);
+        for (uint32_t i = from_i; i < to_i; i++){
+            RelationID l, r;
+            bool valid = false;
 
-            LOG_DEBUG("relid=%u, i=%u: id=%u, block[%d]=%u, bl=%u, br=%u, p=%u\n",
-                        relid, i, id, i_block, blocks[i_block], 
-                        block_left_id, block_right_id, permitted);
-
-            
-            if (is_connected(block_left_id, edge_table)
-                && is_connected(block_right_id, edge_table)
-            ){
-                RelationID l = grow(block_left_id, permitted, 
-                                edge_table);
-                RelationID r = BMS32_DIFFERENCE(relid, l);
+            if (i < n_possible_joins){
+                while (i >= psum){
+                    prev_psum = psum;
+                    psum += (1 << BMS32_SIZE(blocks[++i_block])) - 2;
+                }
                 
-                Assert(l != BMS32_EMPTY && r != BMS32_EMPTY);
+                RelationID id = i - prev_psum + 1;
+                RelationID block_left_id = BMS32_EXPAND_TO_MASK(id,blocks[i_block]);
+                RelationID block_right_id = BMS32_DIFFERENCE(blocks[i_block], block_left_id);
 
-                LOG_DEBUG("[%3d,%3d]: %u %u (%u)\n", 
-                    blockIdx.x,
-                    threadIdx.x,
-                    l,
-                    r, 
-                    relid
-                );
+                LOG_DEBUG("relid=%u, i=%u: id=%u, block[%d]=%u, bl=%u, br=%u\n",
+                            relid, i, id, i_block, blocks[i_block], 
+                            block_left_id, block_right_id);
 
-                JoinRelation left_rel = *memo.lookup(l);
-                JoinRelation right_rel = *memo.lookup(r);
-    
-                do_join(jr_out, l, left_rel, r, right_rel, info);
+                l = grow(BMS32_LOWEST(block_left_id), 
+                                BMS32_DIFFERENCE(relid, block_right_id), 
+                                edge_table);
+                r = grow(BMS32_LOWEST(block_right_id), 
+                                BMS32_DIFFERENCE(relid, block_left_id), 
+                                edge_table);
+                
+                valid = BMS32_UNION(l, r) == relid;
             }
+            
+            try_join<false,false>(relid, jr_out, l, r, valid, stack, memo, info);
         }
+
+        if (LANE_ID < stack.stackTop){
+            int pos = W_OFFSET + stack.stackTop - LANE_ID - 1;
+            RelationID l = stack.ctxStack[pos];
+            RelationID r = BMS32_DIFFERENCE(relid, l);
+
+            LOG_DEBUG("[%d: %d] Emptying stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
+
+            JoinRelation left_rel = *memo.lookup(l);
+            JoinRelation right_rel = *memo.lookup(r);
+            do_join(jr_out, l, left_rel, r, right_rel, info);
+        }
+
     
         return jr_out;
     }
