@@ -130,16 +130,55 @@ void launchUnrankFilteredDPSubKernel(int sq, int qss,
     );
 }
 
+template<int STEP>
+__device__ void blockReduceMinStep(volatile int* s_indexes, 
+                                volatile float* s_costs)
+{
+    int tid = threadIdx.x;
+
+    if (tid % (2*STEP) == 0){
+        if (s_costs[tid+STEP] < s_costs[tid]){
+            s_costs[tid] = s_costs[tid+STEP];
+            s_indexes[tid] = s_indexes[tid+STEP];
+        }
+    }
+    if (STEP >= WARP_SIZE)
+        __syncthreads();
+    else
+        __syncwarp();
+
+}
+
+template<int DIM>
+__device__ void blockReduceMin(volatile int* s_indexes, 
+                                volatile float* s_costs)
+{
+    if (DIM >   1) blockReduceMinStep<  1>(s_indexes, s_costs);
+    if (DIM >   2) blockReduceMinStep<  2>(s_indexes, s_costs);
+    if (DIM >   4) blockReduceMinStep<  4>(s_indexes, s_costs);
+    if (DIM >   8) blockReduceMinStep<  8>(s_indexes, s_costs);
+    if (DIM >  16) blockReduceMinStep< 16>(s_indexes, s_costs);
+    if (DIM >  32) blockReduceMinStep< 32>(s_indexes, s_costs);
+    if (DIM >  64) blockReduceMinStep< 64>(s_indexes, s_costs);
+    if (DIM > 128) blockReduceMinStep<128>(s_indexes, s_costs);
+    if (DIM > 256) blockReduceMinStep<256>(s_indexes, s_costs);
+    if (DIM > 512) blockReduceMinStep<512>(s_indexes, s_costs);
+}
+
  /* evaluateDPSub
   *
   *	 evaluation algorithm for DPsub GPU variant with partial pruning
   */
-template<typename BinaryFunction>
+template<int n_splits, typename BinaryFunction>
 __global__
-void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_threads, BinaryFunction enum_functor){
+void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, BinaryFunction enum_functor){
     uint32_t n_threads_cuda = blockDim.x * gridDim.x;
+
+    __shared__ volatile float shared_costs[BLOCK_DIM];
+    __shared__ volatile int shared_idxs[BLOCK_DIM];
+    
     for (uint32_t tid = blockIdx.x*blockDim.x + threadIdx.x; 
-        tid < n_threads; 
+        tid < n_splits*n_sets; 
         tid += n_threads_cuda) 
     {
         uint32_t rid = n_pending_sets - 1 - (tid / n_splits);
@@ -153,32 +192,87 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
                 tid, n_splits, rid, cid, relid);
         
         JoinRelation jr_out = enum_functor(relid, cid);
+        shared_idxs[threadIdx.x] = threadIdx.x;
+        shared_costs[threadIdx.x] = jr_out.cost;
 
-        scratchpad_keys[tid] = relid;
-        scratchpad_vals[tid] = jr_out;
+        if (n_splits > WARP_SIZE)
+            __syncthreads();
+        else
+            __syncwarp();
+
+        blockReduceMin<n_splits>(&shared_idxs[0], &shared_costs[0]);
+
+        int leader = threadIdx.x & (~(n_splits-1));
+
+        if (threadIdx.x == shared_idxs[leader]){
+            scratchpad_keys[tid/n_splits] = relid;
+            scratchpad_vals[tid/n_splits] = jr_out;
+        }
     }
 }
 
-template<typename BinaryFunction>
-void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_threads, BinaryFunction enum_functor)
+template<int n_splits, typename BinaryFunction>
+void _launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, BinaryFunction enum_functor)
 {
     int blocksize = BLOCK_DIM;
     
     int mingridsize;
     int threadblocksize;
     cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, 
-        evaluateFilteredDPSubKernel<BinaryFunction>, 0, blocksize);
+        evaluateFilteredDPSubKernel<n_splits, BinaryFunction>, 0, blocksize);
 
-    int gridsize = min(mingridsize, ceil_div(n_threads, blocksize));
+    int gridsize = min(mingridsize, ceil_div(n_sets*n_splits, blocksize));
         
-    cudaFuncSetCacheConfig(evaluateFilteredDPSubKernel<BinaryFunction>, cudaFuncCachePreferL1);
+    cudaFuncSetCacheConfig(evaluateFilteredDPSubKernel<n_splits, BinaryFunction>, cudaFuncCachePreferL1);
 
-    evaluateFilteredDPSubKernel<<<gridsize, blocksize>>>(
+    // n_splits is a power of 2 and is lower than or equal to BLOCK_DIM
+    Assert(BMS32_SIZE(n_splits) == 1 && n_splits <= BLOCK_DIM);
+
+    evaluateFilteredDPSubKernel<n_splits, BinaryFunction><<<gridsize, blocksize>>>(
         pending_keys, scratchpad_keys, scratchpad_vals,
         sq, qss, 
-        n_pending_sets, n_splits, n_threads,
+        n_pending_sets, n_sets,
         enum_functor
     );
+}
+
+template<typename BinaryFunction>
+void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_sets, BinaryFunction enum_functor){
+    switch(n_splits){
+    case    1:
+        _launchEvaluateFilteredDPSubKernel<   1, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    case    2:
+        _launchEvaluateFilteredDPSubKernel<   2, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    case    4:
+        _launchEvaluateFilteredDPSubKernel<   4, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    case    8:
+        _launchEvaluateFilteredDPSubKernel<   8, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    case   16:
+        _launchEvaluateFilteredDPSubKernel<  16, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    case   32:
+        _launchEvaluateFilteredDPSubKernel<  32, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    case   64:
+        _launchEvaluateFilteredDPSubKernel<  64, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    case  128:
+        _launchEvaluateFilteredDPSubKernel< 128, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    case  256:
+        _launchEvaluateFilteredDPSubKernel< 256, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    case  512:
+        _launchEvaluateFilteredDPSubKernel< 512, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    case 1024:
+        _launchEvaluateFilteredDPSubKernel<1024, BinaryFunction>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, enum_functor);
+        break;
+    }
 }
 
 
@@ -190,15 +284,13 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
     uint32_t n_sets_per_iteration;
     uint32_t threads_per_set;
     uint32_t factor = gpuqo_n_parallel / n_pending_sets;
-
-    if (factor < 32 || params.n_joins_per_set <= 32){
-        threads_per_set = 32;
-    } else{
-        threads_per_set = BMS32_HIGHEST(min(factor, params.n_joins_per_set));
-    }
+    
+    threads_per_set = BMS32_HIGHEST(min(factor, params.n_joins_per_set));
+    threads_per_set = min(threads_per_set, BLOCK_DIM); // at most block size
+    threads_per_set = max(threads_per_set, WARP_SIZE); // at least warp size
     
     n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
-    n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, n_pending_sets);
+    n_sets_per_iteration = min(params.scratchpad_size, n_pending_sets);
 
     LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
         n_joins_per_thread,
@@ -222,7 +314,6 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
         || (n_pending_sets > 0 && n_remaining_sets == 0)
     ){
         uint32_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);
-        uint32_t n_threads = n_eval_sets * threads_per_set;
 
         START_TIMING(compute);
         if (use_csg) {
@@ -234,7 +325,7 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
                 iter,
                 n_pending_sets,
                 threads_per_set,
-                n_threads,
+                n_eval_sets,
                 dpsubEnumerateCsg(
                     *params.memo,
                     params.info,
@@ -250,7 +341,7 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
                 iter,
                 n_pending_sets,
                 threads_per_set,
-                n_threads,
+                n_eval_sets,
                 dpsubEnumerateAllSubs(
                     *params.memo,
                     params.info,
@@ -264,7 +355,7 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
         DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
         DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
 
-        dpsub_prune_scatter(threads_per_set, n_threads, params);
+        dpsub_scatter(n_eval_sets, params);
 
         n_pending_sets -= n_eval_sets;
     }
@@ -285,7 +376,7 @@ uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
     threads_per_set = 32;
     
     n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
-    n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, n_pending_sets);
+    n_sets_per_iteration = min(params.scratchpad_size, n_pending_sets);
 
     LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
         n_joins_per_thread,
@@ -302,7 +393,6 @@ uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
         || (n_pending_sets > 0 && n_remaining_sets == 0)
     ){
         uint32_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);
-        uint32_t n_threads = n_eval_sets * threads_per_set;
 
         START_TIMING(compute);
         launchEvaluateFilteredDPSubKernel(
@@ -313,7 +403,7 @@ uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
             iter,
             n_pending_sets,
             threads_per_set,
-            n_threads,
+            n_eval_sets,
             dpsubEnumerateBiCC(
                 *params.memo,
                 params.info,
@@ -326,7 +416,7 @@ uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
         DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
         DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
 
-        dpsub_prune_scatter(threads_per_set, n_threads, params);
+        dpsub_scatter(n_eval_sets, params);
 
         n_pending_sets -= n_eval_sets;
     }
@@ -346,9 +436,10 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
     uint32_t n_joins_per_set = iter; 
 
     threads_per_set = min(max(1, factor), n_joins_per_set);
+    threads_per_set = min(threads_per_set, BLOCK_DIM); // at most block size
     
     n_joins_per_thread = ceil_div(n_joins_per_set, threads_per_set);
-    n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, n_pending_sets);
+    n_sets_per_iteration = min(params.scratchpad_size, n_pending_sets);
 
     LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
         n_joins_per_thread,
@@ -366,7 +457,6 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
         || (n_pending_sets > 0 && n_remaining_sets == 0)
     ){
         uint32_t n_eval_sets = min(n_sets_per_iteration, n_pending_sets);
-        uint32_t n_threads = n_eval_sets * threads_per_set;
 
         START_TIMING(compute);
         if (gpuqo_spanning_tree_enable){
@@ -378,7 +468,7 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
                 iter,
                 n_pending_sets,
                 threads_per_set,
-                n_threads,
+                n_eval_sets,
                 dpsubEnumerateTreeWithSubtrees(                
                     *params.memo,
                     params.info,
@@ -394,7 +484,7 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
                 iter,
                 n_pending_sets,
                 threads_per_set,
-                n_threads,
+                n_eval_sets,
                 dpsubEnumerateTreeSimple(
                     *params.memo,
                     params.info,
@@ -409,7 +499,7 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
         DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
         DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
 
-        dpsub_prune_scatter(threads_per_set, n_threads, params);
+        dpsub_scatter(n_eval_sets, params);
 
         n_pending_sets -= n_eval_sets;
     }

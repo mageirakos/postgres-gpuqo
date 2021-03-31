@@ -61,6 +61,9 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params);
 int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params);
 
 void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t &params);
+void dpsub_scatter(scatter_iter_t scatter_from_iters, 
+                scatter_iter_t scatter_to_iters, dpsub_iter_param_t &params);
+void dpsub_scatter(int n_sets, dpsub_iter_param_t &params);
 
 EXTERN_PROTOTYPE_TIMING(unrank);
 EXTERN_PROTOTYPE_TIMING(filter);

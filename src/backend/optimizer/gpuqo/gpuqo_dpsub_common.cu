@@ -86,6 +86,36 @@ void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t 
     DUMP_VECTOR(scatter_from_iters.first, scatter_to_iters.first);
     DUMP_VECTOR(scatter_from_iters.second, scatter_to_iters.second);
 
+    dpsub_scatter(scatter_from_iters, scatter_to_iters, params);
+}
+
+void dpsub_scatter(int n_sets, dpsub_iter_param_t &params){
+    // give possibility to user to interrupt
+    CHECK_FOR_INTERRUPTS();
+
+    scatter_iter_t scatter_from_iters;
+    scatter_iter_t scatter_to_iters;
+
+
+    scatter_from_iters = thrust::make_pair(
+        params.gpu_scratchpad_keys.begin(),
+        params.gpu_scratchpad_vals.begin()
+    );
+    scatter_to_iters = thrust::make_pair(
+        (params.gpu_scratchpad_keys.begin()+n_sets),
+        (params.gpu_scratchpad_vals.begin()+n_sets)
+    );
+
+    DUMP_VECTOR(scatter_from_iters.first, scatter_to_iters.first);
+    DUMP_VECTOR(scatter_from_iters.second, scatter_to_iters.second);
+
+    dpsub_scatter(scatter_from_iters, scatter_to_iters, params);
+}
+
+void dpsub_scatter(scatter_iter_t scatter_from_iters, scatter_iter_t scatter_to_iters, dpsub_iter_param_t &params){
+    // give possibility to user to interrupt
+    CHECK_FOR_INTERRUPTS();
+
     START_TIMING(scatter);
     params.memo->insert(
         scatter_from_iters.first.base().get(),
