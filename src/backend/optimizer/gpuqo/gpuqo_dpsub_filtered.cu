@@ -368,8 +368,8 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
         STOP_TIMING(compute);
 
         LOG_DEBUG("After tabulate\n");
-        DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
-        DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
+        DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_eval_sets);
+        DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_eval_sets);
 
         dpsub_scatter(n_eval_sets, params);
 
@@ -426,8 +426,8 @@ uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
         STOP_TIMING(compute);
 
         LOG_DEBUG("After tabulate\n");
-        DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
-        DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
+        DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_eval_sets);
+        DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_eval_sets);
 
         dpsub_scatter(n_eval_sets, params);
 
@@ -503,8 +503,8 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
         STOP_TIMING(compute);
 
         LOG_DEBUG("After tabulate\n");
-        DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_threads);
-        DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_threads);
+        DUMP_VECTOR(params.gpu_scratchpad_keys.begin(), params.gpu_scratchpad_keys.begin()+n_eval_sets);
+        DUMP_VECTOR(params.gpu_scratchpad_vals.begin(), params.gpu_scratchpad_vals.begin()+n_eval_sets);
 
         dpsub_scatter(n_eval_sets, params);
 
