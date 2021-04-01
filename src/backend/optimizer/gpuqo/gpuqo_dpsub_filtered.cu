@@ -294,6 +294,9 @@ void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scr
     case 1024:
         _launchEvaluateFilteredDPSubKernel<1024, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
         break;
+    default:
+        printf("FATAL ERROR: Trying to call launchEvaluateFilteredDPSubKernel with n_splits=%d\n", n_splits);
+        exit(1);
     }
 }
 
@@ -450,6 +453,7 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
 
     threads_per_set = min(max(1, factor), n_joins_per_set);
     threads_per_set = min(threads_per_set, BLOCK_DIM); // at most block size
+    threads_per_set = BMS32_HIGHEST(threads_per_set); // round to closest pow2
     
     n_joins_per_thread = ceil_div(n_joins_per_set, threads_per_set);
     n_sets_per_iteration = min(params.scratchpad_size, n_pending_sets);
