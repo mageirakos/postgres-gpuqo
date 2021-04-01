@@ -141,6 +141,8 @@ __device__ void blockReduceMinStep(volatile int* s_indexes,
             s_costs[tid] = s_costs[tid+STEP];
             s_indexes[tid] = s_indexes[tid+STEP];
         }
+        LOG_DEBUG("red<%3d> idx[%3d]=%3d, cost[%3d]=%.2f\n",
+                    STEP, tid, s_indexes[tid], tid, s_costs[tid]);
     }
     if (STEP >= WARP_SIZE)
         __syncthreads();
@@ -207,11 +209,24 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
         else
             __syncwarp();
 
+        LOG_DEBUG("red<%3d> before: idx[%3d]=%3d, cost[%3d]=%.2f\n",
+                n_splits, threadIdx.x, shared_idxs[threadIdx.x], 
+                        threadIdx.x, shared_costs[threadIdx.x]);
+
         blockReduceMin<n_splits>(&shared_idxs[0], &shared_costs[0]);
 
         int leader = threadIdx.x & (~(n_splits-1));
 
+        if (threadIdx.x == leader){
+            LOG_DEBUG("red<%3d> after: idx[%3d]=%3d, cost[%3d]=%.2f\n",
+                n_splits, threadIdx.x, shared_idxs[threadIdx.x], 
+                        threadIdx.x, shared_costs[threadIdx.x]);
+        }
+
         if (threadIdx.x == shared_idxs[leader]){
+            LOG_DEBUG("[%3d] write scratch[%d] = %u (l=%u, r=%u, cost=%.2f)\n",
+                threadIdx.x, tid/n_splits, relid, 
+                jr_out.left_rel_id, jr_out.right_rel_id, jr_out.cost);
             scratchpad_keys[tid/n_splits] = relid;
             scratchpad_vals[tid/n_splits] = jr_out;
         }

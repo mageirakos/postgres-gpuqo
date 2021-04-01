@@ -89,17 +89,17 @@ static JoinRelation dpsubEnumerateTreeWithSubtrees(RelationID relid,
         RelationID l = S;
         RelationID r = BMS32_DIFFERENCE(relid, S);
 
+        LOG_DEBUG("%d %d: %u %u (%u)\n", 
+            blockIdx.x,
+            threadIdx.x,
+            l,
+            r, 
+            relid
+        );
+
         if (l != BMS32_EMPTY && r != BMS32_EMPTY){
             JoinRelation left_rel = *memo.lookup(l);
             JoinRelation right_rel = *memo.lookup(r);
-
-            LOG_DEBUG("%d %d: %u %u (%u)\n", 
-                blockIdx.x,
-                threadIdx.x,
-                l,
-                r, 
-                relid
-            );
 
             do_join(jr_out, l, left_rel, r, right_rel, info);
             do_join(jr_out, r, right_rel, l, left_rel, info);
