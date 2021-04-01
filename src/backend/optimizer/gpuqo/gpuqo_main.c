@@ -23,6 +23,12 @@
 #include "optimizer/paths.h"
 #include "optimizer/restrictinfo.h"
 
+#ifdef OPTIMIZER_DEBUG
+#ifndef GPUQO_INFO
+#define GPUQO_INFO
+#endif
+#endif
+
 int gpuqo_algorithm;
 
 BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
@@ -388,9 +394,9 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     makeBFSIndexRemapTables(remap_table_fw, remap_table_bw, info);
     remapPlannerInfo(info, remap_table_fw);
 
-// #ifdef OPTIMIZER_DEBUG
+#ifdef GPUQO_INFO
     printEdges(info);
-// #endif
+#endif
 
     switch (gpuqo_algorithm)
     {
@@ -430,8 +436,9 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
         gpuqo_free(info->subtrees);
     gpuqo_free(info);
     
-#ifdef OPTIMIZER_DEBUG
+#ifdef GPUQO_INFO
     printQueryTree(query_tree, 2);
+    printf("gpuqo cost is %f\n", query_tree->cost);
 #endif
 
     remapQueryTree(query_tree, remap_table_bw);
