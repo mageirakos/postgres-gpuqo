@@ -102,7 +102,6 @@ DPCPUAlgorithm gpuqo_cpu_dpsub_alg = {
  *	 Sequential CPU baseline for GPU query optimization using the DP sub
  *   algorithm.
  */
-extern "C"
 QueryTree*
 gpuqo_cpu_dpsub(GpuqoPlannerInfo* info)
 {
@@ -115,7 +114,6 @@ gpuqo_cpu_dpsub(GpuqoPlannerInfo* info)
  *	 Parallel CPU baseline for GPU query optimization using the DP sub
  *   algorithm.
  */
-extern "C"
 QueryTree*
 gpuqo_dpe_dpsub(GpuqoPlannerInfo* info)
 {

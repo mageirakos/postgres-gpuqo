@@ -40,37 +40,4 @@ extern bool gpuqo_dpsub_tree_enable;
 extern bool gpuqo_dpsub_bicc_enable;
 extern bool gpuqo_spanning_tree_enable;
 
-typedef Bitmapset32 EdgeMask;
-typedef Bitmapset32 RelationID;
-
-typedef struct EqClassInfo{
-	RelationID relids;
-	float* sels;
-	struct EqClassInfo* next;
-} EqClassInfo;
-
-typedef struct BaseRelation{
-	RelationID id;
-	float rows;
-	float tuples;
-} BaseRelation;
-
-typedef struct QueryTree{
-	RelationID id;
-	float rows;
-	float cost;
-	struct QueryTree* left;
-	struct QueryTree* right;
-} QueryTree;
-
-typedef struct GpuqoPlannerInfo{
-	int n_rels;
-	BaseRelation *base_rels;
-	EdgeMask* edge_table;
-	EdgeMask* indexed_edge_table;
-	EqClassInfo* eq_classes;
-	float* fk_selecs;
-	RelationID* subtrees;
-} GpuqoPlannerInfo;
-
 #endif							/* GPUQO_COMMON_H */

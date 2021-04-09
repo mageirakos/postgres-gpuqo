@@ -93,10 +93,13 @@ estimate_join_selectivity(RelationID left_rel_id, JoinRelation &left_rel,
     if (BMS32_SIZE(left_rel_id) == 1 && BMS32_SIZE(right_rel_id) == 1){
         int left_rel_idx = BMS32_LOWEST_POS(left_rel_id)-2;
         int right_rel_idx = BMS32_LOWEST_POS(right_rel_id)-2;
-        float fksel = info->fk_selecs[left_rel_idx * info->n_rels + right_rel_idx];
 
-        if(!isnan(fksel)){
-            return fksel;
+        BaseRelation left_br = info->base_rels[left_rel_idx];
+        for (int i=0; i < left_br.n_fk_selecs; i++){
+            if (info->fk_selec_idxs[left_br.off_fk_selecs+i] == right_rel_idx){
+                sel *= info->fk_selec_sels[left_br.off_fk_selecs+i];
+                break;
+            }
         }
     }
     
@@ -104,10 +107,12 @@ estimate_join_selectivity(RelationID left_rel_id, JoinRelation &left_rel,
     // get its selectivity.
     // NB: one equivalence class may only apply a selectivity once so the lowest
     // matching id on both sides is kept
-    EqClassInfo* ec = info->eq_classes;
-    while (ec != NULL){
-        RelationID match_l = BMS32_INTERSECTION(ec->relids, left_rel_id);
-        RelationID match_r = BMS32_INTERSECTION(ec->relids, right_rel_id);
+    int off = 0;
+    for (int i=0; i<info->n_eq_classes; i++){
+        RelationID ec_relids = info->eq_classes[i];
+        int size = BMS32_SIZE(ec_relids);
+        RelationID match_l = BMS32_INTERSECTION(ec_relids, left_rel_id);
+        RelationID match_r = BMS32_INTERSECTION(ec_relids, right_rel_id);
 
         if (match_l != BMS32_EMPTY && match_r != BMS32_EMPTY){
             // more than one on the same equivalence class may match
@@ -116,20 +121,27 @@ estimate_join_selectivity(RelationID left_rel_id, JoinRelation &left_rel,
             int idx_l = BMS32_SIZE(
                 BMS32_INTERSECTION(
                     BMS32_SET_ALL_LOWER(match_l),
-                    ec->relids
+                    ec_relids
                 )
             );
             int idx_r = BMS32_SIZE(
                 BMS32_INTERSECTION(
                     BMS32_SET_ALL_LOWER(match_r),
-                    ec->relids
+                    ec_relids
                 )
             );
-            int size = BMS32_SIZE(ec->relids);
+            
+            if (idx_l > idx_r){
+                int tmp = idx_l;
+                idx_l = idx_r;
+                idx_r = tmp;
+            }
 
-            sel *= ec->sels[idx_l*size+idx_r];
+            int idx = idx_l*size - idx_l*(idx_l+1)/2 + (idx_r-idx_l-1);
+            sel *= info->eq_class_sels[off+idx];
         }
-        ec = ec->next;
+           
+        off += size*(size-1)/2;
     }
     
     return sel;

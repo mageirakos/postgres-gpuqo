@@ -62,7 +62,7 @@ __global__
 void unrankFilteredDPSubKernel(int sq, int qss, 
                                uint32_t offset, uint32_t n_tab_sets,
                                uint32_t* binoms,
-                               EdgeMask* gobal_edge_table,
+                               GpuqoPlannerInfo* info,
                                RelationID* out_relids)
 {
     uint32_t threadid = blockIdx.x*blockDim.x + threadIdx.x;
@@ -71,7 +71,7 @@ void unrankFilteredDPSubKernel(int sq, int qss,
     int n_active = __popc(__activemask());
     __shared__ EdgeMask edge_table[32];
     for (int i = threadIdx.x; i < sq; i+=n_active){
-        edge_table[i] = gobal_edge_table[i];
+        edge_table[i] = info->edge_table[i];
     }
     __syncthreads();
     
@@ -109,7 +109,7 @@ void unrankFilteredDPSubKernel(int sq, int qss,
 void launchUnrankFilteredDPSubKernel(int sq, int qss, 
                                      uint32_t offset, uint32_t n_tab_sets,
                                      uint32_t* binoms,
-                                     EdgeMask* global_edge_table,
+                                     GpuqoPlannerInfo* info,
                                      RelationID* out_relids)
 {
     int blocksize = 512;
@@ -125,7 +125,7 @@ void launchUnrankFilteredDPSubKernel(int sq, int qss,
         sq, qss, 
         offset, n_tab_sets,
         binoms,
-        global_edge_table,
+        info,
         out_relids
     );
 }
@@ -171,7 +171,7 @@ __device__ void blockReduceMin(volatile int* s_indexes,
   *
   *	 evaluation algorithm for DPsub GPU variant with partial pruning
   */
-template<int n_splits, dpsub_filtered_evaluate_t Function>
+template<int n_splits, dpsub_filtered_evaluate_t Function, bool full_shmem>
 __global__
 void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, HashTable32bit memo, GpuqoPlannerInfo *info){
     uint32_t n_threads_cuda = blockDim.x * gridDim.x;
@@ -179,9 +179,37 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
     __shared__ volatile float shared_costs[BLOCK_DIM];
     __shared__ volatile int shared_idxs[BLOCK_DIM];
 
-    __shared__ EdgeMask edge_table[32];
-    for (int i = threadIdx.x; i < info->n_rels; i+=n_threads_cuda){
-        edge_table[i] = info->edge_table[i];
+    extern __shared__ uint64_t dynshmem[];
+    int size = full_shmem ? info->size : sizeof(GpuqoPlannerInfo);
+    for (int i = threadIdx.x; i < size/8; i+=blockDim.x){
+        dynshmem[i] = *((uint64_t*)info + i);
+    }
+    __syncthreads();
+    
+    GpuqoPlannerInfo *info_sh = (GpuqoPlannerInfo *)dynshmem;
+	
+    if (threadIdx.x == 0){
+        char *p = (char*) dynshmem;
+        p += sizeof(GpuqoPlannerInfo);
+
+        if (full_shmem){
+            info_sh->fk_selec_idxs = (unsigned int*)p;
+            p += sizeof(unsigned int) * info->n_fk_selecs;
+            
+            info_sh->fk_selec_sels = (float*) p;
+            p += sizeof(float) * info->n_fk_selecs;
+            
+            info_sh->eq_classes = (RelationID*) p;
+            p += sizeof(RelationID) * info->n_eq_classes;
+            
+            info_sh->eq_class_sels = (float*) p;
+            p += sizeof(float) * info->n_eq_class_sels;
+        } else {
+            info_sh->fk_selec_idxs = info->fk_selec_idxs;
+            info_sh->fk_selec_sels = info->fk_selec_sels;
+            info_sh->eq_classes = info->eq_classes;
+            info_sh->eq_class_sels = info->eq_class_sels;
+        }
     }
     __syncthreads();
     
@@ -199,8 +227,8 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
         LOG_DEBUG("[%u] n_splits=%d, rid=%u, cid=%u, relid=%u\n", 
                 tid, n_splits, rid, cid, relid);
         
-        JoinRelation jr_out = Function(relid, cid, n_splits, edge_table, 
-                                        memo, info);
+        JoinRelation jr_out = Function(relid, cid, n_splits, 
+                                        memo, info_sh);
         shared_idxs[threadIdx.x] = threadIdx.x;
         shared_costs[threadIdx.x] = jr_out.cost;
 
@@ -233,24 +261,24 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
     }
 }
 
-template<int n_splits, dpsub_filtered_evaluate_t Function>
-void _launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, HashTable32bit &memo, GpuqoPlannerInfo *info)
+template<int n_splits, dpsub_filtered_evaluate_t Function, bool full_shmem>
+void __launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, int shmem_size, HashTable32bit &memo, GpuqoPlannerInfo *info)
 {
     int blocksize = BLOCK_DIM;
     
     int mingridsize;
     int threadblocksize;
     cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, 
-        evaluateFilteredDPSubKernel<n_splits, Function>, 0, blocksize);
+        evaluateFilteredDPSubKernel<n_splits, Function, full_shmem>, 0, blocksize);
 
     int gridsize = min(mingridsize, ceil_div(n_sets*n_splits, blocksize));
         
-    cudaFuncSetCacheConfig(evaluateFilteredDPSubKernel<n_splits, Function>, cudaFuncCachePreferL1);
+    // cudaFuncSetCacheConfig(evaluateFilteredDPSubKernel<n_splits, Function>, cudaFuncCachePreferL1);
 
     // n_splits is a power of 2 and is lower than or equal to BLOCK_DIM
     Assert(BMS32_SIZE(n_splits) == 1 && n_splits <= BLOCK_DIM);
 
-    evaluateFilteredDPSubKernel<n_splits, Function><<<gridsize, blocksize>>>(
+    evaluateFilteredDPSubKernel<n_splits, Function, full_shmem><<<gridsize, blocksize, shmem_size>>>(
         pending_keys, scratchpad_keys, scratchpad_vals,
         sq, qss, 
         n_pending_sets, n_sets,
@@ -258,41 +286,55 @@ void _launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* sc
     );
 }
 
+template<int n_splits, dpsub_filtered_evaluate_t Function>
+void _launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, HashTable32bit &memo, GpuqoPlannerInfo *info, GpuqoPlannerInfo *gpu_info)
+{
+    if (info->size > 6000){
+        int shmem_size = sizeof(GpuqoPlannerInfo);
+        __launchEvaluateFilteredDPSubKernel<  n_splits, Function, false>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, shmem_size, memo, gpu_info);
+    } else {
+        int shmem_size = info->size;
+        __launchEvaluateFilteredDPSubKernel<  n_splits, Function, true>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, shmem_size, memo, gpu_info);
+
+    }
+}
+
+
 template<dpsub_filtered_evaluate_t Function>
-void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_sets, HashTable32bit &memo, GpuqoPlannerInfo *info){
+void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_sets, HashTable32bit &memo, GpuqoPlannerInfo *info, GpuqoPlannerInfo *gpu_info){
     switch(n_splits){
     case    1:
-        _launchEvaluateFilteredDPSubKernel<   1, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel<   1, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     case    2:
-        _launchEvaluateFilteredDPSubKernel<   2, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel<   2, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     case    4:
-        _launchEvaluateFilteredDPSubKernel<   4, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel<   4, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     case    8:
-        _launchEvaluateFilteredDPSubKernel<   8, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel<   8, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     case   16:
-        _launchEvaluateFilteredDPSubKernel<  16, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel<  16, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     case   32:
-        _launchEvaluateFilteredDPSubKernel<  32, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel<  32, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     case   64:
-        _launchEvaluateFilteredDPSubKernel<  64, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel<  64, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     case  128:
-        _launchEvaluateFilteredDPSubKernel< 128, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel< 128, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     case  256:
-        _launchEvaluateFilteredDPSubKernel< 256, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel< 256, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     case  512:
-        _launchEvaluateFilteredDPSubKernel< 512, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel< 512, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     case 1024:
-        _launchEvaluateFilteredDPSubKernel<1024, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info);
+        _launchEvaluateFilteredDPSubKernel<1024, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);
         break;
     default:
         printf("FATAL ERROR: Trying to call launchEvaluateFilteredDPSubKernel with n_splits=%d\n", n_splits);
@@ -352,7 +394,8 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
                 threads_per_set,
                 n_eval_sets,
                 *params.memo,
-                params.info
+                params.info,
+                params.gpu_info
             );
         } else {
             launchEvaluateFilteredDPSubKernel<dpsubEnumerateAllSubs>(
@@ -365,7 +408,8 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
                 threads_per_set,
                 n_eval_sets,
                 *params.memo,
-                params.info
+                params.info,
+                params.gpu_info
             );
         }           
         STOP_TIMING(compute);
@@ -424,7 +468,8 @@ uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
             threads_per_set,
             n_eval_sets,
             *params.memo,
-            params.info
+            params.info,
+            params.gpu_info
         );     
         STOP_TIMING(compute);
 
@@ -487,7 +532,8 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
                 threads_per_set,
                 n_eval_sets,
                 *params.memo,
-                params.info
+                params.info,
+                params.gpu_info
             );
         } else {
             launchEvaluateFilteredDPSubKernel<dpsubEnumerateTreeSimple>(
@@ -500,7 +546,8 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
                 threads_per_set,
                 n_eval_sets,
                 *params.memo,
-                params.info
+                params.info,
+                params.gpu_info
             );
         }
                     
@@ -568,7 +615,7 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                     params.info->n_rels, iter,
                     set_offset, n_tab_sets,
                     thrust::raw_pointer_cast(params.gpu_binoms.data()),
-                    params.info->edge_table,
+                    params.gpu_info,
                     thrust::raw_pointer_cast(params.gpu_pending_keys.data())+n_pending_sets
 
                 );
@@ -601,7 +648,7 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                 middle = thrust::partition(
                 params.gpu_pending_keys.begin(),
                 params.gpu_pending_keys.begin()+n_pending_sets,
-                findCycleInRelation(params.info)
+                findCycleInRelation(params.gpu_info)
             );
             } // otherwise "middle" is just the beginning (all trees)
 

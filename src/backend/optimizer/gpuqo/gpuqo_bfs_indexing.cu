@@ -1,17 +1,14 @@
 /*------------------------------------------------------------------------
  *
- * gpuqo_bfs_indexing.c
+ * gpuqo_bfs_indexing.cu
  *	  utilities to remap indices so that they are BFS-coherent
  *
- * src/backend/optimizer/gpuqo/gpuqo_main.c
+ * src/backend/optimizer/gpuqo/gpuqo_bfs_indexing.cu
  *
  *-------------------------------------------------------------------------
  */
 
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
-#include "optimizer/gpuqo.h"
+#include "gpuqo.cuh"
 
 void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlannerInfo* info){
     int bfs_queue[32];
@@ -80,10 +77,12 @@ void remapPlannerInfo(GpuqoPlannerInfo* info, int* remap_table){
     if (gpuqo_spanning_tree_enable)
         remapEdgeTable(info->subtrees, info->n_rels, remap_table);
 
-    EqClassInfo* p = info->eq_classes;
-    while (p != NULL){
-        p->relids = remapRelid(p->relids, remap_table);
-        p = p->next;
+    for (int i=0; i<info->n_eq_classes; i++){
+        info->eq_classes[i] = remapRelid(info->eq_classes[i], remap_table);
+    }
+
+    for (int i=0; i<info->n_fk_selecs; i++){
+        info->fk_selec_idxs[i] = remap_table[info->fk_selec_idxs[i]];
     }
 }
 

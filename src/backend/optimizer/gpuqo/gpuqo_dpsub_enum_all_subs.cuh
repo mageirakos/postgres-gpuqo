@@ -19,7 +19,7 @@
 
 __device__
 static JoinRelation dpsubEnumerateAllSubs(RelationID relid, uint32_t cid, 
-                                int n_splits, EdgeMask* edge_table,
+                                int n_splits,
                                 HashTable32bit &memo, GpuqoPlannerInfo* info)
 {
     JoinRelation jr_out;

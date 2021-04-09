@@ -172,7 +172,6 @@ DPCPUAlgorithm gpuqo_cpu_dpccp_alg = {
  *	 Sequential CPU baseline for GPU query optimization using the DP size
  *   algorithm.
  */
-extern "C"
 QueryTree*
 gpuqo_cpu_dpccp(GpuqoPlannerInfo* info)
 {
@@ -184,7 +183,6 @@ gpuqo_cpu_dpccp(GpuqoPlannerInfo* info)
  *	 Parallel CPU baseline for GPU query optimization using the DP size
  *   algorithm.
  */
-extern "C"
 QueryTree*
 gpuqo_dpe_dpccp(GpuqoPlannerInfo* info)
 {

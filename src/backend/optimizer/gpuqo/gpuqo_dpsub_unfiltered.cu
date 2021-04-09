@@ -52,13 +52,7 @@ public:
     __device__
     JoinRelation operator()(RelationID relid, uint32_t cid)
     {
-        int n_active = __popc(__activemask());
-        __shared__ EdgeMask edge_table[32];
-        for (int i = threadIdx.x; i < info->n_rels; i+=n_active){
-            edge_table[i] = info->edge_table[i];
-        }
-        __syncthreads();
-        return dpsubEnumerateAllSubs(relid, cid, n_splits, edge_table, 
+        return dpsubEnumerateAllSubs(relid, cid, n_splits,
             memo, info);
     }
 };
@@ -156,7 +150,7 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
             unrankEvaluateDPSub<dpsubEnumerateAllSubsFunctor>(
                 dpsubEnumerateAllSubsFunctor(
                     *params.memo,
-                    params.info,
+                    params.gpu_info,
                     threads_per_set
                 ),
                 params.info->n_rels,

@@ -87,6 +87,7 @@ void printEdges(GpuqoPlannerInfo* info){
                 printf("(");
                 while (ec != NULL){
                     if (BMS32_IS_SET(ec->relids, i+1) && BMS32_IS_SET(ec->relids, idx)){
+                        int idx;
                         int size = BMS32_SIZE(ec->relids);
                         int idx_l = BMS32_SIZE(
                             BMS32_INTERSECTION(
@@ -100,7 +101,14 @@ void printEdges(GpuqoPlannerInfo* info){
                                 ec->relids
                             )
                         );
-                        printf("%u: %f, ", ec->relids, ec->sels[idx_l*size+idx_r]);
+                        if (idx_l > idx_r){
+                            int tmp = idx_l;
+                            idx_l = idx_r;
+                            idx_r = tmp;
+                        }
+
+                        idx = idx_l*size - idx_l*(idx_l+1)/2 + (idx_r-idx_l-1);
+                        printf("%u: %f, ", ec->relids, ec->sels[idx]);
                     }
                     ec = ec->next;
                 }
@@ -183,6 +191,7 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
     baserel.rows = rel->rows;
     baserel.tuples = rel->tuples;
     baserel.id = convertBitmapset(rel->relids);
+    baserel.fk_selecs = NULL;
 
     return baserel;
 }
@@ -190,7 +199,7 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
 EdgeMask* makeEdgeTable(PlannerInfo* root, int n_rels){
     ListCell* lc;
 
-    EdgeMask* edge_table = gpuqo_malloc(sizeof(EdgeMask)*n_rels);
+    EdgeMask* edge_table = malloc(sizeof(EdgeMask)*n_rels);
     memset(edge_table, 0, sizeof(EdgeMask)*n_rels);
     foreach(lc, root->eq_classes){
         EquivalenceClass *ec = (EquivalenceClass *) lfirst(lc);
@@ -221,7 +230,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
     ListCell* lc_restrictinfo;
     int i, j;
 
-    info->indexed_edge_table = (EdgeMask*) gpuqo_malloc(n_rels * sizeof(EdgeMask));
+    info->indexed_edge_table = (EdgeMask*) malloc(n_rels * sizeof(EdgeMask));
     memset(info->indexed_edge_table, 0, n_rels * sizeof(EdgeMask));
 
     i = 0;
@@ -235,6 +244,9 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                 List *restrictlist = NULL;
                 SpecialJoinInfo sjinfo;
                 RelOptInfo *join_rel;
+                float fk_sel;
+
+                FKSelecInfo* fk = info->base_rels[i].fk_selecs;
                 
                 sjinfo.type = T_SpecialJoinInfo;
                 sjinfo.jointype = JOIN_INNER;
@@ -275,7 +287,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
 										&sjinfo);
 
                 foreach(lc_restrictinfo, restrictlist){
-                    int size, idx_l, idx_r;
+                    int size, idx_l, idx_r, idx;
                     RestrictInfo *rinfo= (RestrictInfo*) lfirst(lc_restrictinfo);
                     EqClassInfo* ec = info->eq_classes;
 
@@ -291,12 +303,14 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                     };
 
                     if (ec == NULL){
-                        ec = (EqClassInfo*) gpuqo_malloc(sizeof(EqClassInfo));
+                        ec = (EqClassInfo*) malloc(sizeof(EqClassInfo));
                         ec->next = info->eq_classes;
                         info->eq_classes = ec;
                         ec->relids = convertBitmapset(rinfo->parent_ec->ec_relids);
                         size = BMS32_SIZE(ec->relids);
-                        ec->sels = (float*) gpuqo_malloc(sizeof(float)*size*size);
+                        ec->sels = (float*) malloc(sizeof(float)*size*size);
+                        info->n_eq_classes++;
+                        info->n_eq_class_sels += size*(size-1)/2;
                     } else {
                         size = BMS32_SIZE(ec->relids);
                     }
@@ -313,8 +327,13 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                             ec->relids
                         )
                     );
-                    ec->sels[idx_l*size+idx_r] = rinfo->norm_selec;
-                    ec->sels[idx_r*size+idx_l] = rinfo->norm_selec;
+                    if (idx_l > idx_r){
+                        int tmp = idx_l;
+                        idx_l = idx_r;
+                        idx_r = tmp;
+                    }
+                    idx = idx_l*size - idx_l*(idx_l+1)/2 + (idx_r-idx_l-1);
+                    ec->sels[idx] = rinfo->norm_selec;
                 }
 
                 foreach(lc_inner_path, rel_inner->pathlist){
@@ -330,14 +349,19 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                     }
                 }
 
-                // fk selectivity
-                info->fk_selecs[i * info->n_rels + j] = 
-                    get_foreign_key_join_selectivity(root,
+                fk_sel = get_foreign_key_join_selectivity(root,
 											   rel_outer->relids,
 											   rel_inner->relids,
 											   &sjinfo,
 											   &restrictlist);
-                
+                if (fk_sel < 1){
+                    fk = (FKSelecInfo*) malloc(sizeof(FKSelecInfo));
+                    fk->next = info->base_rels[i].fk_selecs;
+                    info->base_rels[i].fk_selecs = fk;
+                    fk->other_baserel = j;
+                    fk->sel = fk_sel;
+                    info->n_fk_selecs++;
+                }
             }
             j++;
         }
@@ -364,16 +388,15 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     printf("Hello, here is gpuqo!\n");
 #endif
 
-    info = (GpuqoPlannerInfo*) gpuqo_malloc(sizeof(GpuqoPlannerInfo));
+    info = (GpuqoPlannerInfo*) malloc(sizeof(GpuqoPlannerInfo));
     
-    info->base_rels = (BaseRelation*) gpuqo_malloc(n_rels * sizeof(BaseRelation));
-
-    info->fk_selecs = (float*) gpuqo_malloc(n_rels * n_rels * sizeof(float));
-    for (int i = 0; i < n_rels*n_rels; i++)
-        info->fk_selecs[i] = NAN;
+    info->base_rels = (BaseRelation*) malloc(n_rels * sizeof(BaseRelation));
 
     info->n_rels = n_rels;
     info->eq_classes = NULL;
+    info->n_fk_selecs = 0;
+    info->n_eq_classes = 0;
+    info->n_eq_class_sels = 0;
 
     i = 0;
     foreach(lc, initial_rels){
@@ -383,67 +406,21 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     info->edge_table = makeEdgeTable(root, n_rels);
     fillSelectivityInformation(root, initial_rels, info, n_rels);
 
-    if (gpuqo_spanning_tree_enable){
-        minimumSpanningTree(info);
-        info->subtrees = buildSubTrees(info);
-    }
-
-    int* remap_table_fw = (int*) malloc(n_rels*sizeof(int));
-    int* remap_table_bw = (int*) malloc(n_rels*sizeof(int));
-
-    makeBFSIndexRemapTables(remap_table_fw, remap_table_bw, info);
-    remapPlannerInfo(info, remap_table_fw);
-
 #ifdef GPUQO_INFO
     printEdges(info);
 #endif
 
-    switch (gpuqo_algorithm)
-    {
-    case GPUQO_DPSIZE:
-        query_tree = gpuqo_dpsize(info);
-        break;
-    case GPUQO_DPSUB:
-        query_tree = gpuqo_dpsub(info);
-        break;
-    case GPUQO_CPU_DPSIZE:
-        query_tree = gpuqo_cpu_dpsize(info);
-        break;
-    case GPUQO_CPU_DPSUB:
-        query_tree = gpuqo_cpu_dpsub(info);
-        break;
-    case GPUQO_CPU_DPCCP:
-        query_tree = gpuqo_cpu_dpccp(info);
-        break;
-    case GPUQO_DPE_DPSIZE:
-        query_tree = gpuqo_dpe_dpsize(info);
-        break;
-    case GPUQO_DPE_DPSUB:
-        query_tree = gpuqo_dpe_dpsub(info);
-        break;
-    case GPUQO_DPE_DPCCP:
-        query_tree = gpuqo_dpe_dpccp(info);
-        break;
-    default: 
-        // impossible branch but without it the compiler complains
-        query_tree = NULL;
-        break;
-    }
+    query_tree = gpuqo_run(gpuqo_algorithm, info);
     
-    gpuqo_free(info->base_rels);
-    gpuqo_free(info->edge_table);
-    if (gpuqo_spanning_tree_enable)
-        gpuqo_free(info->subtrees);
-    gpuqo_free(info);
+    free(info->base_rels);
+    free(info->edge_table);
+    free(info);
+    // TODO free lists
     
 #ifdef GPUQO_INFO
     printQueryTree(query_tree, 2);
     printf("gpuqo cost is %f\n", query_tree->cost);
 #endif
-
-    remapQueryTree(query_tree, remap_table_bw);
-    free(remap_table_fw);
-    free(remap_table_bw);
 
 	return queryTree2Plan(query_tree, n_rels, root, n_rels, initial_rels);
 }

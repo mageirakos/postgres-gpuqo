@@ -211,9 +211,7 @@ public:
  *
  *	 GPU query optimization using the DP size variant.
  */
-extern "C"
-QueryTree*
-gpuqo_dpsize(GpuqoPlannerInfo* info)
+QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
 {
     DECLARE_TIMING(gpuqo_dpsize);
     DECLARE_NV_TIMING(init);
@@ -265,6 +263,8 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
     // scratchpad size is increased on demand, starting from a minimum capacity
     uninit_device_vector_relid gpu_scratchpad_keys(scratchpad_size);
     uninit_device_vector_uint2 gpu_scratchpad_vals(scratchpad_size);
+
+    GpuqoPlannerInfo* gpu_info = copyToDeviceGpuqoPlannerInfo(info);
 
     STOP_TIMING(init);
 
@@ -410,7 +410,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                         filterJoinedDisconnected(
                             gpu_memo_keys.data(), 
                             gpu_memo_vals.data(),
-                            info
+                            gpu_info
                         )
                     );
 
@@ -475,7 +475,7 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
                         joinCost(
                             gpu_memo_keys.data(), 
                             gpu_memo_vals.data(),
-                            info
+                            gpu_info
                         )
                     ),
                     gpu_memo_keys.begin()+partition_offsets[i-1],
@@ -543,6 +543,8 @@ gpuqo_dpsize(GpuqoPlannerInfo* info)
     } catch(thrust::system_error err){
         printf("Thrust %d: %s", err.code().value(), err.what());
     }
+
+    cudaFree(gpu_info);
 
     STOP_TIMING(execute);
     STOP_TIMING(gpuqo_dpsize);

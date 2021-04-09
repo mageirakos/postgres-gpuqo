@@ -19,7 +19,7 @@
 
 __device__
 static JoinRelation dpsubEnumerateTreeSimple(RelationID relid, 
-                        uint32_t cid, int n_splits, EdgeMask* edge_table,
+                        uint32_t cid, int n_splits,
                         HashTable32bit &memo, GpuqoPlannerInfo* info)
 {
     JoinRelation jr_out;
@@ -42,13 +42,10 @@ static JoinRelation dpsubEnumerateTreeSimple(RelationID relid,
             relid
         );
 
-        RelationID l = grow(base_rel_id, permitted, edge_table);
+        RelationID l = grow(base_rel_id, permitted, info->edge_table);
         RelationID r = BMS32_DIFFERENCE(relid, l);
 
         if (l != BMS32_EMPTY && r != BMS32_EMPTY){
-            JoinRelation left_rel = *memo.lookup(l);
-            JoinRelation right_rel = *memo.lookup(r);
-
             LOG_DEBUG("%d %d: %u %u (%u)\n", 
                 blockIdx.x,
                 threadIdx.x,
@@ -57,6 +54,8 @@ static JoinRelation dpsubEnumerateTreeSimple(RelationID relid,
                 relid
             );
 
+            JoinRelation left_rel = *memo.lookup(l);
+            JoinRelation right_rel = *memo.lookup(r);
             do_join(jr_out, l, left_rel, r, right_rel, info);
             do_join(jr_out, r, right_rel, l, left_rel, info);
         }
@@ -67,7 +66,7 @@ static JoinRelation dpsubEnumerateTreeSimple(RelationID relid,
 
 __device__
 static JoinRelation dpsubEnumerateTreeWithSubtrees(RelationID relid, 
-                        uint32_t cid, int n_splits, EdgeMask* edge_table,
+                        uint32_t cid, int n_splits,
                         HashTable32bit &memo, GpuqoPlannerInfo* info)
 { 
     JoinRelation jr_out;

@@ -132,7 +132,6 @@ void dpsub_scatter(scatter_iter_t scatter_from_iters, scatter_iter_t scatter_to_
  *
  *	 GPU query optimization using the DP size variant.
  */
-extern "C"
 QueryTree*
 gpuqo_dpsub(GpuqoPlannerInfo* info)
 {
@@ -151,6 +150,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
     dpsub_iter_param_t params;
     params.info = info;
+    params.gpu_info = copyToDeviceGpuqoPlannerInfo(info);
     params.memo = new HashTable32bit(memo_cap, max_memo_cap);
     thrust::host_vector<RelationID> ini_memo_keys(info->n_rels+1);
     thrust::host_vector<JoinRelation> ini_memo_vals(info->n_rels+1);
@@ -293,6 +293,8 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
     params.memo->free();
     delete params.memo;
+
+    cudaFree(params.gpu_info);
 
     return out;
 }

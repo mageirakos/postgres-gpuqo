@@ -14,7 +14,6 @@
 
 bool gpuqo_spanning_tree_enable;
 
-extern "C"
 void minimumSpanningTree(GpuqoPlannerInfo *info){
     RelationID S = info->base_rels[0].id;
     RelationID out_relid = BMS32_EMPTY;
@@ -90,11 +89,6 @@ RelationID buildSubTreesDFS(int idx, int parent_idx,
     return subtree;
 }
 
-extern "C"
-RelationID* buildSubTrees(GpuqoPlannerInfo *info){
-    RelationID* subtrees = (RelationID*) gpuqo_malloc(info->n_rels*sizeof(RelationID));
-
+void buildSubTrees(RelationID* subtrees, GpuqoPlannerInfo *info){
     buildSubTreesDFS(0, -1, subtrees, info->edge_table);
-
-    return subtrees;
 }

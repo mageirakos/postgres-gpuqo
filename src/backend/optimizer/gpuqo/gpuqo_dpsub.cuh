@@ -38,6 +38,7 @@ typedef struct ccc_stack_t<join_stack_elem_t> join_stack_t;
 
 typedef struct dpsub_iter_param_t{
     GpuqoPlannerInfo* info;
+    GpuqoPlannerInfo* gpu_info;
     RelationID out_relid;
     HashTable32bit* memo;
     thrust::host_vector<uint32_t> binoms;
@@ -66,7 +67,7 @@ void dpsub_scatter(scatter_iter_t scatter_from_iters,
 void dpsub_scatter(int n_sets, dpsub_iter_param_t &params);
 
 typedef JoinRelation (*dpsub_filtered_evaluate_t)(RelationID, uint32_t, int, 
-                                EdgeMask*, HashTable32bit&, GpuqoPlannerInfo*);
+    HashTable32bit&, GpuqoPlannerInfo*);
 
 EXTERN_PROTOTYPE_TIMING(unrank);
 EXTERN_PROTOTYPE_TIMING(filter);

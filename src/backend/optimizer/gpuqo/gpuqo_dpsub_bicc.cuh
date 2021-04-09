@@ -209,8 +209,7 @@ static int bfs_bicc(RelationID relid, const EdgeMask* edges, RelationID *blocks)
 
 __device__
 static JoinRelation dpsubEnumerateBiCC(RelationID relid, 
-                        uint32_t cid, int n_splits, EdgeMask* edge_table,
-                        HashTable32bit &memo, GpuqoPlannerInfo* info)
+                        uint32_t cid, int n_splits, HashTable32bit &memo, GpuqoPlannerInfo* info)
 { 
     JoinRelation jr_out;
     jr_out.cost = INFD;
@@ -228,7 +227,7 @@ static JoinRelation dpsubEnumerateBiCC(RelationID relid,
     __shared__ RelationID shared_blocks[32*BLOCK_DIM/32];
     RelationID* blocks = shared_blocks + t_off*32;
 
-    int n_blocks = bfs_bicc(relid, edge_table, blocks);
+    int n_blocks = bfs_bicc(relid, info->edge_table, blocks);
 
     LOG_DEBUG("%u has %d blocks\n", relid, n_blocks);
 
@@ -266,10 +265,10 @@ static JoinRelation dpsubEnumerateBiCC(RelationID relid,
 
             l = grow(BMS32_LOWEST(block_left_id), 
                             BMS32_DIFFERENCE(relid, block_right_id), 
-                            edge_table);
+                            info->edge_table);
             r = grow(BMS32_LOWEST(block_right_id), 
                             BMS32_DIFFERENCE(relid, block_left_id), 
-                            edge_table);
+                            info->edge_table);
             
             valid = BMS32_UNION(l, r) == relid;
         }

@@ -13,6 +13,7 @@
 #include <iostream>
 #include "optimizer/gpuqo_common.h"
 #include "gpuqo_uninitalloc.cuh"
+#include "gpuqo_planner_info.cuh"
 
 // I did not want to include the full c.h for fear of conflicts so I just 
 // include the definitions (to get USE_ASSERT_CHECKING) and just define the
@@ -115,10 +116,22 @@ typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation
 typedef thrust::device_vector<JoinRelationDpsize, uninitialized_allocator<JoinRelationDpsize> > uninit_device_vector_joinrel_dpsize;
 typedef thrust::device_vector<uint2, uninitialized_allocator<uint2> > uninit_device_vector_uint2;
 
-extern "C" void* gpuqo_malloc(size_t size);
-extern "C" void gpuqo_free(void* p);
+extern QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_dpsub(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_cpu_dpsize(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_cpu_dpsub(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_cpu_dpccp(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_dpe_dpsize(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_dpe_dpsub(GpuqoPlannerInfo* info);
+extern QueryTree* gpuqo_dpe_dpccp(GpuqoPlannerInfo* info);
 
-extern "C" void minimumSpanningTree(GpuqoPlannerInfo *info);
-extern "C" RelationID* buildSubTrees(GpuqoPlannerInfo *info);
+extern void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlannerInfo* info);
+extern RelationID remap_relid(RelationID id, int *remap_table);
+extern void remapEdgeTable(EdgeMask* edge_table, int n, int* remap_table);
+extern void remapPlannerInfo(GpuqoPlannerInfo* info, int* remap_table);
+extern void remapQueryTree(QueryTree* qt, int* remap_table);
+
+extern void minimumSpanningTree(GpuqoPlannerInfo *info);
+extern void buildSubTrees(RelationID* subtrees, GpuqoPlannerInfo *info);
 
 #endif							/* GPUQO_CUH */
