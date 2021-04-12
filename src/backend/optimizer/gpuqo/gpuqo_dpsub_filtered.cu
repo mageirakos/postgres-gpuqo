@@ -128,6 +128,17 @@ void launchUnrankFilteredDPSubKernel(int sq, int qss,
         info,
         out_relids
     );
+
+    cudaDeviceSynchronize();
+
+    cudaError_t err = cudaGetLastError();
+    if (err){
+        printf("CUDA ERROR! %s: %s\n", 
+            cudaGetErrorName(err),
+            cudaGetErrorString(err)
+        );
+        throw "CUDA ERROR";
+    }
 }
 
 template<int STEP>
@@ -284,6 +295,17 @@ void __launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* s
         n_pending_sets, n_sets,
         memo, info
     );
+
+    cudaDeviceSynchronize();
+
+    cudaError_t err = cudaGetLastError();
+    if (err){
+        printf("CUDA ERROR! %s: %s\n", 
+            cudaGetErrorName(err),
+            cudaGetErrorString(err)
+        );
+        throw "CUDA ERROR";
+    }
 }
 
 template<int n_splits, dpsub_filtered_evaluate_t Function>
