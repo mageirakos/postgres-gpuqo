@@ -60,7 +60,7 @@ GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
 	size += sizeof(float) * info_c->n_fk_selecs;
 	size += sizeof(RelationID) * info_c->n_eq_classes;
 	size += sizeof(float) * info_c->n_eq_class_sels;
-	size += 8-(size%8); // ceil to 64 bits multiples TODO
+	size += ceil_div(size, 8)*8; // ceil to 64 bits multiples
 
 	char* p = new char[size];
 
