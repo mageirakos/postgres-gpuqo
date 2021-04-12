@@ -18,7 +18,7 @@ __host__ __device__
 __forceinline__
 bool is_disjoint(RelationID left_rel_id, RelationID right_rel_id)
 {
-    return !BMS32_INTERSECTS(left_rel_id, right_rel_id);
+    return !left_rel_id.intersects(right_rel_id);
 }
 
 __host__ __device__
@@ -43,7 +43,7 @@ __forceinline__
 bool are_connected(EdgeMask left_edges, RelationID right_id,
                 GpuqoPlannerInfo* info)
 {
-    return BMS32_INTERSECTS(left_edges, right_id);
+    return left_edges.intersects(right_id);
 }
 
 __host__ __device__
@@ -58,14 +58,14 @@ bool are_connected(JoinRelationDetailed &left_rel,
 __host__ __device__
 __forceinline__
 RelationID get_neighbours(RelationID set, EdgeMask* edge_table){
-    RelationID neigs = BMS32_EMPTY;
+    RelationID neigs = RelationID(0);
     RelationID temp = set;
-    while (temp != BMS32_EMPTY){
-        int baserel_idx = BMS32_LOWEST_POS(temp)-2;
-        neigs = BMS32_UNION(neigs, edge_table[baserel_idx]);
-        temp = BMS32_UNSET(temp, baserel_idx+1);
+    while (!temp.empty()){
+        int baserel_idx = temp.lowestPos()-1;
+        neigs |= edge_table[baserel_idx];
+        temp.unset(baserel_idx+1);
     }
-    return BMS32_DIFFERENCE(neigs, set);
+    return neigs - set;
 }
 
 
@@ -78,31 +78,31 @@ __host__ __device__
 __forceinline__
 RelationID grow(RelationID from, RelationID subset, EdgeMask* edge_table)
 {
-    RelationID V = BMS32_EMPTY;
+    RelationID V = RelationID(0);
     RelationID N = from;
 
-    LOG_DEBUG("grow(%u, %u)\n", from, subset);
+    LOG_DEBUG("grow(%u, %u)\n", from.toUint(), subset.toUint());
 
-    Assert(BMS32_IS_SUBSET(from, subset));
+    Assert(from.isSubset(subset));
 
     // as long as there are nodes to visit
-    while (N != BMS32_EMPTY) {
+    while (!N.empty()) {
         // pop one of the not visited neighbours 
-        int baserel_idx = BMS32_LOWEST_POS(N)-2;
+        int baserel_idx = N.lowestPos()-1;
 
-        LOG_DEBUG("[%u] N=%u V=%u i=%d\n", from, N, V, baserel_idx);
+        LOG_DEBUG("[%u] N=%u V=%u i=%d\n", from.toUint(), N.toUint(), V.toUint(), baserel_idx);
 
         // mark as visited
-        V = BMS32_SET(V, baserel_idx+1);
+        V.set(baserel_idx+1);
         
         // add his neighbours to the nodes to visit
-        N = BMS32_UNION(N, edge_table[baserel_idx]);
+        N |= edge_table[baserel_idx];
 
         // keep only permitted nodes 
-        N = BMS32_INTERSECTION(N, subset);
+        N &= subset;
 
         // remove already visited nodes (including baserel_idx)
-        N = BMS32_DIFFERENCE(N, V);
+        N -= V;
     };
 
     return V;
@@ -112,11 +112,11 @@ __host__ __device__
 __forceinline__
 bool is_connected(RelationID relid, EdgeMask* edge_table)
 {
-    if (relid == BMS32_EMPTY){
+    if (relid.empty()){
         return false;
     }
 
-    return grow(BMS32_LOWEST(relid), relid, edge_table) == relid;
+    return grow(relid.lowest(), relid, edge_table) == relid;
 }
 
 /**
@@ -131,16 +131,12 @@ bool is_cyclic(RelationID relid, GpuqoPlannerInfo *info)
 {
     // for each base relation
     for (int i=0; i<info->n_rels; i++){
-        RelationID r = BMS32_NTH(i+1);
+        RelationID r = RelationID::nth(i+1);
 
         // if it is in relid
-        if (BMS32_INTERSECTS(relid, r)){
+        if (relid.intersects(r)){
             // check that there is at most one backwards arc
-            if (BMS32_SIZE(BMS32_INTERSECTION(
-                    BMS32_INTERSECTION(relid, BMS32_SET_ALL_LOWER_INC(r)),
-                    info->edge_table[i]
-                )) > 1
-            ){
+            if ((relid & r.allLowerInc() & info->edge_table[i]).size() > 1){
                 // found a cycle
                 return true;
             }

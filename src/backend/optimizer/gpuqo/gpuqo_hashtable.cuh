@@ -91,15 +91,15 @@ V* HashTable<K,V,Kint>::lookup(K key){
     Kint first_slot = slot;
     do {
         if (keys[slot] == key){
-            LOG_DEBUG("%u: found %u (%u)\n", key, slot, hash(key));
+            LOG_DEBUG("%u: found %u (%u)\n", key.toUint(), slot, hash(key));
             return &values[slot];
-        } else if (keys[slot] == EMPTY){
+        } else if (keys[slot].empty()){
             // NB: elements cannot be deleted!
-            LOG_DEBUG("%u: not found %u (%u)\n", key, slot, hash(key));
+            LOG_DEBUG("%u: not found %u (%u)\n", key.toUint(), slot, hash(key));
             return NULL;
         }
 
-        LOG_DEBUG("%u: inc %u (%u)\n", key, slot, hash(key));
+        LOG_DEBUG("%u: inc %u (%u)\n", key.toUint(), slot, hash(key));
 
         slot = (slot + 1) & (capacity-1);
     } while (slot != first_slot);
@@ -114,14 +114,14 @@ void HashTable<K,V,Kint>::insert(K key, V value){
     Kint slot = hash(key);
     Kint first_slot = slot;
     do {
-        K prev = atomicCAS(&keys[slot], EMPTY, key);
-        if (prev == EMPTY || prev == key){
-            LOG_DEBUG("%u: found %u (%u)\n", key, slot, hash(key));
+        K prev = atomicCAS(&keys[slot], K(0), key);
+        if (prev.empty() || prev == key){
+            LOG_DEBUG("%u: found %u (%u)\n", key.toUint(), slot, hash(key));
             values[slot] = value;
             return;
         }
 
-        LOG_DEBUG("%u: inc %u (%u)\n", key, slot, hash(key));
+        LOG_DEBUG("%u: inc %u (%u)\n", key.toUint(), slot, hash(key));
 
         slot = (slot + 1) & (capacity-1);
     } while (slot != first_slot);
@@ -133,13 +133,8 @@ void HashTable<K,V,Kint>::insert(K key, V value){
 
 template<>
 __device__ __forceinline__ 
-unsigned int HashTable<uint32_t, JoinRelation, unsigned int>::hash(uint32_t k){
-    k ^= k >> 16;
-    k *= 0x85ebca6b;
-    k ^= k >> 13;
-    k *= 0xc2b2ae35;
-    k ^= k >> 16;
-    return k & (capacity-1);
+unsigned int HashTable<RelationID, JoinRelation, unsigned int>::hash(RelationID k){
+    return k.hash() & (capacity-1);
 }
 
 #endif

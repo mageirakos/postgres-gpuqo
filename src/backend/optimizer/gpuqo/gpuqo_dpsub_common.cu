@@ -158,24 +158,24 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     thrust::device_vector<JoinRelation> ini_memo_vals_gpu(info->n_rels+1);
 
     QueryTree* out = NULL;
-    params.out_relid = BMS32_EMPTY;
+    params.out_relid = RelationID(0);
 
     for(int i=0; i<info->n_rels; i++){
         JoinRelation t;
-        t.left_rel_id = BMS32_EMPTY; 
-        t.left_rel_id = BMS32_EMPTY; 
+        t.left_rel_id = RelationID(0); 
+        t.left_rel_id = RelationID(0); 
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
         ini_memo_keys[i] = info->base_rels[i].id;
         ini_memo_vals[i] = t;
 
-        params.out_relid = BMS32_UNION(params.out_relid, info->base_rels[i].id);
+        params.out_relid = params.out_relid | info->base_rels[i].id;
     }
     
     // add dummy relation
     JoinRelation dummy_jr;
-	dummy_jr.left_rel_id = BMS32_EMPTY;
-	dummy_jr.right_rel_id = BMS32_EMPTY;
+	dummy_jr.left_rel_id = RelationID(0);
+	dummy_jr.right_rel_id = RelationID(0);
     dummy_jr.rows = 0.0;
 	dummy_jr.cost = 0.0;
     

@@ -95,7 +95,7 @@ public:
         RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
         RelationID relid = s<<1;
 
-        LOG_DEBUG("[%u] s=%u\n", tid, s);
+        LOG_DEBUG("[%u] s=%u\n", tid, s.toUint());
 
         JoinRelation jr_out = enum_functor(relid, cid);
         return thrust::tuple<RelationID, JoinRelation>(relid, jr_out);
@@ -111,7 +111,7 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
     if (factor < 32 || params.n_joins_per_set <= 32){
         threads_per_set = 32;
     } else{
-        threads_per_set = BMS32_HIGHEST(min(factor, params.n_joins_per_set));
+        threads_per_set = floorPow2(min(factor, params.n_joins_per_set));
     }
     
     n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);

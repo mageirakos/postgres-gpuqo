@@ -10,8 +10,6 @@
 #ifndef GPUQO_COMMON_H
 #define GPUQO_COMMON_H
 
-#include <optimizer/gpuqo_bitmapset.h>
-
 typedef enum GpuqoAlgorithm {
 	GPUQO_DPSIZE = 0,
 	GPUQO_DPSUB,
@@ -39,5 +37,23 @@ extern int gpuqo_dpe_pairs_per_depbuf;
 extern bool gpuqo_dpsub_tree_enable;
 extern bool gpuqo_dpsub_bicc_enable;
 extern bool gpuqo_spanning_tree_enable;
+
+#ifdef __CUDA_ARCH__
+__host__ __device__
+#endif
+static inline int eqClassNSels(int size){
+	return size*(size-1)/2;
+}
+
+#ifdef __CUDA_ARCH__
+__host__ __device__
+#endif
+static inline int eqClassIndex(int idx_l, int idx_r, int size){
+	if (idx_l < idx_r)
+		return idx_l*size - idx_l*(idx_l+1)/2 + (idx_r-idx_l-1);
+	else
+		return eqClassIndex(idx_r, idx_l, size);
+}
+
 
 #endif							/* GPUQO_COMMON_H */

@@ -10,7 +10,7 @@
 
  #include "gpuqo.cuh"
 
- extern "C" QueryTree *gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfo* info_c)
+ extern "C" gpuqo_c::QueryTree *gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfo* info_c)
  {
 	GpuqoPlannerInfo *info = convertGpuqoPlannerInfo(info_c);
 
@@ -65,7 +65,7 @@
     delete remap_table_fw;
     delete remap_table_bw;
  
-	free(info);
+	delete info;
  
-	return query_tree;
+	return convertQueryTree(query_tree);
  }

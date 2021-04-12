@@ -16,14 +16,14 @@
 #include "gpuqo_hashtable.cuh"
 
 
-template <typename T, typename Container>
+template <typename T, typename Container, typename idx_t>
 static
-T buildQueryTree_get(Container v, uint32_t idx){
+T buildQueryTree_get(Container v, idx_t idx){
     return v[idx];
 }
 
 template<> 
-JoinRelation buildQueryTree_get(HashTable32bit ht, uint32_t idx){
+JoinRelation buildQueryTree_get(HashTable32bit ht, RelationID idx){
     return ht.get(idx);
 }
 
@@ -31,7 +31,7 @@ JoinRelation buildQueryTree_get(HashTable32bit ht, uint32_t idx){
 template <typename Container>
 void dpsize_buildQueryTree(uint32_t idx, Container &gpu_memo_vals, QueryTree **qt)
 {
-    JoinRelationDpsize jr = buildQueryTree_get<JoinRelationDpsize, Container>(gpu_memo_vals, idx);
+    JoinRelationDpsize jr = buildQueryTree_get<JoinRelationDpsize, Container, uint32_t>(gpu_memo_vals, idx);
 
     (*qt) = (QueryTree*) malloc(sizeof(QueryTree));
     (*qt)->id = jr.id;
@@ -40,11 +40,11 @@ void dpsize_buildQueryTree(uint32_t idx, Container &gpu_memo_vals, QueryTree **q
     (*qt)->rows = jr.rows;
     (*qt)->cost = jr.cost;
 
-    if (jr.left_rel_id == 0 && jr.left_rel_id == 0){ // leaf
+    if (jr.left_rel_id.empty() && jr.left_rel_id.empty()){ // leaf
         return;
     }
 
-    if (jr.left_rel_id == 0 || jr.right_rel_id == 0){ // error
+    if (jr.left_rel_id.empty() || jr.right_rel_id.empty()){ // error
         printf("ERROR in buildQueryTree: %u has children %u and %u\n",
                 jr.id, jr.left_rel_id, jr.right_rel_id);
         return;
@@ -57,7 +57,7 @@ void dpsize_buildQueryTree(uint32_t idx, Container &gpu_memo_vals, QueryTree **q
 template <typename Container>
 void dpsub_buildQueryTree(RelationID id, Container &gpu_memo_vals, QueryTree **qt)
 {
-    JoinRelation jr = buildQueryTree_get<JoinRelation, Container>(gpu_memo_vals, id);
+    JoinRelation jr = buildQueryTree_get<JoinRelation, Container, RelationID>(gpu_memo_vals, id);
 
     (*qt) = (QueryTree*) malloc(sizeof(QueryTree));
     (*qt)->id = id;
@@ -66,7 +66,7 @@ void dpsub_buildQueryTree(RelationID id, Container &gpu_memo_vals, QueryTree **q
     (*qt)->rows = jr.rows;
     (*qt)->cost = jr.cost;
 
-    if (jr.left_rel_id == 0 && jr.left_rel_id == 0){ // leaf
+    if (jr.left_rel_id.empty() && jr.left_rel_id.empty()){ // leaf
         return;
     }
 

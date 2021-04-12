@@ -47,14 +47,17 @@ static void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
             HashTable32bit &memo, GpuqoPlannerInfo* info);
 
 __device__
-static JoinRelation dpsubEnumerateCsg(RelationID relid, uint32_t cid, 
+static JoinRelation dpsubEnumerateCsg(RelationID relid, uint32_t cid_bits, 
                                 int n_splits, HashTable32bit &memo, 
                                 GpuqoPlannerInfo* info)
 { 
-    Assert(n_splits % 32 == 0 && BMS32_SIZE((Bitmapset32) n_splits) == 1);
+    // TODO check
+    Assert(n_splits % 32 == 0 && popc(n_splits) == 1);
 
-    Bitmapset32 n_splits_bms = BMS32_HIGHEST((Bitmapset32) n_splits);
-    Bitmapset32 cmp_cid = (n_splits_bms)-1 - cid;
+    RelationID cid = RelationID(cid_bits);
+
+    RelationID split_mask = RelationID(floorPow2(n_splits)).allLower();
+    RelationID cmp_cid = split_mask - cid;
 
     JoinRelation jr_out;
     jr_out.cost = INFD;
@@ -64,15 +67,15 @@ static JoinRelation dpsubEnumerateCsg(RelationID relid, uint32_t cid,
     join_stack.ctxStack = ctxStack;
     join_stack.stackTop = 0;
 
-    Assert(BMS32_HIGHEST_POS(n_splits_bms)-1 <= BMS32_SIZE(relid));
-    LOG_DEBUG("[%u, %u] n_splits_bms=%u, cmp_cid=%u\n", 
-        relid, cid, n_splits_bms, cmp_cid);
+    Assert(split_mask.size() <= relid.size());
+    LOG_DEBUG("[%u, %u] split_mask=%u, cmp_cid=%u\n", 
+        relid.toUint(), cid.toUint(), split_mask.toUint(), cmp_cid.toUint());
 
-    Assert(BMS32_UNION(cid, cmp_cid) == n_splits_bms-1);
-    Assert(!BMS32_INTERSECTS(cid, cmp_cid));
+    Assert((cid|cmp_cid) == split_mask);
+    Assert(!cid.intersects(cmp_cid));
 
-    RelationID inc_set = BMS32_EXPAND_TO_MASK(cid, relid);
-    RelationID exc_set = BMS32_EXPAND_TO_MASK(cmp_cid, relid);
+    RelationID inc_set = expandToMask(cid, relid);
+    RelationID exc_set = expandToMask(cmp_cid, relid);
     
     enumerate_sub_csg<32,64>(relid, inc_set, exc_set, jr_out, join_stack, 
         memo, info);
@@ -81,10 +84,10 @@ static JoinRelation dpsubEnumerateCsg(RelationID relid, uint32_t cid,
         int pos = W_OFFSET + join_stack.stackTop - LANE_ID - 1;
         Assert(pos >= W_OFFSET && pos < W_OFFSET + WARP_SIZE);
         RelationID l = join_stack.ctxStack[pos];
-        RelationID r = BMS32_DIFFERENCE(relid, l);
+        RelationID r = relid - l;
 
         LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", 
-                W_OFFSET, LANE_ID, pos, l, r);
+                W_OFFSET, LANE_ID, pos, l.toUint(), r.toUint());
 
         JoinRelation left_rel = *memo.lookup(l);
         JoinRelation right_rel = *memo.lookup(r);
@@ -102,33 +105,27 @@ static void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
             JoinRelation &jr_out, join_stack_t &join_stack, 
             HashTable32bit &memo, GpuqoPlannerInfo* info){
     // LOG_DEBUG("enumerate_sub_csg_emit(%u, %u, %u, %u, %u)\n",
-    //         T, emit_S, emit_X, I, E);
-    Assert(BMS32_IS_SUBSET(emit_S, T));
-    Assert(BMS32_IS_SUBSET(I, T));
-    Assert(emit_S == BMS32_EMPTY || is_connected(emit_S, info->edge_table));
+    //         T.toUint(), emit_S.toUint(), emit_X.toUint(), I.toUint(), E.toUint());
+    Assert(emit_S.isSubset(T));
+    Assert(I.isSubset(T));
+    Assert(emit_S.empty() || is_connected(emit_S, info->edge_table));
 
-    try_join<false,true>(T, jr_out, emit_S, BMS32_DIFFERENCE(T, emit_S), 
-            emit_S != BMS32_EMPTY && BMS32_IS_SUBSET(I, emit_S), 
+    try_join<false,true>(T, jr_out, emit_S, T-emit_S, 
+            !emit_S.empty() && I.isSubset(emit_S), 
             join_stack, memo, info);
 
-    RelationID new_N = BMS32_INTERSECTION(
-        BMS32_DIFFERENCE(
-            get_neighbours(emit_S, info->edge_table), 
-            emit_X
-        ),
-        BMS32_DIFFERENCE(T, E)
-    );
+    RelationID new_N = (get_neighbours(emit_S,info->edge_table)-emit_X) & (T-E);
     
     // If possible, directly move to smaller I (it does not make 
     // sense to explore other rels in I first since it won't be 
     // possible to go back)
-    RelationID lowI = BMS32_LOWEST(BMS32_DIFFERENCE(I, emit_S));
-    if (BMS32_INTERSECTS(lowI, new_N)){
+    RelationID lowI = (I - emit_S).lowest();
+    if (lowI.intersects(new_N)){
         new_N = lowI;
     }
 
     // do not add useless elements to stack
-    if (new_N != BMS32_EMPTY){
+    if (!new_N.empty()){
         loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
             emit_S, emit_X, I, new_N
         };
@@ -141,9 +138,9 @@ __device__
 static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     JoinRelation &jr_out, join_stack_t &join_stack,
                     HashTable32bit &memo, GpuqoPlannerInfo* info){
-    RelationID R = BMS32_UNION(I, E);
+    RelationID R = I | E;
 
-    Assert(BMS32_IS_SUBSET(I, T));
+    Assert(I.isSubset(T));
 
     // S, X, I, N
     ext_loop_stack_elem_t loop_stack[STACK_SIZE];
@@ -157,30 +154,30 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
     LOG_DEBUG("[%d: %d] lanemask_le=%u\n", W_OFFSET, LANE_ID, LANE_MASK_LE);
 
     RelationID temp;
-    if (I != BMS32_EMPTY){
-        temp = BMS32_LOWEST(I);
+    if (!I.empty()){
+        temp = I.lowest();
     } else{
-        temp = BMS32_DIFFERENCE(T, E);
+        temp = T-E;
     }
 
-    while (temp != BMS32_EMPTY){
-        RelationID v = BMS32_LOWEST(temp);
+    while (!temp.empty()){
+        RelationID v = temp.lowest();
         
         loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
-            BMS32_EMPTY,
-            BMS32_SET_ALL_LOWER_INC(v),
+            RelationID(0),
+            v.allLowerInc(),
             I,
             v
         };
         Assert(loop_stack_size < STACK_SIZE);
-        temp = BMS32_DIFFERENCE(temp, v);
+        temp -= v;
     }
 
     bool all_empty = false;
     while (!all_empty || stack.stackTop != 0){
         RelationID emit_S;
         RelationID emit_X;
-        RelationID next_subset = BMS32_EMPTY;
+        RelationID next_subset = RelationID(0);
 
         if (loop_stack_size != 0){
             ext_loop_stack_elem_t top = loop_stack[--loop_stack_size];
@@ -188,18 +185,18 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
             RelationID X = top.X;
             RelationID N = top.N;
             I = top.I;
-            E = BMS32_DIFFERENCE(R,I);
+            E = R - I;
 
             Assert(loop_stack_size >= 0);
 
-            // LOG_DEBUG("[%u: %u, %u] loop_stack: S=%u, X=%u, N=%u\n", T, I, E, S, X, N);
+            // LOG_DEBUG("[%u: %u, %u] loop_stack: S=%u, X=%u, N=%u\n", T.toUint(), I.toUint(), E.toUint(), S.toUint(), X.toUint(), N.toUint());
 
-            next_subset = BMS32_NEXT_SUBSET(BMS32_INTERSECTION(S,N), N);
+            next_subset = nextSubset(S & N, N);
 
-            emit_S = BMS32_UNION(BMS32_DIFFERENCE(S, N), next_subset);
-            emit_X = BMS32_UNION(X, N);
+            emit_S = (S - N) | next_subset;
+            emit_X = X | N;
 
-            if (next_subset != BMS32_EMPTY){
+            if (!next_subset.empty()){
                 loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
                     emit_S, X, I, N
                 };
@@ -208,7 +205,7 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
         }
 
         if (!all_empty){
-            bool p = next_subset != BMS32_EMPTY;
+            bool p = !next_subset.empty();
             unsigned pthBlt = __ballot_sync(WARP_MASK, !p);
             int reducedNTaken = __popc(pthBlt);
             if (LANE_ID == 0){
@@ -222,8 +219,8 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     emit_S = stack.ctxStack[pos].S;
                     emit_X = stack.ctxStack[pos].X;
                     I = stack.ctxStack[pos].I;
-                    E = BMS32_DIFFERENCE(R,I);
-                    LOG_DEBUG("[%d: %d] Consuming stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S, emit_X, I);
+                    E = R - I;
+                    LOG_DEBUG("[%d: %d] Consuming stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S.toUint(), emit_X.toUint(), I.toUint());
                 }
                 stack.stackTop -= reducedNTaken;
                 Assert(stack.stackTop >= 0);
@@ -239,7 +236,7 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     stack.ctxStack[pos].S = emit_S;
                     stack.ctxStack[pos].X = emit_X;
                     stack.ctxStack[pos].I = I;
-                    LOG_DEBUG("[%d: %d] Accumulating stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S, emit_X, I);
+                    LOG_DEBUG("[%d: %d] Accumulating stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S.toUint(), emit_X.toUint(), I.toUint());
                 }
                 stack.stackTop += WARP_SIZE - reducedNTaken;
                 Assert(stack.stackTop <= WARP_SIZE);
@@ -255,16 +252,16 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 emit_S = stack.ctxStack[pos].S;
                 emit_X = stack.ctxStack[pos].X;
                 I = stack.ctxStack[pos].I;
-                E = BMS32_DIFFERENCE(R,I);
+                E = R - I;
 
-                LOG_DEBUG("[%d: %d] Consuming stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S, emit_X, I);
+                LOG_DEBUG("[%d: %d] Consuming stack (%d): S=%u, X=%u, I=%u\n", W_OFFSET, LANE_ID, pos, emit_S.toUint(), emit_X.toUint(), I.toUint());
             } else {
                 // fake values just to get to try_join
                 // these will fail all checks and make the thread execute any
                 // pending join
                 // this thread will not touch any queue
 
-                emit_S = BMS32_EMPTY;
+                emit_S = RelationID(0);
                 emit_X = T;
             }
 

@@ -113,8 +113,11 @@ public:
                 out.x,
                 out.y
             );
+
+            RelationID lid = memo_keys[out.x];
+            RelationID rid = memo_keys[out.y];
     
-            relid = BMS32_UNION(memo_keys[out.x], memo_keys[out.y]);
+            relid = lid | rid;
     
             return thrust::tuple<RelationID, uint2>(relid, out);
         }
@@ -179,12 +182,12 @@ public:
         JoinRelationDpsize& left_rel = memo_vals.get()[idxs.x];
         JoinRelationDpsize& right_rel = memo_vals.get()[idxs.y];
 
-        jr.id = BMS32_UNION(left_rel.id, right_rel.id);
+        jr.id = left_rel.id | right_rel.id;
         jr.left_rel_id = left_rel.id;
         jr.left_rel_idx = idxs.x;
         jr.right_rel_id = right_rel.id;
         jr.right_rel_idx = idxs.y;
-        jr.edges = BMS32_UNION(left_rel.edges, right_rel.edges);
+        jr.edges = left_rel.edges | right_rel.edges;
         jr.rows = estimate_join_rows(left_rel.id, left_rel, right_rel.id, right_rel, info);
         jr.cost = calc_join_cost(left_rel.id, left_rel, right_rel.id, right_rel, jr.rows, info);
 
@@ -246,9 +249,9 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
         JoinRelationDpsize t;
         t.id = info->base_rels[i].id;
         t.left_rel_idx = 0; 
-        t.left_rel_id = BMS32_EMPTY; 
+        t.left_rel_id = RelationID(0);
         t.right_rel_idx = 0; 
-        t.right_rel_id = BMS32_EMPTY; 
+        t.right_rel_id = RelationID(0);
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
         t.edges = info->edge_table[i];

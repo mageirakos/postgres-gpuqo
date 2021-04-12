@@ -8,7 +8,51 @@
  *-------------------------------------------------------------------------
  */
 
+#include <iostream>
+
 #include "gpuqo_planner_info.cuh"
+
+extern "C" void *palloc0(size_t size);
+extern "C" void *palloc(size_t size);
+
+static size_t bitmapset_size(int nwords){
+	return (offsetof(gpuqo_c::Bitmapset, words) + (nwords) * sizeof(gpuqo_c::bitmapword));
+}
+
+template<typename Bitmapset>
+Bitmapset convertBitmapset(gpuqo_c::Bitmapset* set){
+	if (set == NULL)
+		return RelationID(0);
+
+    if (set->nwords > 1){
+        printf("WARNING: only relids of 32 bits are supported!\n");
+    }
+    if (set->words[0] & 0xFFFFFFFF00000000ULL){
+        printf("WARNING: only relids of 32 bits are supported!\n");
+    }
+    return Bitmapset(set->words[0] & 0xFFFFFFFFULL);
+}
+
+template<typename Bitmapset>
+gpuqo_c::Bitmapset* convertBitmapset(Bitmapset set){
+	gpuqo_c::Bitmapset *result;
+
+	int nwords = (sizeof(set)*8 + BITS_PER_BITMAPWORD - 1) / BITS_PER_BITMAPWORD;
+
+	result = (gpuqo_c::Bitmapset *) palloc0(bitmapset_size(nwords));
+	result->nwords = nwords;
+
+	while (!set.empty()){
+		int x = set.lowestPos(); 
+		int wordnum = x / BITS_PER_BITMAPWORD;
+		int bitnum = x % BITS_PER_BITMAPWORD;
+
+		result->words[wordnum] |= ((gpuqo_c::bitmapword) 1 << bitnum);
+		set.unset(x);
+	}
+
+	return result;
+}
 
 GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
 	unsigned int size = sizeof(GpuqoPlannerInfo);
@@ -16,9 +60,9 @@ GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
 	size += sizeof(float) * info_c->n_fk_selecs;
 	size += sizeof(RelationID) * info_c->n_eq_classes;
 	size += sizeof(float) * info_c->n_eq_class_sels;
-	size += 8-(size%8); // ceil to 64 bits multiples
+	size += 8-(size%8); // ceil to 64 bits multiples TODO
 
-	char* p = (char*) malloc(size);
+	char* p = new char[size];
 
 	GpuqoPlannerInfo *info = (GpuqoPlannerInfo*) p;
 	p += sizeof(GpuqoPlannerInfo);
@@ -27,8 +71,8 @@ GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
 	info->n_rels = info_c->n_rels;
 
 	for (int i=0; i < info->n_rels; i++){
-		info->edge_table[i] = info_c->edge_table[i];
-		info->indexed_edge_table[i] = info_c->indexed_edge_table[i];
+		info->edge_table[i] = convertBitmapset<RelationID>(info_c->edge_table[i]);
+		info->indexed_edge_table[i] = convertBitmapset<RelationID>(info_c->indexed_edge_table[i]);
 	}
 
 	info->n_fk_selecs = info_c->n_fk_selecs;
@@ -40,7 +84,7 @@ GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
 
 	int offset = 0;
 	for (int i=0; i < info->n_rels; i++){
-		info->base_rels[i].id = info_c->base_rels[i].id;
+		info->base_rels[i].id = convertBitmapset<RelationID>(info_c->base_rels[i].id);
 		info->base_rels[i].rows = info_c->base_rels[i].rows;
 		info->base_rels[i].tuples = info_c->base_rels[i].tuples;
 
@@ -71,10 +115,10 @@ GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
 	int i = 0;
 	offset = 0;
 	while (ec != NULL){
-		eq_classes[i] = ec->relids;
+		eq_classes[i] = convertBitmapset<RelationID>(ec->relids);
 
-		int s = BMS32_SIZE(ec->relids);
-		int n = s*(s-1)/2;
+		int s = eq_classes[i].size();
+		int n = eqClassNSels(s);
 		for (int j = 0; j < n; j++)
 			eq_class_sels[offset+j] = ec->sels[j];
 		
@@ -121,5 +165,21 @@ GpuqoPlannerInfo* copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo *info){
 	cudaMemcpy(info_gpu, &tmp_info, sizeof(GpuqoPlannerInfo), cudaMemcpyHostToDevice);
 
 	return info_gpu;
+}
+
+gpuqo_c::QueryTree* convertQueryTree(QueryTree* qt){
+	if (qt == NULL)
+		return NULL;
+	
+	gpuqo_c::QueryTree *result = (gpuqo_c::QueryTree *) palloc(sizeof(gpuqo_c::QueryTree));
+	result->id = convertBitmapset<RelationID>(qt->id);
+	result->left = convertQueryTree(qt->left);
+	result->right = convertQueryTree(qt->right);
+	result->cost = qt->cost;
+	result->rows = qt->rows;
+
+	free(qt);
+
+	return result;
 }
   

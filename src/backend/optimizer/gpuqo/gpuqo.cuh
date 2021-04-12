@@ -14,19 +14,8 @@
 #include "optimizer/gpuqo_common.h"
 #include "gpuqo_uninitalloc.cuh"
 #include "gpuqo_planner_info.cuh"
+#include "gpuqo_debug.cuh"
 
-// I did not want to include the full c.h for fear of conflicts so I just 
-// include the definitions (to get USE_ASSERT_CHECKING) and just define the
-// Assert macro as in c.h
-#include "pg_config.h"
-#ifndef USE_ASSERT_CHECKING
-#define Assert(condition)	((void)true)
-#else
-#include <assert.h>
-#define Assert(p) assert(p)
-#endif
-
-// I do the same for the CHECK_FOR_INTERRUPTS macro
 #include "signal.h"
 extern "C" void ProcessInterrupts(void);
 extern "C" volatile sig_atomic_t InterruptPending;
@@ -58,58 +47,6 @@ do { \
 
 // ceiled integer division
 #define ceil_div(a,b) (((a)+(b)-1)/(b)) 
-
-// structure representing join of two relations used by CUDA and CPU code 
-// of GPUQO
-struct JoinRelation{
-	RelationID left_rel_id;
-	RelationID right_rel_id;
-	float rows;
-	float cost;
-
-public:
-	__host__ __device__
-	bool operator<(const JoinRelation &o) const
-	{
-		return cost < o.cost;
-	}
-
-	__host__ __device__
-	bool operator>(const JoinRelation &o) const
-	{
-		return cost > o.cost;
-	}
-
-	__host__ __device__
-	bool operator==(const JoinRelation &o) const
-	{
-		return cost == o.cost;
-	}
-
-	__host__ __device__
-	bool operator<=(const JoinRelation &o) const
-	{
-		return cost <= o.cost;
-	}
-
-	__host__ __device__
-	bool operator>=(const JoinRelation &o) const
-	{
-		return cost >= o.cost;
-	}
-};
-
-struct JoinRelationDetailed : public JoinRelation{
-	RelationID id;
-	EdgeMask edges;
-};
-
-struct JoinRelationDpsize : public JoinRelationDetailed {
-	uint32_t left_rel_idx;
-	uint32_t right_rel_idx;
-};
-
-extern std::ostream & operator<<(std::ostream &os, const JoinRelation& jr);
 
 typedef thrust::device_vector<RelationID, uninitialized_allocator<RelationID> > uninit_device_vector_relid;
 typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation> > uninit_device_vector_joinrel;

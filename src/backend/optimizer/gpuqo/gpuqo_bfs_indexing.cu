@@ -19,38 +19,37 @@ void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlan
     
     bfs_queue[bfs_queue_back_idx++] = 0;
 
-    Bitmapset32 seen = BMS32_NTH(1);
+    RelationID seen = RelationID::nth(1);
     while (bfs_queue_front_idx != bfs_queue_back_idx && bfs_idx < info->n_rels){
         int base_rel_idx = bfs_queue[bfs_queue_front_idx++];
         
-        BaseRelation* r = &info->base_rels[base_rel_idx];
         EdgeMask edges = info->edge_table[base_rel_idx];
 
         remap_table_fw[base_rel_idx] = bfs_idx;
         remap_table_bw[bfs_idx] = base_rel_idx;
         bfs_idx++;
 
-        while (edges != BMS32_EMPTY){
-            RelationID next_r = BMS32_LOWEST(edges);
-            int next = BMS32_LOWEST_POS(edges) - 2;
+        while (!edges.empty()){
+            RelationID next_r = edges.lowest();
+            int next = edges.lowestPos() - 1;
 
-            if (!BMS32_INTERSECTS(seen, next_r)){
+            if (!seen.intersects(next_r)){
                 bfs_queue[bfs_queue_back_idx++] = next;
             }
             
-            edges = BMS32_DIFFERENCE(edges, BMS32_LOWEST(edges));
+            edges -= edges.lowest();
         }
-        seen = BMS32_UNION(seen, info->edge_table[base_rel_idx]);
+        seen |= info->edge_table[base_rel_idx];
     }
 }
 
 RelationID remapRelid(RelationID id, int *remap_table){
     RelationID in = id;
-    RelationID out = BMS32_EMPTY;
-    while (id != BMS32_EMPTY){
-        int pos = BMS32_LOWEST_POS(id)-2;
-        out = BMS32_UNION(out, BMS32_NTH(remap_table[pos]+1));
-        id = BMS32_DIFFERENCE(id, BMS32_NTH(pos+1));
+    RelationID out = RelationID(0);
+    while (!id.empty()){
+        int pos = id.lowestPos();
+        out.set(remap_table[pos-1]+1);
+        id.unset(pos);
     }
 
     return out;
@@ -66,10 +65,46 @@ void remapEdgeTable(EdgeMask* edge_table, int n, int* remap_table){
     free(edge_table_tmp);
 }
 
-void remapPlannerInfo(GpuqoPlannerInfo* info, int* remap_table){
-    for (int i = 0; i < info->n_rels; i++){
-        info->base_rels[i].id = remapRelid(info->base_rels[i].id, remap_table);
+void remapBaseRels(BaseRelation* base_rels, int n, int* remap_table){
+    BaseRelation* base_rels_tmp = (BaseRelation*) malloc(n*sizeof(BaseRelation));
+    memcpy(base_rels_tmp, base_rels, n*sizeof(BaseRelation));
+    for (int i = 0; i < n; i++){
+        base_rels[remap_table[i]] = base_rels_tmp[i];
+        base_rels[remap_table[i]].id = remapRelid(base_rels_tmp[i].id, remap_table);
     }
+
+    free(base_rels_tmp);
+}
+
+void remapEqClass(RelationID* eq_class, float* sels, int* remap_table){
+    RelationID new_eq_class = remapRelid(*eq_class, remap_table);
+    int s = eq_class->size();
+    int n = eqClassNSels(s);
+
+    float* sels_tmp = (float*) malloc(n*sizeof(float));
+    memcpy(sels_tmp, sels, n*sizeof(float));
+
+    for (int idx_l = 0; idx_l < s; idx_l++){
+        RelationID id_l = expandToMask(RelationID::nth(idx_l), *eq_class); 
+        RelationID new_id_l = remapRelid(id_l, remap_table); 
+        int new_idx_l = (new_id_l.allLower() & new_eq_class).size();
+
+        for (int idx_r = idx_l+1; idx_r < s; idx_r++){
+            RelationID id_r = expandToMask(RelationID::nth(idx_r), *eq_class); 
+            RelationID new_id_r = remapRelid(id_r, remap_table); 
+            int new_idx_r = (new_id_r.allLower() & new_eq_class).size();
+
+            int old_idx = eqClassIndex(idx_l, idx_r, s);
+            int new_idx = eqClassIndex(new_idx_l, new_idx_r, s);
+
+            sels[new_idx] = sels_tmp[old_idx];
+        }
+    }
+    free(sels_tmp);
+}
+
+void remapPlannerInfo(GpuqoPlannerInfo* info, int* remap_table){
+    remapBaseRels(info->base_rels, info->n_rels, remap_table);
     remapEdgeTable(info->edge_table, info->n_rels, remap_table);
     remapEdgeTable(info->indexed_edge_table, info->n_rels, remap_table);
 
@@ -77,8 +112,10 @@ void remapPlannerInfo(GpuqoPlannerInfo* info, int* remap_table){
     if (gpuqo_spanning_tree_enable)
         remapEdgeTable(info->subtrees, info->n_rels, remap_table);
 
+    size_t offset = 0;
     for (int i=0; i<info->n_eq_classes; i++){
-        info->eq_classes[i] = remapRelid(info->eq_classes[i], remap_table);
+        remapEqClass(&info->eq_classes[i], info->eq_class_sels+offset, remap_table);
+		offset += eqClassNSels(info->eq_classes[i].size());
     }
 
     for (int i=0; i<info->n_fk_selecs; i++){

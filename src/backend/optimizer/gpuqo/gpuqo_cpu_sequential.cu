@@ -71,9 +71,9 @@ QueryTree* gpuqo_cpu_sequential(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm
     
     algorithm.enumerate_function(info, gpuqo_cpu_sequential_join, memo, extra, algorithm);
 
-    RelationID final_joinrel_id = BMS32_EMPTY;
+    RelationID final_joinrel_id = RelationID(0);
     for (int i = 0; i < info->n_rels; i++)
-        final_joinrel_id = BMS32_UNION(final_joinrel_id, info->base_rels[i].id);
+        final_joinrel_id |= info->base_rels[i].id;
 
     
     auto final_joinrel_pair = memo.find(final_joinrel_id);

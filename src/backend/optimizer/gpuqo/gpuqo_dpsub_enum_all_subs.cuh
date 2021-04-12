@@ -24,14 +24,14 @@ static JoinRelation dpsubEnumerateAllSubs(RelationID relid, uint32_t cid,
 {
     JoinRelation jr_out;
     jr_out.cost = INFD;
-    int qss = BMS32_SIZE(relid);
+    int qss = relid.size();
     uint32_t n_possible_joins = 1U<<qss;
     uint32_t n_pairs = ceil_div(n_possible_joins, n_splits);
     uint32_t join_id = (cid)*n_pairs;
-    RelationID l = BMS32_EXPAND_TO_MASK(join_id, relid);
+    RelationID l = expandToMask(RelationID(join_id), relid);
     RelationID r;
 
-    LOG_DEBUG("[%u, %u] n_splits=%d\n", relid, cid, n_splits);
+    LOG_DEBUG("[%u, %u] n_splits=%d\n", relid.toUint(), cid, n_splits);
 
     Assert(blockDim.x == BLOCK_DIM);
     volatile __shared__ join_stack_elem_t ctxStack[BLOCK_DIM];
@@ -41,11 +41,11 @@ static JoinRelation dpsubEnumerateAllSubs(RelationID relid, uint32_t cid,
 
     bool valid = join_id < n_possible_joins;
     for (int i = 0; i < n_pairs; i++){
-        r = BMS32_DIFFERENCE(relid, l);
+        r = relid - l;
         
         try_join<true,true>(relid, jr_out, l, r, valid, stack, memo, info);
 
-        l = BMS32_NEXT_SUBSET(l, relid);
+        l = nextSubset(l, relid);
 
         // if l becomes 0, I reached the end and I mark all next joins as
         // invalid
@@ -55,9 +55,9 @@ static JoinRelation dpsubEnumerateAllSubs(RelationID relid, uint32_t cid,
     if (LANE_ID < stack.stackTop){
         int pos = W_OFFSET + stack.stackTop - LANE_ID - 1;
         RelationID l = stack.ctxStack[pos];
-        RelationID r = BMS32_DIFFERENCE(relid, l);
+        RelationID r = relid - l;
 
-        LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
+        LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l.toUint(), r.toUint());
 
         JoinRelation left_rel = *memo.lookup(l);
         JoinRelation right_rel = *memo.lookup(r);

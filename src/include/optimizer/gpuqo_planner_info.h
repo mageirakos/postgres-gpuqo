@@ -10,10 +10,10 @@
 #ifndef GPUQO_PLANNER_INFO_H
 #define GPUQO_PLANNER_INFO_H
 
-#include <optimizer/gpuqo_bitmapset.h>
+#include <nodes/bitmapset.h>
 
-typedef Bitmapset32 EdgeMask;
-typedef Bitmapset32 RelationID;
+typedef Bitmapset* EdgeMask;
+typedef Bitmapset* RelationID;
 
 typedef struct EqClassInfo{
 	RelationID relids;

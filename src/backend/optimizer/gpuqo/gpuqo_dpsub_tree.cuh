@@ -25,33 +25,30 @@ static JoinRelation dpsubEnumerateTreeSimple(RelationID relid,
     JoinRelation jr_out;
     jr_out.cost = INFD;
 
-    uint32_t n_possible_joins = BMS32_SIZE(relid);
+    uint32_t n_possible_joins = relid.size();
 
     for (uint32_t i = cid; i < n_possible_joins; i += n_splits){
-        RelationID base_rel_id = BMS32_EXPAND_TO_MASK(BMS32_NTH(i), relid);
-        RelationID permitted = BMS32_DIFFERENCE(
-            relid, 
-            // TODO check if I can rely on this in general...
-            BMS32_SET_ALL_LOWER(base_rel_id)
-        );
+        RelationID base_rel_id = expandToMask(RelationID::nth(i), relid);
+        // TODO check if I can rely on this in general...
+        RelationID permitted = relid - base_rel_id.allLower();
 
         LOG_DEBUG("%d %d: %u (%u)\n", 
             blockIdx.x,
             threadIdx.x,
-            base_rel_id,
-            relid
+            base_rel_id.toUint(),
+            relid.toUint()
         );
 
         RelationID l = grow(base_rel_id, permitted, info->edge_table);
-        RelationID r = BMS32_DIFFERENCE(relid, l);
+        RelationID r = relid - l;
 
-        if (l != BMS32_EMPTY && r != BMS32_EMPTY){
+        if (!l.empty() && !r.empty()){
             LOG_DEBUG("%d %d: %u %u (%u)\n", 
                 blockIdx.x,
                 threadIdx.x,
-                l,
-                r, 
-                relid
+                l.toUint(),
+                r.toUint(), 
+                relid.toUint()
             );
 
             JoinRelation left_rel = *memo.lookup(l);
@@ -72,31 +69,28 @@ static JoinRelation dpsubEnumerateTreeWithSubtrees(RelationID relid,
     JoinRelation jr_out;
     jr_out.cost = INFD;
 
-    uint32_t n_possible_joins = BMS32_SIZE(relid);
+    uint32_t n_possible_joins = relid.size();
 
     for (uint32_t i = cid; i < n_possible_joins; i += n_splits){
-        RelationID base_rel_id = BMS32_EXPAND_TO_MASK(BMS32_NTH(i), relid);
-        int base_rel_idx = BMS32_LOWEST_POS(base_rel_id)-2;
+        RelationID base_rel_id = expandToMask(RelationID::nth(i), relid);
+        int base_rel_idx = base_rel_id.lowestPos()-1;
 
         Assert(base_rel_idx < info->n_rels);
 
-        RelationID S = BMS32_INTERSECTION(
-            info->subtrees[base_rel_idx],
-            relid
-        );
+        RelationID S = info->subtrees[base_rel_idx] & relid;
 
         RelationID l = S;
-        RelationID r = BMS32_DIFFERENCE(relid, S);
+        RelationID r = relid - S;
 
         LOG_DEBUG("%d %d: %u %u (%u)\n", 
             blockIdx.x,
             threadIdx.x,
-            l,
-            r, 
-            relid
+            l.toUint(),
+            r.toUint(), 
+            relid.toUint()
         );
 
-        if (l != BMS32_EMPTY && r != BMS32_EMPTY){
+        if (!l.empty() && !r.empty()){
             JoinRelation left_rel = *memo.lookup(l);
             JoinRelation right_rel = *memo.lookup(r);
 

@@ -84,13 +84,13 @@ EXTERN_PROTOTYPE_TIMING(iteration);
 __host__ __device__
 __forceinline__
 RelationID dpsub_unrank_sid(uint32_t sid, uint32_t qss, uint32_t sq, uint32_t* binoms){
-    RelationID s = BMS32_SET_ALL_LOWER(BMS32_NTH(sq));
+    RelationID s = RelationID::nth(sq).allLower();
     int qss_tmp = qss, sq_tmp = sq;
 
     while (sq_tmp > 0 && sq_tmp > qss_tmp){
         uint32_t o = BINOM(binoms, sq, sq_tmp-1, sq_tmp-qss_tmp-1);
         if (sid < o){
-            s = BMS32_UNSET(s, sq_tmp-1);
+            s.unset(sq_tmp-1);
         } else {
             qss_tmp--;
             sid -= o;
@@ -109,8 +109,7 @@ RelationID dpsub_unrank_sid(uint32_t sid, uint32_t qss, uint32_t sq, uint32_t* b
 __host__ __device__
 __forceinline__
 RelationID dpsub_unrank_next(RelationID v){
-    unsigned int t = (v | (v - 1)) + 1;  
-    return t | ((((t & -t) / (v & -v)) >> 1) - 1);  
+    return v.nextPermutation();
 }
 
 template<bool CHECK_LEFT, bool CHECK_RIGHT>
@@ -138,7 +137,7 @@ bool check_join(RelationID left_id, RelationID right_id,
         return true;
     } else {
         LOG_DEBUG("[bid:%d tid:%d] Invalid subsets %u and %u\n", 
-                blockIdx.x, threadIdx.x, left_id, right_id
+                blockIdx.x, threadIdx.x, left_id.toUint(), right_id.toUint()
         );
         return false;
     }
@@ -152,11 +151,11 @@ void do_join(JoinRelation &jr_out,
              GpuqoPlannerInfo* info) {
     LOG_DEBUG("[%3d,%3d] Joining %u and %u (%u)\n", 
                 blockIdx.x, threadIdx.x,
-                left_rel_id, right_rel_id,
-                BMS32_UNION(left_rel_id, right_rel_id));
+                left_rel_id.toUint(), right_rel_id.toUint(),
+                (left_rel_id | right_rel_id).toUint());
 
-    Assert(left_rel_id != BMS32_EMPTY);
-    Assert(right_rel_id != BMS32_EMPTY);
+    Assert(!left_rel_id.empty());
+    Assert(!right_rel_id.empty());
 
     float jr_rows = estimate_join_rows(left_rel_id, left_rel, right_rel_id, right_rel, info);
     float jr_cost = calc_join_cost(left_rel_id, left_rel, right_rel_id, right_rel, jr_rows, info);
@@ -176,7 +175,7 @@ void try_join(RelationID jr, JoinRelation &jr_out, RelationID l, RelationID r,
                 HashTable32bit &memo, GpuqoPlannerInfo* info)
 {
     LOG_DEBUG("[%d, %d] try_join(%u, %u, %s)\n", 
-                blockIdx.x, threadIdx.x, l, r,
+                blockIdx.x, threadIdx.x, l.toUint(), r.toUint(),
                 additional_predicate ? "true" : "false");
 
     bool p;
@@ -198,18 +197,18 @@ void try_join(RelationID jr, JoinRelation &jr_out, RelationID l, RelationID r,
         int pos = W_OFFSET + stack.stackTop - wScan;
         if (!p){
             l = stack.ctxStack[pos];
-            r = BMS32_DIFFERENCE(jr, l);
+            r = jr - l;
             LOG_DEBUG("[%d: %d] Consuming stack (%d=%d+%d-%d): l=%u, r=%u\n", 
-                W_OFFSET, LANE_ID, pos, W_OFFSET, stack.stackTop, wScan, l, r
+                W_OFFSET, LANE_ID, pos, W_OFFSET, stack.stackTop, wScan, l.toUint(), r.toUint()
             );
         } else {
             LOG_DEBUG("[%d: %d] Using local values: l=%u, r=%u\n", 
-                W_OFFSET, LANE_ID, l, r
+                W_OFFSET, LANE_ID, l.toUint(), r.toUint()
             );
         }
         stack.stackTop -= reducedNTaken;
 
-        Assert(l != BMS32_EMPTY && r != BMS32_EMPTY);
+        Assert(!l.empty() && !r.empty());
 
         JoinRelation left_rel = *memo.lookup(l);
         JoinRelation right_rel = *memo.lookup(r);
@@ -219,7 +218,7 @@ void try_join(RelationID jr, JoinRelation &jr_out, RelationID l, RelationID r,
         int wScan = __popc(~pthBlt & LANE_MASK_LE);
         int pos = W_OFFSET + stack.stackTop + wScan - 1;
         if (p){
-            LOG_DEBUG("[%d: %d] Accumulating stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l, r);
+            LOG_DEBUG("[%d: %d] Accumulating stack (%d): l=%u, r=%u\n", W_OFFSET, LANE_ID, pos, l.toUint(), r.toUint());
             stack.ctxStack[pos] = l;
         }
         stack.stackTop += WARP_SIZE - reducedNTaken;

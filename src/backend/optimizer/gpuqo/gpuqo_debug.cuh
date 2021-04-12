@@ -11,7 +11,20 @@
 #ifndef GPUQO_DEBUG_CUH
 #define GPUQO_DEBUG_CUH
 
+#include "gpuqo_planner_info.cuh"
+
 #include <iostream>
+
+// I did not want to include the full c.h for fear of conflicts so I just 
+// include the definitions (to get USE_ASSERT_CHECKING) and just define the
+// Assert macro as in c.h
+#include "pg_config.h"
+#ifndef USE_ASSERT_CHECKING
+#define Assert(condition)	((void)true)
+#else
+#include <assert.h>
+#define Assert(p) assert(p)
+#endif
 
 // activate profiling as a conequence of debug (if not yet active)
 #ifdef GPUQO_DEBUG
@@ -43,5 +56,12 @@
 
 __host__
 std::ostream & operator<<(std::ostream &os, const uint2& idxs);
+
+__host__
+std::ostream & operator<<(std::ostream &os, const JoinRelation& jr);
+
+template<typename Type>
+__host__
+std::ostream & operator<<(std::ostream &os, const Bitmapset<Type>& bms);
 
 #endif							/* GPUQO_DEBUG_CUH */

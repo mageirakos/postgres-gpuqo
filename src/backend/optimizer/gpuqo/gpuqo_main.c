@@ -23,6 +23,8 @@
 #include "optimizer/paths.h"
 #include "optimizer/restrictinfo.h"
 
+#define GPUQO_INFO
+
 #ifdef OPTIMIZER_DEBUG
 #ifndef GPUQO_INFO
 #define GPUQO_INFO
@@ -33,7 +35,6 @@ int gpuqo_algorithm;
 
 BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
 EdgeMask* makeEdgeTable(PlannerInfo* root, int n_rels);
-Bitmapset32 convertBitmapset(Bitmapset* set);
 void printQueryTree(QueryTree* qt, int indent);
 void printEdges(GpuqoPlannerInfo* info);
 RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels);
@@ -66,7 +67,7 @@ void printQueryTree(QueryTree* qt, int indent){
 
     for (i = 0; i<indent; i++)
         printf(" ");
-    printf("%u (rows=%.0f, cost=%.2f)\n", qt->id, qt->rows, qt->cost);
+    printf("%lu (rows=%.0f, cost=%.2f)\n", qt->id->words[0], qt->rows, qt->cost);
 
     printQueryTree(qt->left, indent + 2);
     printQueryTree(qt->right, indent + 2);
@@ -76,9 +77,9 @@ void printEdges(GpuqoPlannerInfo* info){
     printf("\nEdges:\n");
     for (int i = 0; i < info->n_rels; i++){
         RelationID edges = info->edge_table[i];
+        int idx = -1;
         printf("%d:", i+1);
-        while (edges != BMS32_EMPTY){
-            int idx = BMS32_LOWEST_POS(edges)-1;
+        while ((idx = bms_next_member(edges, idx)) >= 0){
             EqClassInfo *ec = info->eq_classes;
             
             printf(" %d ", idx);
@@ -86,36 +87,18 @@ void printEdges(GpuqoPlannerInfo* info){
             if (ec != NULL){
                 printf("(");
                 while (ec != NULL){
-                    if (BMS32_IS_SET(ec->relids, i+1) && BMS32_IS_SET(ec->relids, idx)){
-                        int idx;
-                        int size = BMS32_SIZE(ec->relids);
-                        int idx_l = BMS32_SIZE(
-                            BMS32_INTERSECTION(
-                                BMS32_SET_ALL_LOWER(BMS32_NTH(i+1)),
-                                ec->relids
-                            )
-                        );
-                        int idx_r = BMS32_SIZE(
-                            BMS32_INTERSECTION(
-                                BMS32_SET_ALL_LOWER(BMS32_NTH(idx)),
-                                ec->relids
-                            )
-                        );
-                        if (idx_l > idx_r){
-                            int tmp = idx_l;
-                            idx_l = idx_r;
-                            idx_r = tmp;
-                        }
+                    if (bms_is_member(i+1, ec->relids) && bms_is_member(idx, ec->relids)){
+                        int size = bms_num_members(ec->relids);
+                        int idx_l = bms_member_index(ec->relids, i+1);
+                        int idx_r = bms_member_index(ec->relids, idx);
+                        int idx_sel = eqClassIndex(idx_l, idx_r, size);
 
-                        idx = idx_l*size - idx_l*(idx_l+1)/2 + (idx_r-idx_l-1);
-                        printf("%u: %f, ", ec->relids, ec->sels[idx]);
+                        printf("%lu: %e, ", ec->relids->words[0], ec->sels[idx_sel]);
                     }
                     ec = ec->next;
                 }
                 printf(");");
             }
-
-            edges = BMS32_UNSET(edges, idx);
         }
         printf("\n");
     }
@@ -134,7 +117,7 @@ RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_re
     if (qt->left == 0 || qt->right == 0){
         foreach(lc, initial_rels){
             RelOptInfo* base_rel = (RelOptInfo*) lfirst(lc);
-            if (base_rel->relids->words[0] & qt->id){
+            if (bms_equal(base_rel->relids, qt->id)){
                 this_rel = base_rel;
                 break;
             }
@@ -162,27 +145,13 @@ RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_re
     }
 
     if (this_rel == NULL) {
-        printf("WARNING: Found NULL RelOptInfo*: %u (%u, %u)\n", 
-                qt->id, 
-                qt->left ? qt->left->id : 0, 
-                qt->right ? qt->right->id : 0
-        );
+        printf("WARNING: Found NULL RelOptInfo*\n");
     }
 
     // clean-up the query tree
-    free(qt);
+    pfree(qt);
 
     return this_rel;
-}
-
-Bitmapset32 convertBitmapset(Bitmapset* set){
-    if (set->nwords > 1){
-        printf("WARNING: only relids of 32 bits are supported!\n");
-    }
-    if (set->words[0] & 0xFFFFFFFF00000000ULL){
-        printf("WARNING: only relids of 32 bits are supported!\n");
-    }
-    return (Bitmapset32)(set->words[0] & 0xFFFFFFFFULL);
 }
 
 BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
@@ -190,7 +159,7 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
     
     baserel.rows = rel->rows;
     baserel.tuples = rel->tuples;
-    baserel.id = convertBitmapset(rel->relids);
+    baserel.id = bms_copy(rel->relids);
     baserel.fk_selecs = NULL;
 
     return baserel;
@@ -199,24 +168,18 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
 EdgeMask* makeEdgeTable(PlannerInfo* root, int n_rels){
     ListCell* lc;
 
-    EdgeMask* edge_table = malloc(sizeof(EdgeMask)*n_rels);
-    memset(edge_table, 0, sizeof(EdgeMask)*n_rels);
+    EdgeMask* edge_table = palloc0(sizeof(EdgeMask)*n_rels);
     foreach(lc, root->eq_classes){
         EquivalenceClass *ec = (EquivalenceClass *) lfirst(lc);
-        EdgeMask ec_relids = convertBitmapset(ec->ec_relids);
 
         if (list_length(ec->ec_members) <= 1)
 			continue;
 
         for (int i=1; i <= n_rels; i++){
-            RelationID baserelid = BMS32_NTH(i);
-            if (BMS32_INTERSECTS(ec_relids, baserelid)){
-                edge_table[i-1] = BMS32_UNION(
-                        edge_table[i-1],
-                        BMS32_DIFFERENCE(ec_relids, baserelid)
-                );
+            if (bms_is_member(i, ec->ec_relids)){
+                edge_table[i-1] = bms_add_members(edge_table[i-1], ec->ec_relids);
+                edge_table[i-1] = bms_del_member(edge_table[i-1], i);
             }
-            
         }
     }
 
@@ -230,8 +193,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
     ListCell* lc_restrictinfo;
     int i, j;
 
-    info->indexed_edge_table = (EdgeMask*) malloc(n_rels * sizeof(EdgeMask));
-    memset(info->indexed_edge_table, 0, n_rels * sizeof(EdgeMask));
+    info->indexed_edge_table = (EdgeMask*) palloc0(n_rels * sizeof(EdgeMask));
 
     i = 0;
     foreach(lc_outer, initial_rels){
@@ -240,7 +202,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
         foreach(lc_inner, initial_rels){
             RelOptInfo* rel_inner = (RelOptInfo*) lfirst(lc_inner);
             
-            if (BMS32_INTERSECTS(info->edge_table[i], convertBitmapset(rel_inner->relids))){
+            if (bms_overlap(info->edge_table[i], rel_inner->relids)){
                 List *restrictlist = NULL;
                 SpecialJoinInfo sjinfo;
                 RelOptInfo *join_rel;
@@ -296,44 +258,34 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
 
 
                     while (ec != NULL){
-                        if (ec->relids == convertBitmapset(rinfo->parent_ec->ec_relids))
+                        if (bms_equal(ec->relids, rinfo->parent_ec->ec_relids))
                             break;
                         ec = ec->next;
 
                     };
 
                     if (ec == NULL){
-                        ec = (EqClassInfo*) malloc(sizeof(EqClassInfo));
+                        size_t n_sels;
+                        
+                        ec = (EqClassInfo*) palloc(sizeof(EqClassInfo));
                         ec->next = info->eq_classes;
                         info->eq_classes = ec;
-                        ec->relids = convertBitmapset(rinfo->parent_ec->ec_relids);
-                        size = BMS32_SIZE(ec->relids);
-                        ec->sels = (float*) malloc(sizeof(float)*size*size);
+                        ec->relids = bms_copy(rinfo->parent_ec->ec_relids);
+                        size = bms_num_members(ec->relids);
+                        n_sels = eqClassNSels(size);
+                        ec->sels = (float*) palloc(sizeof(float)*n_sels);
                         info->n_eq_classes++;
-                        info->n_eq_class_sels += size*(size-1)/2;
+                        info->n_eq_class_sels += n_sels;
                     } else {
-                        size = BMS32_SIZE(ec->relids);
+                        size = bms_num_members(ec->relids);
                     }
 
-                    idx_l = BMS32_SIZE(
-                        BMS32_INTERSECTION(
-                            BMS32_SET_ALL_LOWER(BMS32_NTH(i+1)),
-                            ec->relids
-                        )
-                    );
-                    idx_r = BMS32_SIZE(
-                        BMS32_INTERSECTION(
-                            BMS32_SET_ALL_LOWER(BMS32_NTH(j+1)),
-                            ec->relids
-                        )
-                    );
-                    if (idx_l > idx_r){
-                        int tmp = idx_l;
-                        idx_l = idx_r;
-                        idx_r = tmp;
+                    idx_l = bms_member_index(ec->relids, i+1);
+                    idx_r = bms_member_index(ec->relids, j+1);
+                    if (idx_l < idx_r){ // prevent duplicates
+                        idx = eqClassIndex(idx_l, idx_r, size);
+                        ec->sels[idx] = rinfo->norm_selec;
                     }
-                    idx = idx_l*size - idx_l*(idx_l+1)/2 + (idx_r-idx_l-1);
-                    ec->sels[idx] = rinfo->norm_selec;
                 }
 
                 foreach(lc_inner_path, rel_inner->pathlist){
@@ -343,7 +295,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                                 && bms_overlap(PATH_REQ_OUTER(path),
                                     rel_outer->relids
                                 )){
-                            info->indexed_edge_table[j] = BMS32_SET(info->indexed_edge_table[j], i+1);
+                            info->indexed_edge_table[j] = bms_add_member(info->indexed_edge_table[j], i+1);
                             break;
                         }
                     }
@@ -355,7 +307,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
 											   &sjinfo,
 											   &restrictlist);
                 if (fk_sel < 1){
-                    fk = (FKSelecInfo*) malloc(sizeof(FKSelecInfo));
+                    fk = (FKSelecInfo*) palloc(sizeof(FKSelecInfo));
                     fk->next = info->base_rels[i].fk_selecs;
                     info->base_rels[i].fk_selecs = fk;
                     fk->other_baserel = j;
@@ -388,9 +340,9 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     printf("Hello, here is gpuqo!\n");
 #endif
 
-    info = (GpuqoPlannerInfo*) malloc(sizeof(GpuqoPlannerInfo));
+    info = (GpuqoPlannerInfo*) palloc(sizeof(GpuqoPlannerInfo));
     
-    info->base_rels = (BaseRelation*) malloc(n_rels * sizeof(BaseRelation));
+    info->base_rels = (BaseRelation*) palloc(n_rels * sizeof(BaseRelation));
 
     info->n_rels = n_rels;
     info->eq_classes = NULL;
@@ -412,9 +364,9 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
 
     query_tree = gpuqo_run(gpuqo_algorithm, info);
     
-    free(info->base_rels);
-    free(info->edge_table);
-    free(info);
+    pfree(info->base_rels);
+    pfree(info->edge_table);
+    pfree(info);
     // TODO free lists
     
 #ifdef GPUQO_INFO

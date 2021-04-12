@@ -94,11 +94,11 @@ void unrankFilteredDPSubKernel(int sq, int qss,
             RelationID relid = s << 1;
             
             if (!is_connected(relid, edge_table))
-                relid = BMS32_EMPTY;
+                relid = RelationID(0);
             
             LOG_DEBUG("[%u,%u] tid=%u idx=%u s=%u relid=%u\n", 
                         blockIdx.x, threadIdx.x, 
-                        tid, idx++, s, relid);
+                        tid, idx++, s.toUint(), relid.toUint());
             out_relids[tid] = relid;
 
             s = dpsub_unrank_next(s);
@@ -225,7 +225,7 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
         RelationID relid = pending_keys[rid];
 
         LOG_DEBUG("[%u] n_splits=%d, rid=%u, cid=%u, relid=%u\n", 
-                tid, n_splits, rid, cid, relid);
+                tid, n_splits, rid, cid, relid.toUint());
         
         JoinRelation jr_out = Function(relid, cid, n_splits, 
                                         memo, info_sh);
@@ -253,8 +253,8 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
 
         if (threadIdx.x == shared_idxs[leader]){
             LOG_DEBUG("[%3d] write scratch[%d] = %u (l=%u, r=%u, cost=%.2f)\n",
-                threadIdx.x, tid/n_splits, relid, 
-                jr_out.left_rel_id, jr_out.right_rel_id, jr_out.cost);
+                threadIdx.x, tid/n_splits, relid.toUint(), 
+                jr_out.left_rel_id.toUint(), jr_out.right_rel_id.toUint(), jr_out.cost);
             scratchpad_keys[tid/n_splits] = relid;
             scratchpad_vals[tid/n_splits] = jr_out;
         }
@@ -276,7 +276,7 @@ void __launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* s
     // cudaFuncSetCacheConfig(evaluateFilteredDPSubKernel<n_splits, Function>, cudaFuncCachePreferL1);
 
     // n_splits is a power of 2 and is lower than or equal to BLOCK_DIM
-    Assert(BMS32_SIZE(n_splits) == 1 && n_splits <= BLOCK_DIM);
+    Assert(popc(n_splits) == 1 && n_splits <= BLOCK_DIM);
 
     evaluateFilteredDPSubKernel<n_splits, Function, full_shmem><<<gridsize, blocksize, shmem_size>>>(
         pending_keys, scratchpad_keys, scratchpad_vals,
@@ -352,7 +352,7 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
     uint32_t threads_per_set;
     uint32_t factor = gpuqo_n_parallel / n_pending_sets;
     
-    threads_per_set = BMS32_HIGHEST(min(factor, params.n_joins_per_set));
+    threads_per_set = floorPow2(min(factor, params.n_joins_per_set));
     threads_per_set = min(threads_per_set, BLOCK_DIM); // at most block size
     threads_per_set = max(threads_per_set, WARP_SIZE); // at least warp size
     
@@ -498,7 +498,7 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
 
     threads_per_set = min(max(1, factor), n_joins_per_set);
     threads_per_set = min(threads_per_set, BLOCK_DIM); // at most block size
-    threads_per_set = BMS32_HIGHEST(threads_per_set); // round to closest pow2
+    threads_per_set = floorPow2(threads_per_set); // round to closest pow2
     
     n_joins_per_thread = ceil_div(n_joins_per_set, threads_per_set);
     n_sets_per_iteration = min(params.scratchpad_size, n_pending_sets);
@@ -625,7 +625,7 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
                 auto keys_end_iter = thrust::remove(
                     params.gpu_pending_keys.begin()+n_pending_sets,
                     params.gpu_pending_keys.begin()+(n_pending_sets+n_tab_sets),
-                    BMS32_EMPTY
+                    RelationID(0)
                 );
                 STOP_TIMING(filter);
 

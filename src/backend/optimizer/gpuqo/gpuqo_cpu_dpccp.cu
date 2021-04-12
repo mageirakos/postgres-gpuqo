@@ -35,13 +35,13 @@ struct GpuqoCPUDPCcpExtra{
 
 std::list<RelationID>* get_all_subsets(RelationID set){
     std::list<RelationID> *out = new std::list<RelationID>;
-    if (set == BMS32_EMPTY)
+    if (set.empty())
         return out;
 
-    RelationID subset = BMS32_LOWEST(set);
+    RelationID subset = set.lowest();
     while (subset != set){
         out->push_back(subset);
-        subset = BMS32_NEXT_SUBSET(subset, set);
+        subset = nextSubset(subset, set);
     }
     out->push_back(set);
     return out;
@@ -50,15 +50,15 @@ std::list<RelationID>* get_all_subsets(RelationID set){
 void enumerate_csg_rec(RelationID S, RelationID X, RelationID cmp, 
                     GpuqoPlannerInfo* info, emit_f emit_function, memo_t &memo,
                     extra_t extra, struct DPCPUAlgorithm algorithm){
-    LOG_DEBUG("enumerate_csg_rec(%u, %u, %u)\n", S, X, cmp);
-    RelationID N = BMS32_DIFFERENCE(get_neighbours(S, info->edge_table), X);
+    LOG_DEBUG("enumerate_csg_rec(%u, %u, %u)\n", S.toUint(), X.toUint(), cmp.toUint());
+    RelationID N = get_neighbours(S, info->edge_table) - X;
     std::list<RelationID> *subsets = get_all_subsets(N);
     for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
-        RelationID emit_set = BMS32_UNION(S, *subset);
+        RelationID emit_set = S | *subset;
         emit_function(cmp, emit_set, info, memo, extra, algorithm);
     }
     for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
-        enumerate_csg_rec(BMS32_UNION(S, *subset), BMS32_UNION(X, N), cmp,
+        enumerate_csg_rec(S|*subset, X|N, cmp,
             info, emit_function, memo, extra, algorithm);
     }
     delete subsets; 
@@ -66,32 +66,31 @@ void enumerate_csg_rec(RelationID S, RelationID X, RelationID cmp,
 
 void enumerate_csg(GpuqoPlannerInfo* info, emit_f emit_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
     for (int i=info->n_rels; i>=1; i--){
-        RelationID subset = BMS32_NTH(i);
+        RelationID subset = RelationID::nth(i);
 
-        emit_function(subset, BMS32_EMPTY, info, memo, extra, algorithm);
+        emit_function(subset, RelationID(0), info, memo, extra, algorithm);
 
-        enumerate_csg_rec(subset, BMS32_SET_ALL_LOWER_INC(subset), BMS32_EMPTY,
+        enumerate_csg_rec(subset, subset.allLowerInc(), RelationID(0),
             info, emit_function, memo, extra, algorithm);
 
     }
 }
 
 void enumerate_cmp(RelationID S, GpuqoPlannerInfo* info, emit_f emit_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
-    LOG_DEBUG("enumerate_cmp(%u)\n", S);
-    RelationID X = BMS32_SET_ALL_LOWER_INC(S);
-    RelationID N = BMS32_DIFFERENCE(get_neighbours(S, info->edge_table), X);
+    LOG_DEBUG("enumerate_cmp(%u)\n", S.toUint());
+    RelationID X = S.allLowerInc();
+    RelationID N = get_neighbours(S, info->edge_table) - X;
     RelationID temp = N;
-    while (temp != BMS32_EMPTY){
-        int idx = BMS32_HIGHEST_POS(temp)-1;
-        RelationID v = BMS32_NTH(idx);
+    while (!temp.empty()){
+        int idx = temp.highestPos();
+        RelationID v = RelationID::nth(idx);
         emit_function(S, v, info, memo, extra, algorithm);
 
-        RelationID newX = BMS32_UNION(X, 
-                            BMS32_INTERSECTION(BMS32_SET_ALL_LOWER_INC(v), N));
+        RelationID newX = X | (v.allLowerInc() & N);
         enumerate_csg_rec(v, newX, S, info, emit_function, memo, extra, 
                         algorithm);
         
-        temp = BMS32_DIFFERENCE(temp, v);
+        temp -= v;
     }
 }
 
@@ -103,11 +102,11 @@ void gpuqo_cpu_dpccp_init(GpuqoPlannerInfo* info, memo_t &memo, extra_t &extra){
 void gpuqo_cpu_dpccp_emit(RelationID left_id, RelationID right_id,
                         GpuqoPlannerInfo* info, memo_t &memo, 
                         extra_t extra, struct DPCPUAlgorithm algorithm){
-    LOG_DEBUG("gpuqo_cpu_dpccp_emit(%u, %u)\n", left_id, right_id);
+    LOG_DEBUG("gpuqo_cpu_dpccp_emit(%u, %u)\n", left_id.toUint(), right_id.toUint());
 
     struct GpuqoCPUDPCcpExtra* mExtra = (struct GpuqoCPUDPCcpExtra*) extra.alg;
 
-    if (left_id != BMS32_EMPTY && right_id != BMS32_EMPTY){
+    if (!left_id.empty() && !right_id.empty()){
         auto left = memo.find(left_id);
         auto right = memo.find(right_id);
 
@@ -115,14 +114,14 @@ void gpuqo_cpu_dpccp_emit(RelationID left_id, RelationID right_id,
 
         JoinRelationCPU *left_rel = left->second;
         JoinRelationCPU *right_rel = right->second;
-        RelationID joinset = BMS32_UNION(left_id, right_id);
-        int level = BMS32_SIZE(joinset);
+        RelationID joinset = left_id | right_id;
+        int level = joinset.size();
 
         mExtra->join_function(level, true, *right_rel, *left_rel, info, 
                 memo, extra, algorithm
         );
 
-    } else if (left_id != BMS32_EMPTY) {
+    } else if (!left_id.empty()) {
         enumerate_cmp(left_id, info, gpuqo_cpu_dpccp_emit, 
                 memo, extra, algorithm);
     } else{

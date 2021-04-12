@@ -13,24 +13,7 @@
 #include <vector>
 
 #include "gpuqo_hashtable.cuh"
-
-// HELPER FUNCTIONS
-
-size_t ceilPow2(size_t x){
-    size_t y = 1;
-    while (y < x){
-        y *= 2;
-    }
-    return y;
-}
-
-size_t floorPow2(size_t x){
-    size_t y = 1;
-    while (y*2 <= x){
-        y *= 2;
-    }
-    return y;
-}
+#include "gpuqo_bit_manipulation.cuh"
 
 // KERNELS IMPLEMENTATION
 
@@ -42,9 +25,9 @@ void HashTable_insert(HashTable<K,V,Kint> hashtable, K* in_keys, V* in_values, s
     if (threadid < n){
         K key = in_keys[threadid];
         V value = in_values[threadid];
-        if (key != HashTable<K,V,Kint>::EMPTY){
+        if (!key.empty()){
             hashtable.insert(key, value);
-            LOG_DEBUG("%u: inserted %u\n", threadid, key);
+            LOG_DEBUG("%u: inserted %u\n", threadid, key.toUint());
         }
     }
 }
@@ -61,7 +44,7 @@ void HashTable_lookup(HashTable<K,V,Kint> hashtable, K* in_keys, V* out_values, 
         if (val_p)
             out_values[threadid] = *val_p;
 
-        LOG_DEBUG("%u: looked up %u\n", threadid, key);  
+        LOG_DEBUG("%u: looked up %u\n", threadid, key.toUint());  
     }
 }
 
@@ -174,7 +157,7 @@ template <typename K, typename V, typename Kint>
 __host__
 void HashTable<K,V,Kint>::deviceMalloc(){
     cudaMalloc(&keys, sizeof(K) * capacity);    
-    cudaMemset(keys, 0xff, sizeof(K) * capacity);
+    cudaMemset(keys, 0, sizeof(K) * capacity);
     LOG_DEBUG("cudaMalloc(%llx, %u)\n", keys, sizeof(K) * capacity);
     
     cudaMalloc(&values, sizeof(V) * capacity);    

@@ -29,16 +29,13 @@
 __host__ __device__
 static bool has_useful_index(RelationID left_rel_id, RelationID right_rel_id, 
                             GpuqoPlannerInfo* info){
-    if (BMS32_SIZE(right_rel_id) != 1)  // inner must be base rel
+    if (right_rel_id.size() != 1)  // inner must be base rel
         return false;
     // -1 since it's 1-indexed, 
     // another -1 since relation with id 0b10 is at index 0 and so on
-    int baserel_right_idx = BMS32_LOWEST_POS(right_rel_id) - 2;
+    int baserel_right_idx = right_rel_id.lowestPos() - 1;
     
-    return BMS32_INTERSECTS(
-        left_rel_id, 
-        info->indexed_edge_table[baserel_right_idx]
-    );
+    return left_rel_id.intersects(info->indexed_edge_table[baserel_right_idx]);
 }
 
 __host__ __device__
@@ -90,9 +87,9 @@ estimate_join_selectivity(RelationID left_rel_id, JoinRelation &left_rel,
     float sel = 1.0;
 
     // check fk with base relations
-    if (BMS32_SIZE(left_rel_id) == 1 && BMS32_SIZE(right_rel_id) == 1){
-        int left_rel_idx = BMS32_LOWEST_POS(left_rel_id)-2;
-        int right_rel_idx = BMS32_LOWEST_POS(right_rel_id)-2;
+    if (left_rel_id.size() == 1 && right_rel_id.size() == 1){
+        int left_rel_idx = left_rel_id.lowestPos()-1;
+        int right_rel_idx = right_rel_id.lowestPos()-1;
 
         BaseRelation left_br = info->base_rels[left_rel_idx];
         for (int i=0; i < left_br.n_fk_selecs; i++){
@@ -110,38 +107,22 @@ estimate_join_selectivity(RelationID left_rel_id, JoinRelation &left_rel,
     int off = 0;
     for (int i=0; i<info->n_eq_classes; i++){
         RelationID ec_relids = info->eq_classes[i];
-        int size = BMS32_SIZE(ec_relids);
-        RelationID match_l = BMS32_INTERSECTION(ec_relids, left_rel_id);
-        RelationID match_r = BMS32_INTERSECTION(ec_relids, right_rel_id);
+        int size = ec_relids.size();
+        RelationID match_l = ec_relids & left_rel_id;
+        RelationID match_r = ec_relids & right_rel_id;
 
-        if (match_l != BMS32_EMPTY && match_r != BMS32_EMPTY){
+        if (!match_l.empty() && !match_r.empty()){
             // more than one on the same equivalence class may match
-            // just take the lowest one (already done in BMS32_SET_ALL_LOWER)
+            // just take the lowest one (already done in allLower)
 
-            int idx_l = BMS32_SIZE(
-                BMS32_INTERSECTION(
-                    BMS32_SET_ALL_LOWER(match_l),
-                    ec_relids
-                )
-            );
-            int idx_r = BMS32_SIZE(
-                BMS32_INTERSECTION(
-                    BMS32_SET_ALL_LOWER(match_r),
-                    ec_relids
-                )
-            );
+            int idx_l = (match_l.allLower() & ec_relids).size();
+            int idx_r = (match_r.allLower() & ec_relids).size();
+            int idx = eqClassIndex(idx_l, idx_r, size);
             
-            if (idx_l > idx_r){
-                int tmp = idx_l;
-                idx_l = idx_r;
-                idx_r = tmp;
-            }
-
-            int idx = idx_l*size - idx_l*(idx_l+1)/2 + (idx_r-idx_l-1);
             sel *= info->eq_class_sels[off+idx];
         }
            
-        off += size*(size-1)/2;
+        off += eqClassNSels(size);
     }
     
     return sel;
