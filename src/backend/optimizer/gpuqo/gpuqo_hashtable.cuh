@@ -36,31 +36,29 @@ private:
     void debugDump();
 
     __host__
-    void deviceMalloc();
+    bool deviceMalloc();
 
     __host__
-    void deviceErrorCheck();
+    bool deviceErrorCheck();
 
     __host__ 
-    void _insert(K* keys, V* values, size_t n);
+    bool _insert(K* keys, V* values, size_t n);
 
 public:
-    static const K EMPTY = std::numeric_limits<K>::max();
-
     __host__
     HashTable(size_t initial_size, size_t max_capacity);
 
     __device__ 
     void insert(K key, V value);
     __host__ 
-    void insert(K* keys, V* values, size_t n);
+    bool insert(K* keys, V* values, size_t n);
 
 
     __device__ 
     V* lookup(K key);
 
     __host__ 
-    void lookup(K* keys, V* values, size_t n);
+    bool lookup(K* keys, V* values, size_t n);
 
     __host__
     V get(K key);
@@ -69,7 +67,7 @@ public:
     size_t getCapacity(){ return capacity; }
 
     __host__
-    void resize(size_t capacity);
+    bool resize(size_t capacity);
 
     __host__
     void free();

@@ -58,14 +58,17 @@ HashTable<K,V,Kint>::HashTable(size_t _initial_capacity, size_t _max_capacity){
     capacity = min(ceilPow2(_initial_capacity),max_capacity);
     n_elems_ub = 0;
 
-    deviceMalloc();
+    bool ok = deviceMalloc();
+
+    if (!ok)
+        throw "CUDA Error";
 
     debugDump();
 }
 
 template <typename K, typename V, typename Kint>
 __host__
-void HashTable<K,V,Kint>::lookup(K* in_keys, V* out_values, size_t n){
+bool HashTable<K,V,Kint>::lookup(K* in_keys, V* out_values, size_t n){
 
     // Have CUDA calculate the thread block size
     int mingridsize;
@@ -76,12 +79,12 @@ void HashTable<K,V,Kint>::lookup(K* in_keys, V* out_values, size_t n){
     int gridsize = (n + threadblocksize - 1) / threadblocksize;
     HashTable_lookup<K,V,Kint><<<gridsize, threadblocksize>>>(*this, in_keys, out_values, n);
     
-    deviceErrorCheck();
+    return deviceErrorCheck();
 }
 
 template <typename K, typename V, typename Kint>
 __host__
-void HashTable<K,V,Kint>::_insert(K* in_keys, V* in_values, size_t n){
+bool HashTable<K,V,Kint>::_insert(K* in_keys, V* in_values, size_t n){
     // Have CUDA calculate the thread block size
     int mingridsize;
     int threadblocksize;
@@ -91,12 +94,12 @@ void HashTable<K,V,Kint>::_insert(K* in_keys, V* in_values, size_t n){
     int gridsize = (n + threadblocksize - 1) / threadblocksize;
     HashTable_insert<K,V,Kint><<<gridsize, threadblocksize>>>(*this, in_keys, in_values, n);
     
-    deviceErrorCheck();
+    return deviceErrorCheck();
 }
 
 template <typename K, typename V, typename Kint>
 __host__
-void HashTable<K,V,Kint>::insert(K* in_keys, V* in_values, size_t n){
+bool HashTable<K,V,Kint>::insert(K* in_keys, V* in_values, size_t n){
     LOG_DEBUG("HashTable::insert(%llx, %llx, %u)\n", in_keys, in_values, n);
 
     debugDump();
@@ -104,15 +107,21 @@ void HashTable<K,V,Kint>::insert(K* in_keys, V* in_values, size_t n){
     // check if I need to grow the hashtable
     n_elems_ub += n;
     if (n_elems_ub > capacity/2 && capacity < max_capacity){
-        resize(min(ceilPow2(n_elems_ub)*2, max_capacity));
+        bool ok = resize(min(ceilPow2(n_elems_ub)*2, max_capacity));
+        if (!ok)
+            return false;
     }
 
-    _insert(in_keys, in_values, n);
+    bool res = _insert(in_keys, in_values, n);
+
+    debugDump();
+
+    return res;
 }
 
 template <typename K, typename V, typename Kint>
 __host__
-void HashTable<K,V,Kint>::resize(size_t _capacity){
+bool HashTable<K,V,Kint>::resize(size_t _capacity){
     LOG_PROFILE("resize(%u)\n", _capacity);
     size_t old_capacity = capacity;
     K* old_keys = keys;
@@ -120,42 +129,57 @@ void HashTable<K,V,Kint>::resize(size_t _capacity){
 
     capacity = ceilPow2(_capacity);
 
-    deviceMalloc();
+    bool ok = deviceMalloc();
 
-    _insert(old_keys, old_values, old_capacity);
+    if (!ok)
+        return false;
+
+    ok = _insert(old_keys, old_values, old_capacity);
+
+    if (!ok)
+        return false;
 
     cudaFree(old_keys);
     cudaFree(old_values);
 
-    deviceErrorCheck();
+    return deviceErrorCheck();
 }
 
 template <typename K, typename V, typename Kint>
 __host__
 V HashTable<K,V,Kint>::get(K key){
     V val;
-
     K* dev_key;
+    bool ok;
+
     cudaMalloc(&dev_key, sizeof(K));
     cudaMemcpy(dev_key, &key, sizeof(K), cudaMemcpyHostToDevice);
 
     V* dev_val;
     cudaMalloc(&dev_val, sizeof(V));
 
-    deviceErrorCheck();
+    if (!deviceErrorCheck())
+        goto err;
 
-    lookup(dev_key, dev_val, 1);
+    ok = lookup(dev_key, dev_val, 1);
+
+    if (!ok)
+        goto err;
 
     cudaMemcpy(&val, dev_val, sizeof(V), cudaMemcpyDeviceToHost);
 
-    deviceErrorCheck();
+    if (!deviceErrorCheck())
+        goto err;
 
     return val;
+    
+err:
+    throw "key not found!";
 }
 
 template <typename K, typename V, typename Kint>
 __host__
-void HashTable<K,V,Kint>::deviceMalloc(){
+bool HashTable<K,V,Kint>::deviceMalloc(){
     cudaMalloc(&keys, sizeof(K) * capacity);    
     cudaMemset(keys, 0, sizeof(K) * capacity);
     LOG_DEBUG("cudaMalloc(%llx, %u)\n", keys, sizeof(K) * capacity);
@@ -163,12 +187,12 @@ void HashTable<K,V,Kint>::deviceMalloc(){
     cudaMalloc(&values, sizeof(V) * capacity);    
     LOG_DEBUG("cudaMalloc(%llx, %u)\n", values, sizeof(V) * capacity);
 
-    deviceErrorCheck();
+    return deviceErrorCheck();
 }
 
 template <typename K, typename V, typename Kint>
 __host__
-void HashTable<K,V,Kint>::deviceErrorCheck(){
+bool HashTable<K,V,Kint>::deviceErrorCheck(){
     cudaDeviceSynchronize();
 
     cudaError_t err = cudaGetLastError();
@@ -177,7 +201,10 @@ void HashTable<K,V,Kint>::deviceErrorCheck(){
             cudaGetErrorName(err),
             cudaGetErrorString(err)
         );
+        return false;
     }
+
+    return true;
 }
 
 template <typename K, typename V, typename Kint>
