@@ -38,7 +38,7 @@
 #define DUMP_VECTOR_OFFSET(from, offset, to) do { \
     auto mIter = (from); \
     mIter += (offset); \
-    for(uint32_t mCount=offset; mIter != (to); ++mIter, ++mCount) \
+    for(size_t mCount=offset; mIter != (to); ++mIter, ++mCount) \
         std::cout << mCount << " : " << *mIter << std::endl; \
 } while(0)
 #define DUMP_VECTOR(from, to) DUMP_VECTOR_OFFSET((from), 0, (to))

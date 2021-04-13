@@ -107,7 +107,8 @@ void unrankFilteredDPSubKernel(int sq, int qss,
 }
 
 void launchUnrankFilteredDPSubKernel(int sq, int qss, 
-                                     uint32_t offset, uint32_t n_tab_sets,
+                                     uint64_t offset, 
+                                     uint32_t n_tab_sets,
                                      uint32_t* binoms,
                                      GpuqoPlannerInfo* info,
                                      RelationID* out_relids)
@@ -365,16 +366,16 @@ void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scr
 }
 
 
-uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
-                                    uint32_t offset, uint32_t n_pending_sets, 
+uint32_t dpsub_generic_graph_evaluation(int iter, uint64_t n_remaining_sets,
+                                    uint64_t offset, uint32_t n_pending_sets, 
                                     dpsub_iter_param_t &params)
 {
-    uint32_t n_joins_per_thread;
+    uint64_t n_joins_per_thread;
     uint32_t n_sets_per_iteration;
     uint32_t threads_per_set;
     uint32_t factor = gpuqo_n_parallel / n_pending_sets;
     
-    threads_per_set = floorPow2(min(factor, params.n_joins_per_set));
+    threads_per_set = floorPow2(min((uint64_t) factor, params.n_joins_per_set));
     threads_per_set = min(threads_per_set, BLOCK_DIM); // at most block size
     threads_per_set = max(threads_per_set, WARP_SIZE); // at least warp size
     
@@ -449,11 +450,11 @@ uint32_t dpsub_generic_graph_evaluation(int iter, uint32_t n_remaining_sets,
 }
 
 
-uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
-                                    uint32_t offset, uint32_t n_pending_sets, 
+uint32_t dpsub_bicc_evaluation(int iter, uint64_t n_remaining_sets,
+                                    uint64_t offset, uint32_t n_pending_sets, 
                                     dpsub_iter_param_t &params)
 {
-    uint32_t n_joins_per_thread;
+    uint64_t n_joins_per_thread;
     uint32_t n_sets_per_iteration;
     uint32_t threads_per_set;
     uint32_t factor = gpuqo_n_parallel / n_pending_sets;
@@ -508,11 +509,11 @@ uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
 }
 
 
-uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets, 
-                           uint32_t offset, uint32_t n_pending_sets, 
+uint32_t dpsub_tree_evaluation(int iter, uint64_t n_remaining_sets, 
+                           uint64_t offset, uint32_t n_pending_sets, 
                            dpsub_iter_param_t &params)
 {
-    uint32_t n_joins_per_thread;
+    uint64_t n_joins_per_thread;
     uint32_t n_sets_per_iteration;
     uint32_t threads_per_set;
     uint32_t factor = gpuqo_n_parallel / n_pending_sets;
@@ -590,10 +591,10 @@ uint32_t dpsub_tree_evaluation(int iter, uint32_t n_remaining_sets,
 
 int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){   
     int n_iters = 0;
-    uint32_t set_offset = 0;
+    uint64_t set_offset = 0;
     uint32_t n_pending_sets = 0;
     while (set_offset < params.n_sets){
-        uint32_t n_remaining_sets = params.n_sets - set_offset;
+        uint64_t n_remaining_sets = params.n_sets - set_offset;
         
         while(n_pending_sets < params.scratchpad_size
                 && n_remaining_sets > 0){
@@ -615,7 +616,7 @@ int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params){
 
                 START_TIMING(unrank);
                 thrust::host_vector<RelationID> relids(n_tab_sets);
-                uint32_t n_valid_relids = 0;
+                uint64_t n_valid_relids = 0;
                 RelationID s = dpsub_unrank_sid(0, iter, params.info->n_rels, params.binoms.data());
                 for (uint32_t sid=0; sid < n_tab_sets; sid++){
                     RelationID relid = s << 1;

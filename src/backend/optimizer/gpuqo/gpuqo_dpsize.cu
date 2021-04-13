@@ -36,8 +36,6 @@
 #define KB 1024ULL
 #define MB (KB*1024)
 #define GB (MB*1024)
-#define RELSIZE (sizeof(JoinRelationDpsize)+sizeof(RelationID))
-#define SCR_ENTRY_SIZE (sizeof(uint2)+sizeof(RelationID))
 
 int gpuqo_scratchpad_size_mb;
 int gpuqo_max_memo_size_mb;
@@ -223,14 +221,16 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsize);
     START_TIMING(init);
 
-    uint32_t scratchpad_size = gpuqo_scratchpad_size_mb * MB / SCR_ENTRY_SIZE;
+    size_t scr_entry_size = sizeof(RelationID::type2)+sizeof(RelationID);
+    size_t scratchpad_size = gpuqo_scratchpad_size_mb * MB / scr_entry_size;
     // at least 2*gpuqo_n_parallel otherwise it would be very inefficient
     if (scratchpad_size < 2*gpuqo_n_parallel)
         scratchpad_size = 2*gpuqo_n_parallel;
 
-    uint32_t prune_threshold = scratchpad_size - gpuqo_n_parallel;
-    uint32_t max_memo_size = gpuqo_max_memo_size_mb * MB / RELSIZE;
-    uint32_t memo_size = std::min(1U<<info->n_rels, max_memo_size);
+    size_t rel_size = sizeof(JoinRelationDpsize)+sizeof(RelationID);
+    size_t prune_threshold = scratchpad_size - gpuqo_n_parallel;
+    size_t max_memo_size = gpuqo_max_memo_size_mb * MB / rel_size;
+    size_t memo_size = std::min(1UL<<info->n_rels, max_memo_size);
 
     LOG_PROFILE("Using a scratchpad of size %u (prune threshold: %u)\n", 
         scratchpad_size, prune_threshold);
@@ -308,7 +308,7 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
 
             // size of the already filtered joinrels at the beginning of the 
             // scratchpad
-            uint32_t temp_size;
+            size_t temp_size;
 
             // until I go through every possible iteration
             while (offset < n_combinations){
@@ -347,7 +347,7 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
                             && temp_size < prune_threshold)
                 {
                     // how many combinations I will try at this iteration
-                    uint32_t chunk_size;
+                    size_t chunk_size;
 
                     if (n_combinations - offset < scratchpad_size - temp_size){
                         // all remaining

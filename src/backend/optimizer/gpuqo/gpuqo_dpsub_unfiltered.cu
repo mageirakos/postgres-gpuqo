@@ -103,7 +103,7 @@ public:
 };
 
 int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
-    uint32_t n_joins_per_thread;
+    uint64_t n_joins_per_thread;
     uint32_t n_sets_per_iteration;
     uint32_t threads_per_set;
     uint32_t factor = gpuqo_n_parallel / params.n_sets;
@@ -124,12 +124,12 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
             factor
         );
 
-    uint32_t id_offset = 0;
+    uint64_t id_offset = 0;
     uint64_t offset = 0;
     int n_iters = 0;
     while (offset < params.tot){
         uint32_t n_threads;
-        uint32_t n_remaining_sets = (params.tot-offset)/params.n_joins_per_set;
+        uint64_t n_remaining_sets = (params.tot-offset)/params.n_joins_per_set;
         if (n_remaining_sets >= n_sets_per_iteration){
             n_threads = n_sets_per_iteration*threads_per_set;
         } else {

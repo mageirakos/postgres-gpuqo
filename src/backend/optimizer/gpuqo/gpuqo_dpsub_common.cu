@@ -34,9 +34,6 @@
 #include "gpuqo_query_tree.cuh"
 #include "gpuqo_dpsub.cuh"
 
-// relsize depends on algorithm
-#define RELSIZE (sizeof(JoinRelation))
-
 PROTOTYPE_TIMING(unrank);
 PROTOTYPE_TIMING(filter);
 PROTOTYPE_TIMING(compute);
@@ -142,8 +139,8 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsub);
     START_TIMING(init);
 
-    size_t min_memo_cap = (size_t) gpuqo_min_memo_size_mb * MB / RELSIZE;
-    size_t max_memo_cap = (size_t) gpuqo_max_memo_size_mb * MB / RELSIZE;
+    size_t min_memo_cap = (size_t) gpuqo_min_memo_size_mb * MB / sizeof(JoinRelation);
+    size_t max_memo_cap = (size_t) gpuqo_max_memo_size_mb * MB / sizeof(JoinRelation);
     size_t req_memo_size = 1ULL<<(info->n_rels);
 
     size_t memo_cap = std::min(req_memo_size*2, min_memo_cap);
@@ -239,7 +236,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
             // calculate number of combinations of relations that make up 
             // a joinrel of size i
             params.n_sets = BINOM(params.binoms, info->n_rels, info->n_rels, i);
-            params.n_joins_per_set = ((1U)<<i);
+            params.n_joins_per_set = ((1ULL)<<i);
             params.tot = ((uint64_t)params.n_sets) * params.n_joins_per_set;
 
             // used only if profiling is enabled

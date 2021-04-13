@@ -49,6 +49,7 @@ typedef struct dpsub_iter_param_t{
     uninit_device_vector<RelationID> gpu_reduced_keys;
     uninit_device_vector<JoinRelation> gpu_reduced_vals;
     uint64_t n_sets;
+    uint64_t n_joins_per_set;
     uint64_t tot;
     uint32_t scratchpad_size;
 } dpsub_iter_param_t;
