@@ -40,10 +40,8 @@ do { \
 #define NANF std::numeric_limits<float>::nan()
 #endif
 
-typedef thrust::device_vector<RelationID, uninitialized_allocator<RelationID> > uninit_device_vector_relid;
-typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation> > uninit_device_vector_joinrel;
-typedef thrust::device_vector<JoinRelationDpsize, uninitialized_allocator<JoinRelationDpsize> > uninit_device_vector_joinrel_dpsize;
-typedef thrust::device_vector<uint2, uninitialized_allocator<uint2> > uninit_device_vector_uint2;
+template<typename T>
+using uninit_device_vector = thrust::device_vector<T, uninitialized_allocator<T> >;
 
 extern QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info);
 extern QueryTree* gpuqo_dpsub(GpuqoPlannerInfo* info);

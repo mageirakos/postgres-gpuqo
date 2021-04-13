@@ -235,12 +235,8 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
     LOG_PROFILE("Using a scratchpad of size %u (prune threshold: %u)\n", 
         scratchpad_size, prune_threshold);
     
-    uninit_device_vector_relid gpu_memo_keys(memo_size);
-    uninit_device_vector_joinrel_dpsize gpu_memo_vals(memo_size);
-    thrust::host_vector<uint32_t> partition_offsets(info->n_rels);
-    thrust::host_vector<uint32_t> partition_sizes(info->n_rels);
-    thrust::device_vector<uint32_t> gpu_partition_offsets(info->n_rels);
-    thrust::device_vector<uint32_t> gpu_partition_sizes(info->n_rels);
+    uninit_device_vector<RelationID> gpu_memo_keys(memo_size);
+    uninit_device_vector<JoinRelationDpsize> gpu_memo_vals(memo_size);
     QueryTree* out = NULL;
 
     for(int i=0; i<info->n_rels; i++){
@@ -264,8 +260,8 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
     gpu_partition_sizes = partition_sizes;
 
     // scratchpad size is increased on demand, starting from a minimum capacity
-    uninit_device_vector_relid gpu_scratchpad_keys(scratchpad_size);
-    uninit_device_vector_uint2 gpu_scratchpad_vals(scratchpad_size);
+    uninit_device_vector<RelationID> gpu_scratchpad_keys(scratchpad_size);
+    uninit_device_vector<uint2> gpu_scratchpad_vals(scratchpad_size);
 
     GpuqoPlannerInfo* gpu_info = copyToDeviceGpuqoPlannerInfo(info);
 

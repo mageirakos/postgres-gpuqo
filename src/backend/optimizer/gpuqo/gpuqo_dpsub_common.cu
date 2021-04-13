@@ -211,11 +211,11 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
     LOG_PROFILE("Using a scratchpad of size %u\n", params.scratchpad_size);
 
-    params.gpu_pending_keys = uninit_device_vector_relid(PENDING_KEYS_SIZE(params));
-    params.gpu_scratchpad_keys = uninit_device_vector_relid(params.scratchpad_size);
-    params.gpu_scratchpad_vals = uninit_device_vector_joinrel(params.scratchpad_size);
-    params.gpu_reduced_keys = uninit_device_vector_relid(params.scratchpad_size);
-    params.gpu_reduced_vals = uninit_device_vector_joinrel(params.scratchpad_size);
+    params.gpu_pending_keys = uninit_device_vector<RelationID>(PENDING_KEYS_SIZE(params));
+    params.gpu_scratchpad_keys = uninit_device_vector<RelationID>(params.scratchpad_size);
+    params.gpu_scratchpad_vals = uninit_device_vector<JoinRelation>(params.scratchpad_size);
+    params.gpu_reduced_keys = uninit_device_vector<RelationID>(params.scratchpad_size);
+    params.gpu_reduced_vals = uninit_device_vector<JoinRelation>(params.scratchpad_size);
 
     STOP_TIMING(init);
 
