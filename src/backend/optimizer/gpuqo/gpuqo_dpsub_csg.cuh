@@ -36,7 +36,7 @@ template<int MAX_RELS, int STACK_SIZE>
 __device__
 static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     JoinRelation &jr_out, join_stack_t &join_stack,
-                    HashTable32bit &memo, GpuqoPlannerInfo* info);
+                    HashTableType &memo, GpuqoPlannerInfo* info);
 
 template<int STACK_SIZE>
 __device__ 
@@ -44,11 +44,11 @@ static void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
             RelationID emit_X, RelationID I, RelationID E,
             ext_loop_stack_elem_t* loop_stack, int &loop_stack_size,
             JoinRelation &jr_out, join_stack_t &join_stack, 
-            HashTable32bit &memo, GpuqoPlannerInfo* info);
+            HashTableType &memo, GpuqoPlannerInfo* info);
 
 __device__
 static JoinRelation dpsubEnumerateCsg(RelationID relid, uint32_t cid_bits, 
-                                int n_splits, HashTable32bit &memo, 
+                                int n_splits, HashTableType &memo, 
                                 GpuqoPlannerInfo* info)
 { 
     // TODO check
@@ -103,7 +103,7 @@ static void enumerate_sub_csg_emit(RelationID T, RelationID emit_S,
             RelationID emit_X, RelationID I, RelationID E,
             ext_loop_stack_elem_t* loop_stack, int &loop_stack_size,
             JoinRelation &jr_out, join_stack_t &join_stack, 
-            HashTable32bit &memo, GpuqoPlannerInfo* info){
+            HashTableType &memo, GpuqoPlannerInfo* info){
     // LOG_DEBUG("enumerate_sub_csg_emit(%u, %u, %u, %u, %u)\n",
     //         T.toUint(), emit_S.toUint(), emit_X.toUint(), I.toUint(), E.toUint());
     Assert(emit_S.isSubset(T));
@@ -137,7 +137,7 @@ template<int MAX_RELS, int STACK_SIZE>
 __device__
 static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                     JoinRelation &jr_out, join_stack_t &join_stack,
-                    HashTable32bit &memo, GpuqoPlannerInfo* info){
+                    HashTableType &memo, GpuqoPlannerInfo* info){
     RelationID R = I | E;
 
     Assert(I.isSubset(T));

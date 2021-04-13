@@ -77,7 +77,7 @@ template<typename K, typename V, typename Kint>
 __host__
 HashTable<K,V,Kint>* createHashTable(size_t capacity);
 
-typedef HashTable<RelationID,JoinRelation,unsigned int> HashTable32bit;
+typedef HashTable<Bitmapset32,JoinRelation,unsigned int> HashTable32;
 
 
 // DEVICE FUNCTIONS IMPLEMENTATION

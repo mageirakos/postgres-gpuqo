@@ -151,7 +151,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     dpsub_iter_param_t params;
     params.info = info;
     params.gpu_info = copyToDeviceGpuqoPlannerInfo(info);
-    params.memo = new HashTable32bit(memo_cap, max_memo_cap);
+    params.memo = new HashTableType(memo_cap, max_memo_cap);
     thrust::host_vector<RelationID> ini_memo_keys(info->n_rels+1);
     thrust::host_vector<JoinRelation> ini_memo_vals(info->n_rels+1);
     thrust::device_vector<RelationID> ini_memo_keys_gpu(info->n_rels+1);

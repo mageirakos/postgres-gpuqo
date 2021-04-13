@@ -20,7 +20,7 @@
 __device__
 static JoinRelation dpsubEnumerateAllSubs(RelationID relid, uint32_t cid, 
                                 int n_splits,
-                                HashTable32bit &memo, GpuqoPlannerInfo* info)
+                                HashTableType &memo, GpuqoPlannerInfo* info)
 {
     JoinRelation jr_out;
     jr_out.cost = INFD;

@@ -210,7 +210,7 @@ static int bfs_bicc(RelationID relid, const EdgeMask* edges, RelationID *blocks)
 
 __device__
 static JoinRelation dpsubEnumerateBiCC(RelationID relid, 
-                        uint32_t cid, int n_splits, HashTable32bit &memo, GpuqoPlannerInfo* info)
+                        uint32_t cid, int n_splits, HashTableType &memo, GpuqoPlannerInfo* info)
 { 
     JoinRelation jr_out;
     jr_out.cost = INFD;

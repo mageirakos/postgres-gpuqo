@@ -184,7 +184,7 @@ __device__ void blockReduceMin(volatile int* s_indexes,
   */
 template<int n_splits, dpsub_filtered_evaluate_t Function, bool full_shmem>
 __global__
-void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, HashTable32bit memo, GpuqoPlannerInfo *info){
+void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, HashTableType memo, GpuqoPlannerInfo *info){
     uint32_t n_threads_cuda = blockDim.x * gridDim.x;
 
     __shared__ volatile float shared_costs[BLOCK_DIM];
@@ -273,7 +273,7 @@ void evaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpa
 }
 
 template<int n_splits, dpsub_filtered_evaluate_t Function, bool full_shmem>
-void __launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, int shmem_size, HashTable32bit &memo, GpuqoPlannerInfo *info)
+void __launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, int shmem_size, HashTableType &memo, GpuqoPlannerInfo *info)
 {
     int blocksize = BLOCK_DIM;
     
@@ -309,7 +309,7 @@ void __launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* s
 }
 
 template<int n_splits, dpsub_filtered_evaluate_t Function>
-void _launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, HashTable32bit &memo, GpuqoPlannerInfo *info, GpuqoPlannerInfo *gpu_info)
+void _launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_sets, HashTableType &memo, GpuqoPlannerInfo *info, GpuqoPlannerInfo *gpu_info)
 {
     if (info->size > 6000){
         int shmem_size = sizeof(GpuqoPlannerInfo);
@@ -323,7 +323,7 @@ void _launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* sc
 
 
 template<dpsub_filtered_evaluate_t Function>
-void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_sets, HashTable32bit &memo, GpuqoPlannerInfo *info, GpuqoPlannerInfo *gpu_info){
+void launchEvaluateFilteredDPSubKernel(RelationID* pending_keys, RelationID* scratchpad_keys, JoinRelation* scratchpad_vals, int sq, int qss, uint32_t n_pending_sets, int n_splits, int n_sets, HashTableType &memo, GpuqoPlannerInfo *info, GpuqoPlannerInfo *gpu_info){
     switch(n_splits){
     case    1:
         _launchEvaluateFilteredDPSubKernel<   1, Function>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, memo, info, gpu_info);

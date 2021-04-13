@@ -19,8 +19,7 @@
 
 __device__
 static JoinRelation dpsubEnumerateTreeSimple(RelationID relid, 
-                        uint32_t cid, int n_splits,
-                        HashTable32bit &memo, GpuqoPlannerInfo* info)
+                        HashTableType &memo, GpuqoPlannerInfo* info)
 {
     JoinRelation jr_out;
     jr_out.cost = INFD;
@@ -63,8 +62,7 @@ static JoinRelation dpsubEnumerateTreeSimple(RelationID relid,
 
 __device__
 static JoinRelation dpsubEnumerateTreeWithSubtrees(RelationID relid, 
-                        uint32_t cid, int n_splits,
-                        HashTable32bit &memo, GpuqoPlannerInfo* info)
+                        HashTableType &memo, GpuqoPlannerInfo* info)
 { 
     JoinRelation jr_out;
     jr_out.cost = INFD;

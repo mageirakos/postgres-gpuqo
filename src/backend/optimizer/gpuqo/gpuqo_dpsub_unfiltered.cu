@@ -38,12 +38,12 @@
 
 struct dpsubEnumerateAllSubsFunctor : public pairs_enum_func_t 
 {
-    HashTable32bit memo;
+    HashTableType memo;
     GpuqoPlannerInfo* info;
     int n_splits;
 public:
     dpsubEnumerateAllSubsFunctor(
-        HashTable32bit _memo,
+        HashTableType _memo,
         GpuqoPlannerInfo* _info,
         int _n_splits
     ) : memo(_memo), info(_info), n_splits(_n_splits)

@@ -40,9 +40,7 @@ typedef struct dpsub_iter_param_t{
     GpuqoPlannerInfo* info;
     GpuqoPlannerInfo* gpu_info;
     RelationID out_relid;
-    HashTable32bit* memo;
-    thrust::host_vector<uint32_t> binoms;
-    thrust::device_vector<uint32_t> gpu_binoms;
+    HashTableType* memo;
     uninit_device_vector_relid gpu_pending_keys;
     uninit_device_vector_relid gpu_scratchpad_keys;
     uninit_device_vector_joinrel gpu_scratchpad_vals;
@@ -66,8 +64,7 @@ void dpsub_scatter(scatter_iter_t scatter_from_iters,
                 scatter_iter_t scatter_to_iters, dpsub_iter_param_t &params);
 void dpsub_scatter(int n_sets, dpsub_iter_param_t &params);
 
-typedef JoinRelation (*dpsub_filtered_evaluate_t)(RelationID, uint32_t, int, 
-    HashTable32bit&, GpuqoPlannerInfo*);
+    HashTableType&, GpuqoPlannerInfo*);
 
 EXTERN_PROTOTYPE_TIMING(unrank);
 EXTERN_PROTOTYPE_TIMING(filter);
@@ -172,7 +169,7 @@ template<bool CHECK_LEFT, bool CHECK_RIGHT>
 __device__
 void try_join(RelationID jr, JoinRelation &jr_out, RelationID l, RelationID r, 
                 bool additional_predicate, join_stack_t &stack, 
-                HashTable32bit &memo, GpuqoPlannerInfo* info)
+                HashTableType &memo, GpuqoPlannerInfo* info)
 {
     LOG_DEBUG("[%d, %d] try_join(%u, %u, %s)\n", 
                 blockIdx.x, threadIdx.x, l.toUint(), r.toUint(),

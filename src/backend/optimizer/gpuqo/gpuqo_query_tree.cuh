@@ -23,7 +23,7 @@ T buildQueryTree_get(Container v, idx_t idx){
 }
 
 template<> 
-JoinRelation buildQueryTree_get(HashTable32bit ht, RelationID idx){
+JoinRelation buildQueryTree_get(HashTableType ht, RelationID idx){
     return ht.get(idx);
 }
 
