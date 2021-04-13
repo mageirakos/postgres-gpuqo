@@ -63,7 +63,7 @@ static JoinRelation dpsubEnumerateTreeSimple(RelationID relid,
 
 __device__
 static JoinRelation dpsubEnumerateTreeWithSubtrees(RelationID relid, 
-                        uint64_t cid, int n_splits,
+                        uint32_t cid, int n_splits,
                         HashTableType &memo, GpuqoPlannerInfo* info)
 { 
     JoinRelation jr_out;

@@ -62,35 +62,35 @@ public:
  *   partial pruning.
  */
 template<typename BinaryFunction>
-struct unrankEvaluateDPSub : public thrust::unary_function< uint32_t,thrust::tuple<RelationID, JoinRelation> >
+struct unrankEvaluateDPSub : public thrust::unary_function< RelationID::type,thrust::tuple<RelationID, JoinRelation> >
 {
-    thrust::device_ptr<uint32_t> binoms;
+    thrust::device_ptr<RelationID::type> binoms;
     int sq;
     int qss;
-    uint32_t offset;
+    RelationID::type offset;
     int n_splits;
     BinaryFunction enum_functor;
 public:
     unrankEvaluateDPSub(
         BinaryFunction _enum_functor,
         int _sq,
-        thrust::device_ptr<uint32_t> _binoms,
+        thrust::device_ptr<RelationID::type> _binoms,
         int _qss,
-        uint32_t _offset,
+        RelationID::type _offset,
         int _n_splits
     ) : enum_functor(_enum_functor), sq(_sq), binoms(_binoms), 
         qss(_qss), offset(_offset), n_splits(_n_splits)
     {}
  
     __device__
-    thrust::tuple<RelationID, JoinRelation> operator()(uint32_t tid)
+    thrust::tuple<RelationID, JoinRelation> operator()(RelationID::type tid)
     {
-        uint32_t real_id = tid + offset;
-        uint32_t sid = real_id / n_splits;
-        uint32_t cid = real_id % n_splits;
+        RelationID::type real_id = tid + offset;
+        RelationID::type sid = real_id / n_splits;
+        RelationID::type cid = real_id % n_splits;
 
         LOG_DEBUG("[%u] n_splits=%d, sid=%u, cid=[%u,%u)\n", 
-                tid, n_splits, sid, cid, cid+ceil_div((1U)<<qss, n_splits));
+                tid, n_splits, sid, cid, cid+ceil_div(((RelationID::type)1)<<qss, n_splits));
 
         RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
         RelationID relid = s<<1;
@@ -111,11 +111,14 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
     if (factor < WARP_SIZE || params.n_joins_per_set <= WARP_SIZE){
         threads_per_set = WARP_SIZE;
     } else{
-        threads_per_set = floorPow2(min(factor, params.n_joins_per_set));
+        threads_per_set = floorPow2(min((uint64_t)factor, 
+                                        params.n_joins_per_set));
     }
     
     n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
-    n_sets_per_iteration = min(params.scratchpad_size / threads_per_set, params.n_sets);
+    n_sets_per_iteration = min(
+                        (uint64_t) params.scratchpad_size / threads_per_set, 
+                        params.n_sets);
 
     LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
             n_joins_per_thread,

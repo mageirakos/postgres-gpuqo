@@ -73,8 +73,8 @@ struct JoinRelationDetailed : public JoinRelation{
 };
 
 struct JoinRelationDpsize : public JoinRelationDetailed {
-	uint32_t left_rel_idx;
-	uint32_t right_rel_idx;
+	RelationID::type left_rel_idx;
+	RelationID::type right_rel_idx;
 };
 
 typedef struct QueryTree{

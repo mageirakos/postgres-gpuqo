@@ -41,8 +41,8 @@ typedef struct dpsub_iter_param_t{
     GpuqoPlannerInfo* gpu_info;
     RelationID out_relid;
     HashTableType* memo;
-    thrust::host_vector<uint32_t> binoms;
-    thrust::device_vector<uint32_t> gpu_binoms;
+    thrust::host_vector<RelationID::type> binoms;
+    thrust::device_vector<RelationID::type> gpu_binoms;
     uninit_device_vector<RelationID> gpu_pending_keys;
     uninit_device_vector<RelationID> gpu_scratchpad_keys;
     uninit_device_vector<JoinRelation> gpu_scratchpad_vals;
@@ -54,9 +54,9 @@ typedef struct dpsub_iter_param_t{
     uint32_t scratchpad_size;
 } dpsub_iter_param_t;
 
-typedef thrust::pair<uninit_device_vector_relid::iterator, uninit_device_vector_joinrel::iterator> scatter_iter_t;
+typedef thrust::pair<uninit_device_vector<RelationID>::iterator, uninit_device_vector<JoinRelation>::iterator> scatter_iter_t;
 
-typedef thrust::binary_function<RelationID, uint32_t, JoinRelation> pairs_enum_func_t;
+typedef thrust::binary_function<RelationID, RelationID::type, JoinRelation> pairs_enum_func_t;
 
 int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params);
 int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params);
@@ -66,7 +66,7 @@ void dpsub_scatter(scatter_iter_t scatter_from_iters,
                 scatter_iter_t scatter_to_iters, dpsub_iter_param_t &params);
 void dpsub_scatter(int n_sets, dpsub_iter_param_t &params);
 
-typedef JoinRelation (*dpsub_filtered_evaluate_t)(RelationID, uint64_t, int, 
+typedef JoinRelation (*dpsub_filtered_evaluate_t)(RelationID, uint32_t, int, 
     HashTableType&, GpuqoPlannerInfo*);
 
 EXTERN_PROTOTYPE_TIMING(unrank);
@@ -83,12 +83,12 @@ EXTERN_PROTOTYPE_TIMING(iteration);
  */
 __host__ __device__
 __forceinline__
-RelationID dpsub_unrank_sid(uint32_t sid, uint32_t qss, uint32_t sq, uint32_t* binoms){
+RelationID dpsub_unrank_sid(RelationID::type sid, uint32_t qss, uint32_t sq, RelationID::type* binoms){
     RelationID s = RelationID::nth(sq).allLower();
     int qss_tmp = qss, sq_tmp = sq;
 
     while (sq_tmp > 0 && sq_tmp > qss_tmp){
-        uint32_t o = BINOM(binoms, sq, sq_tmp-1, sq_tmp-qss_tmp-1);
+        RelationID::type o = BINOM(binoms, sq, sq_tmp-1, sq_tmp-qss_tmp-1);
         if (sid < o){
             s.unset(sq_tmp-1);
         } else {

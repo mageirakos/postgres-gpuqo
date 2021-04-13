@@ -19,6 +19,13 @@ std::ostream & operator<<(std::ostream &os, const uint2& idxs)
 	return os;
 }
 
+__host__
+std::ostream & operator<<(std::ostream &os, const ulong2& idxs)
+{
+	os<<"["<<idxs.x<<","<<idxs.y<<"]";
+	return os;
+}
+
 template <typename Type>
 __host__
 std::ostream & operator<<(std::ostream &os, const Bitmapset<Type>& bms){

@@ -60,8 +60,8 @@ bool gpuqo_dpsub_bicc_enable;
  */
 __global__
 void unrankFilteredDPSubKernel(int sq, int qss, 
-                               uint32_t offset, uint32_t n_tab_sets,
-                               uint32_t* binoms,
+                               RelationID::type offset, uint32_t n_tab_sets,
+                               RelationID::type* binoms,
                                GpuqoPlannerInfo* info,
                                RelationID* out_relids)
 {
@@ -109,7 +109,7 @@ void unrankFilteredDPSubKernel(int sq, int qss,
 void launchUnrankFilteredDPSubKernel(int sq, int qss, 
                                      uint64_t offset, 
                                      uint32_t n_tab_sets,
-                                     uint32_t* binoms,
+                                     RelationID::type* binoms,
                                      GpuqoPlannerInfo* info,
                                      RelationID* out_relids)
 {

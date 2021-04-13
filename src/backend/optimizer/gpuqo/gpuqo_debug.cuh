@@ -58,6 +58,9 @@ __host__
 std::ostream & operator<<(std::ostream &os, const uint2& idxs);
 
 __host__
+std::ostream & operator<<(std::ostream &os, const ulong2& idxs);
+
+__host__
 std::ostream & operator<<(std::ostream &os, const JoinRelation& jr);
 
 template<typename Type>

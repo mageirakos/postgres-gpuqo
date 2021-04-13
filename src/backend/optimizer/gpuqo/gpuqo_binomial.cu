@@ -10,7 +10,8 @@
 
 #include "gpuqo_binomial.cuh"
 
-void precompute_binoms(thrust::host_vector<uint32_t> &binoms, int N){
+template<typename uint_t>
+void precompute_binoms(thrust::host_vector<uint_t> &binoms, int N){
     for (int n = 0; n <= N; n++){
         for (int k = 0; k <= N; k++){
             int idx = n*(N+1)+k;
@@ -27,3 +28,7 @@ void precompute_binoms(thrust::host_vector<uint32_t> &binoms, int N){
 
     }
 }
+
+// explicit specification
+template void precompute_binoms<unsigned int>(thrust::host_vector<unsigned int>&,int);
+template void precompute_binoms<unsigned long long int>(thrust::host_vector<unsigned long long int>&,int);

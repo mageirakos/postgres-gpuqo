@@ -12,7 +12,8 @@
 
 #include <thrust/device_vector.h>
 
-void precompute_binoms(thrust::host_vector<uint32_t> &binoms, int N);
+template<typename uint_t>
+void precompute_binoms(thrust::host_vector<uint_t> &binoms, int N);
 
 #define BINOM(binoms, N, n, k) (binoms)[(n)*((N)+1)+(k)]
 

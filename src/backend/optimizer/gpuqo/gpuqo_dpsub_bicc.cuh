@@ -209,8 +209,8 @@ static int bfs_bicc(RelationID relid, const EdgeMask* edges, RelationID *blocks)
 }
 
 __device__
-static JoinRelation dpsubEnumerateBiCC(RelationID relid, 
-                        uint32_t cid, int n_splits, HashTableType &memo, GpuqoPlannerInfo* info)
+static JoinRelation dpsubEnumerateBiCC(RelationID relid, uint32_t cid, 
+                    int n_splits, HashTableType &memo, GpuqoPlannerInfo* info)
 { 
     JoinRelation jr_out;
     jr_out.cost = INFD;
@@ -232,21 +232,21 @@ static JoinRelation dpsubEnumerateBiCC(RelationID relid,
 
     LOG_DEBUG("%u has %d blocks\n", relid.toUint(), n_blocks);
 
-    uint32_t n_possible_joins = 0;
+    RelationID::type n_possible_joins = 0;
     for (int i=0; i<n_blocks; i++){
-        n_possible_joins += (1 << blocks[i].size()) - 2;
+        n_possible_joins += (((RelationID::type)1) << blocks[i].size()) - 2;
     }
 
     LOG_DEBUG("relid=%u: n_possible_joins=%u\n", relid.toUint(), n_possible_joins);
 
-    uint32_t n_joins = ceil_div(n_possible_joins, n_splits);
-    uint32_t from_i = cid*n_joins;
-    uint32_t to_i   = (cid+1)*n_joins;
+    RelationID::type n_joins = ceil_div(n_possible_joins, n_splits);
+    RelationID::type from_i = cid*n_joins;
+    RelationID::type to_i   = (cid+1)*n_joins;
     uint32_t i_block = 0;
-    uint32_t psum = (1 << blocks[i_block].size()) - 2;
-    uint32_t prev_psum = 0;
+    RelationID::type psum = (((RelationID::type)1) << blocks[i_block].size()) - 2;
+    RelationID::type prev_psum = 0;
 
-    for (uint32_t i = from_i; i < to_i; i++){
+    for (RelationID::type i = from_i; i < to_i; i++){
         RelationID l, r;
         bool valid = false;
 

@@ -45,31 +45,31 @@ int gpuqo_min_memo_size_mb;
  *
  *	 unrank algorithm for DPsize GPU variant
  */
-struct unrankDPSize : public thrust::unary_function< uint32_t,thrust::tuple<RelationID, uint2> >
+struct unrankDPSize : public thrust::unary_function< RelationID::type,thrust::tuple<RelationID, RelationID::type2> >
 {
     thrust::device_ptr<RelationID> memo_keys;
     thrust::device_ptr<JoinRelationDpsize> memo_vals;
-    thrust::device_ptr<uint32_t> partition_offsets;
-    thrust::device_ptr<uint32_t> partition_sizes;
+    thrust::device_ptr<RelationID::type> partition_offsets;
+    thrust::device_ptr<RelationID::type> partition_sizes;
     int iid;
     uint64_t offset;
 public:
     unrankDPSize(
         thrust::device_ptr<RelationID> _memo_keys,
         thrust::device_ptr<JoinRelationDpsize> _memo_vals,
-        thrust::device_ptr<uint32_t> _partition_offsets,
-        thrust::device_ptr<uint32_t> _partition_sizes,
+        thrust::device_ptr<RelationID::type> _partition_offsets,
+        thrust::device_ptr<RelationID::type> _partition_sizes,
         int _iid,
-        uint64_t _offset
+        RelationID::type _offset
     ) : memo_keys(_memo_keys), memo_vals(_memo_vals), 
         partition_offsets(_partition_offsets), 
         partition_sizes(_partition_sizes), iid(_iid), offset(_offset)
     {}
 
         __device__
-        thrust::tuple<RelationID, uint2> operator()(uint64_t cid) 
+        thrust::tuple<RelationID, RelationID::type2> operator()(uint64_t cid) 
         {
-            __shared__ uint64_t offsets[32];
+            __shared__ uint64_t offsets[RelationID::SIZE];
             int n_active = __popc(__activemask());
 
             for (int i = threadIdx.x; i <= iid-2; i += n_active){
@@ -77,8 +77,8 @@ public:
             }
             __syncthreads();
     
-            uint32_t lp = 0;
-            uint32_t rp = iid - 2;
+            RelationID::type lp = 0;
+            RelationID::type rp = iid - 2;
             uint64_t o = offsets[lp];
             cid += offset;
 
@@ -87,26 +87,25 @@ public:
                 lp++;
                 rp--;
 
-                Assert(lp <= iid-2 && lp < 32);
-                Assert(rp <= iid-2 && rp < 32);
+                Assert(lp <= iid-2 && lp < RelationID::SIZE);
+                Assert(rp <= iid-2 && rp < RelationID::SIZE);
 
                 o = offsets[lp];
             }
 
-            uint32_t l = cid / partition_sizes[rp];
-            uint32_t r = cid % partition_sizes[rp];
+            RelationID::type l = cid / partition_sizes[rp];
+            RelationID::type r = cid % partition_sizes[rp];
             if (r % 2 == 0)
                 r = r/2;
             else
                 r = ceil_div(partition_sizes[rp], 2) + r/2;
     
             RelationID relid;
-            uint2 out = make_uint2(
-                partition_offsets[lp] + l, 
-                partition_offsets[rp] + r
-            );
+            RelationID::type2 out;
+            out.x = partition_offsets[lp] + l;
+            out.y = partition_offsets[rp] + r;
     
-            LOG_DEBUG("%llu: %u %u\n", 
+            LOG_DEBUG("%llu: %lu %lu\n", 
                 cid, 
                 out.x,
                 out.y
@@ -117,12 +116,12 @@ public:
     
             relid = lid | rid;
     
-            return thrust::tuple<RelationID, uint2>(relid, out);
+            return thrust::tuple<RelationID, RelationID::type2>(relid, out);
         }
 };
 
 
-struct filterJoinedDisconnected : public thrust::unary_function<thrust::tuple<RelationID, uint2>, bool>
+struct filterJoinedDisconnected : public thrust::unary_function<thrust::tuple<RelationID, RelationID::type2>, bool>
 {
     thrust::device_ptr<RelationID> memo_keys;
     thrust::device_ptr<JoinRelationDpsize> memo_vals;
@@ -136,10 +135,10 @@ public:
     {}
 
     __device__
-    bool operator()(thrust::tuple<RelationID, uint2> t) 
+    bool operator()(thrust::tuple<RelationID, RelationID::type2> t) 
     {
         RelationID relid = t.get<0>();
-        uint2 idxs = t.get<1>();
+        RelationID::type2 idxs = t.get<1>();
 
         LOG_DEBUG("%d %d: %u %u\n", 
             blockIdx.x,
@@ -160,7 +159,7 @@ public:
 };
 
 
-struct joinCost : public thrust::unary_function<uint2,JoinRelationDpsize>
+struct joinCost : public thrust::unary_function<RelationID::type2,JoinRelationDpsize>
 {
     thrust::device_ptr<RelationID> memo_keys;
     thrust::device_ptr<JoinRelationDpsize> memo_vals;
@@ -174,7 +173,7 @@ public:
     {}
 
     __device__
-    JoinRelationDpsize operator()(uint2 idxs){
+    JoinRelationDpsize operator()(RelationID::type2 idxs){
         JoinRelationDpsize jr;
 
         JoinRelationDpsize& left_rel = memo_vals.get()[idxs.x];
@@ -193,18 +192,18 @@ public:
     }
 };
 
-struct joinRelToUint2 : public thrust::unary_function<thrust::tuple<RelationID,JoinRelationDpsize>,thrust::tuple<RelationID,uint2> >
+struct joinRelToUint2 : public thrust::unary_function<thrust::tuple<RelationID,JoinRelationDpsize>,thrust::tuple<RelationID,RelationID::type2> >
 {
 public:
     joinRelToUint2() {}
 
     __device__
-    thrust::tuple<RelationID,uint2> operator()(thrust::tuple<RelationID,JoinRelationDpsize> t){
+    thrust::tuple<RelationID,RelationID::type2> operator()(thrust::tuple<RelationID,JoinRelationDpsize> t){
         JoinRelationDpsize& jr = t.get<1>();
-        return thrust::make_tuple(
-            t.get<0>(),
-            make_uint2(jr.left_rel_idx, jr.right_rel_idx)
-        );
+        RelationID::type2 idxs;
+        idxs.x = jr.left_rel_idx;
+        idxs.y = jr.right_rel_idx;
+        return thrust::make_tuple(t.get<0>(), idxs);
     }
 };
 
@@ -237,6 +236,10 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
     
     uninit_device_vector<RelationID> gpu_memo_keys(memo_size);
     uninit_device_vector<JoinRelationDpsize> gpu_memo_vals(memo_size);
+    thrust::host_vector<RelationID::type> partition_offsets(info->n_rels);
+    thrust::host_vector<RelationID::type> partition_sizes(info->n_rels);
+    thrust::device_vector<RelationID::type> gpu_partition_offsets(info->n_rels);
+    thrust::device_vector<RelationID::type> gpu_partition_sizes(info->n_rels);
     QueryTree* out = NULL;
 
     for(int i=0; i<info->n_rels; i++){
@@ -261,7 +264,7 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
 
     // scratchpad size is increased on demand, starting from a minimum capacity
     uninit_device_vector<RelationID> gpu_scratchpad_keys(scratchpad_size);
-    uninit_device_vector<uint2> gpu_scratchpad_vals(scratchpad_size);
+    uninit_device_vector<RelationID::type2> gpu_scratchpad_vals(scratchpad_size);
 
     GpuqoPlannerInfo* gpu_info = copyToDeviceGpuqoPlannerInfo(info);
 

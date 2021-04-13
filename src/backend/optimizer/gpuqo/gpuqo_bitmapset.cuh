@@ -11,6 +11,7 @@
 #define GPUQO_BITMAPSET_CUH
 
 #include <functional>
+#include <type_traits> 
 
 #include "gpuqo_bit_manipulation.cuh"
 
@@ -20,6 +21,12 @@ template<typename T>
 class Bitmapset{
 public: 
     T bits;
+
+    typedef T type;
+    
+    typedef typename std::conditional<sizeof(T) <= 4,
+                            uint2,
+                            ulong2>::type type2;
 
     static constexpr int SIZE = sizeof(T)*8;
 

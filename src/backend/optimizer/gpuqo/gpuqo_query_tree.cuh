@@ -29,9 +29,9 @@ JoinRelation buildQueryTree_get(HashTableType ht, RelationID idx){
 
 
 template <typename Container>
-void dpsize_buildQueryTree(uint32_t idx, Container &gpu_memo_vals, QueryTree **qt)
+void dpsize_buildQueryTree(RelationID::type idx, Container &gpu_memo_vals, QueryTree **qt)
 {
-    JoinRelationDpsize jr = buildQueryTree_get<JoinRelationDpsize, Container, uint32_t>(gpu_memo_vals, idx);
+    JoinRelationDpsize jr = buildQueryTree_get<JoinRelationDpsize, Container, RelationID::type>(gpu_memo_vals, idx);
 
     (*qt) = (QueryTree*) malloc(sizeof(QueryTree));
     (*qt)->id = jr.id;

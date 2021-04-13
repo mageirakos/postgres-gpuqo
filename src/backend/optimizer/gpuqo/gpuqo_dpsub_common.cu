@@ -190,8 +190,8 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     );
 
     int binoms_size = (info->n_rels+1)*(info->n_rels+1);
-    params.binoms = thrust::host_vector<uint32_t>(binoms_size);
-    precompute_binoms(params.binoms, info->n_rels);
+    params.binoms = thrust::host_vector<RelationID::type>(binoms_size);
+    precompute_binoms<RelationID::type>(params.binoms, info->n_rels);
     params.gpu_binoms = params.binoms;
 
     params.scratchpad_size = (

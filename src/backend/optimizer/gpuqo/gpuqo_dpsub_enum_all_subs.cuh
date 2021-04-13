@@ -25,9 +25,9 @@ static JoinRelation dpsubEnumerateAllSubs(RelationID relid, uint32_t cid,
     JoinRelation jr_out;
     jr_out.cost = INFD;
     int qss = relid.size();
-    uint32_t n_possible_joins = 1U<<qss;
-    uint32_t n_pairs = ceil_div(n_possible_joins, n_splits);
-    uint32_t join_id = (cid)*n_pairs;
+    RelationID::type n_possible_joins = ((RelationID::type)1)<<qss;
+    RelationID::type n_pairs = ceil_div(n_possible_joins, n_splits);
+    RelationID::type join_id = (cid)*n_pairs;
     RelationID l = expandToMask(RelationID(join_id), relid);
     RelationID r;
 
