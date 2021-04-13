@@ -64,6 +64,7 @@ void dpsub_scatter(scatter_iter_t scatter_from_iters,
                 scatter_iter_t scatter_to_iters, dpsub_iter_param_t &params);
 void dpsub_scatter(int n_sets, dpsub_iter_param_t &params);
 
+typedef JoinRelation (*dpsub_filtered_evaluate_t)(RelationID, uint64_t, int, 
     HashTableType&, GpuqoPlannerInfo*);
 
 EXTERN_PROTOTYPE_TIMING(unrank);

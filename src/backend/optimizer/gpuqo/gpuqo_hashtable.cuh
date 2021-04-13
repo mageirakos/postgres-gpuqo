@@ -30,7 +30,9 @@ private:
     size_t n_elems_ub;
 
     __device__
-    Kint hash(K key);
+    Kint hash(K key){
+        return key.hash() & (capacity-1);
+    }
 
     __host__
     void debugDump();
@@ -78,6 +80,9 @@ __host__
 HashTable<K,V,Kint>* createHashTable(size_t capacity);
 
 typedef HashTable<Bitmapset32,JoinRelation,unsigned int> HashTable32;
+typedef HashTable<Bitmapset64,JoinRelation,size_t> HashTable64;
+
+typedef HashTable32 HashTableType;
 
 
 // DEVICE FUNCTIONS IMPLEMENTATION
@@ -127,12 +132,6 @@ void HashTable<K,V,Kint>::insert(K key, V value){
     // I checked all available positions
     // table is full
     assert(false);
-}
-
-template<>
-__device__ __forceinline__ 
-unsigned int HashTable<RelationID, JoinRelation, unsigned int>::hash(RelationID k){
-    return k.hash() & (capacity-1);
 }
 
 #endif

@@ -37,8 +37,8 @@ std::ostream & operator<<(std::ostream &os, const JoinRelation& jr)
 
 template
 __host__
-std::ostream & operator<<(std::ostream &os, const Bitmapset<uint32_t>& bms);
+std::ostream & operator<<(std::ostream &os, const Bitmapset32& bms);
 
 template
 __host__
-std::ostream & operator<<(std::ostream &os, const Bitmapset<uint64_t>& bms);
+std::ostream & operator<<(std::ostream &os, const Bitmapset64& bms);

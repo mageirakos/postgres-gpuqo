@@ -142,15 +142,7 @@ public:
     }
 
     __host__ __device__
-    inline size_t hash() const{
-        T x = bits;
-        x ^= x >> 16;
-        x *= 0x85ebca6b;
-        x ^= x >> 13;
-        x *= 0xc2b2ae35;
-        x ^= x >> 16;
-        return x;        
-    }
+    inline size_t hash() const;
 
     __host__ __device__
     inline unsigned toUint() const{
@@ -255,26 +247,32 @@ public:
         bits = other.bits;
         return *this;
     }
-    
-    template <typename Type>
-    __host__ __device__
-    friend inline Bitmapset<Type> nextSubset(const Bitmapset<Type> &set, const Bitmapset<Type> &subset);
-    template <typename Type>
-    __host__ __device__
-    friend inline Bitmapset<Type> expandToMask(const Bitmapset<Type> &val, const Bitmapset<Type> &mask);
-
-    template <typename Type>
-    __device__
-    friend inline Bitmapset<Type> atomicCAS(Bitmapset<Type> *address, Bitmapset<Type> compare, Bitmapset<Type> val);
-
-    template <typename Type>
-    __device__
-    friend inline Bitmapset<Type> atomicOr(Bitmapset<Type> *address, Bitmapset<Type> val);
-    
-    template <typename Type>
-    friend size_t std::hash<Bitmapset<Type>>::operator()(const Bitmapset<Type>& x) const;
 };
 
+
+template<>
+__host__ __device__
+inline size_t Bitmapset<unsigned int>::hash() const{
+    unsigned int x = bits;
+    x ^= x >> 16;
+    x *= 0x85ebca6b;
+    x ^= x >> 13;
+    x *= 0xc2b2ae35;
+    x ^= x >> 16;
+    return x;        
+}
+
+template<>
+__host__ __device__
+inline size_t Bitmapset<unsigned long long int>::hash() const{
+    unsigned long long int x = bits;
+    x ^= x >> 33;
+    x *= 0xff51afd7ed558ccdLLU;
+    x ^= x >> 33;
+    x *= 0xc4ceb9fe1a85ec53LLU;
+    x ^= x >> 33;     
+    return x;
+}
 
 template<typename T>
 __host__ __device__
@@ -309,7 +307,7 @@ namespace std {
     };
 }
 
-typedef Bitmapset<uint32_t> Bitmapset32;
-typedef Bitmapset<uint64_t> Bitmapset64;
-	
+typedef Bitmapset<unsigned int> Bitmapset32;
+typedef Bitmapset<unsigned long long int> Bitmapset64;
+
 #endif							/* GPUQO_BITMAPSET_CUH */

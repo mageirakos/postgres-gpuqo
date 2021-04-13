@@ -21,9 +21,13 @@ static size_t bitmapset_size(int nwords){
 }
 
 template<typename Bitmapset>
-Bitmapset convertBitmapset(gpuqo_c::Bitmapset* set){
+Bitmapset convertBitmapset(gpuqo_c::Bitmapset* set);
+
+template<>
+Bitmapset32 convertBitmapset<Bitmapset32>(gpuqo_c::Bitmapset* set){
 	if (set == NULL)
-		return RelationID(0);
+		return Bitmapset32(0);
+
 
     if (set->nwords > 1){
         printf("WARNING: only relids of 32 bits are supported!\n");
@@ -31,7 +35,18 @@ Bitmapset convertBitmapset(gpuqo_c::Bitmapset* set){
     if (set->words[0] & 0xFFFFFFFF00000000ULL){
         printf("WARNING: only relids of 32 bits are supported!\n");
     }
-    return Bitmapset(set->words[0] & 0xFFFFFFFFULL);
+    return Bitmapset32(set->words[0] & 0xFFFFFFFFULL);
+}
+template<>
+Bitmapset64 convertBitmapset<Bitmapset64>(gpuqo_c::Bitmapset* set){
+	if (set == NULL)
+		return Bitmapset64(0);
+
+    if (set->nwords > 1){
+        printf("WARNING: only relids of 64 bits are supported!\n");
+    }
+	
+    return Bitmapset64(set->words[0]);
 }
 
 template<typename Bitmapset>

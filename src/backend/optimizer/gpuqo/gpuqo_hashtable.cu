@@ -228,3 +228,4 @@ void HashTable<K,V,Kint>::free(){
 
 // explicit specification
 template class HashTable<RelationID,JoinRelation,unsigned int>;
+template class HashTable<RelationID,JoinRelation,size_t>;
