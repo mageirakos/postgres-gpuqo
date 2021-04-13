@@ -11,7 +11,7 @@
 #include "gpuqo.cuh"
 
 void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlannerInfo* info){
-    int bfs_queue[32];
+    int bfs_queue[RelationID::SIZE];
     int bfs_queue_front_idx = 0;
     int bfs_queue_back_idx = 0;
 

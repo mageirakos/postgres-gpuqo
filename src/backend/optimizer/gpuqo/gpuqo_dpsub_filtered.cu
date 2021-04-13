@@ -69,7 +69,7 @@ void unrankFilteredDPSubKernel(int sq, int qss,
     uint32_t n_threads = blockDim.x * gridDim.x;
 
     int n_active = __popc(__activemask());
-    __shared__ EdgeMask edge_table[32];
+    __shared__ EdgeMask edge_table[RelationID::SIZE];
     for (int i = threadIdx.x; i < sq; i+=n_active){
         edge_table[i] = info->edge_table[i];
     }
@@ -458,7 +458,7 @@ uint32_t dpsub_bicc_evaluation(int iter, uint32_t n_remaining_sets,
     uint32_t threads_per_set;
     uint32_t factor = gpuqo_n_parallel / n_pending_sets;
 
-    threads_per_set = 32;
+    threads_per_set = WARP_SIZE;
     
     n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
     n_sets_per_iteration = min(params.scratchpad_size, n_pending_sets);

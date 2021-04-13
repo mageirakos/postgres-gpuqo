@@ -97,10 +97,10 @@ struct BaseRelation{
 struct GpuqoPlannerInfo{
 	unsigned int size;
 	int n_rels;
-	BaseRelation base_rels[32];
-	EdgeMask edge_table[32];
-	EdgeMask indexed_edge_table[32];
-	RelationID subtrees[32];
+	BaseRelation base_rels[RelationID::SIZE];
+	EdgeMask edge_table[RelationID::SIZE];
+	EdgeMask indexed_edge_table[RelationID::SIZE];
+	RelationID subtrees[RelationID::SIZE];
 	int n_fk_selecs;
 	unsigned int* fk_selec_idxs;
 	float* fk_selec_sels;

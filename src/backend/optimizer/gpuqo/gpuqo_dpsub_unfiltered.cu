@@ -108,8 +108,8 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
     uint32_t threads_per_set;
     uint32_t factor = gpuqo_n_parallel / params.n_sets;
 
-    if (factor < 32 || params.n_joins_per_set <= 32){
-        threads_per_set = 32;
+    if (factor < WARP_SIZE || params.n_joins_per_set <= WARP_SIZE){
+        threads_per_set = WARP_SIZE;
     } else{
         threads_per_set = floorPow2(min(factor, params.n_joins_per_set));
     }

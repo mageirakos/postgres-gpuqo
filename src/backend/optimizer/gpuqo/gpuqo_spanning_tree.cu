@@ -18,8 +18,8 @@ void minimumSpanningTree(GpuqoPlannerInfo *info){
     RelationID S = info->base_rels[0].id;
     RelationID out_relid = RelationID(0);
 
-    EdgeMask out_edges[32];
-    JoinRelationDetailed base_joinrels[32];
+    EdgeMask out_edges[RelationID::SIZE];
+    JoinRelationDetailed base_joinrels[RelationID::SIZE];
 
     for (int i=0; i < info->n_rels; i++){
         out_relid |= info->base_rels[i].id;

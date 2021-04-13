@@ -18,8 +18,11 @@
 
 template<typename T>
 class Bitmapset{
-    T bits;
 public: 
+    T bits;
+
+    static constexpr int SIZE = sizeof(T)*8;
+
     __host__ __device__
     inline static Bitmapset<T> nth(unsigned n){
         return ((T)1) << n;

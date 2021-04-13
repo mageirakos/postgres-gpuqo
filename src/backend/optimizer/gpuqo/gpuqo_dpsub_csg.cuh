@@ -52,7 +52,7 @@ static JoinRelation dpsubEnumerateCsg(RelationID relid, uint32_t cid_bits,
                                 GpuqoPlannerInfo* info)
 { 
     // TODO check
-    Assert(n_splits % 32 == 0 && popc(n_splits) == 1);
+    Assert(n_splits % WARP_SIZE == 0 && popc(n_splits) == 1);
 
     RelationID cid = RelationID(cid_bits);
 
@@ -77,7 +77,7 @@ static JoinRelation dpsubEnumerateCsg(RelationID relid, uint32_t cid_bits,
     RelationID inc_set = expandToMask(cid, relid);
     RelationID exc_set = expandToMask(cmp_cid, relid);
     
-    enumerate_sub_csg<32,64>(relid, inc_set, exc_set, jr_out, join_stack, 
+    enumerate_sub_csg<RelationID::SIZE,RelationID::SIZE*2>(relid, inc_set, exc_set, jr_out, join_stack, 
         memo, info);
 
     if (LANE_ID < join_stack.stackTop){

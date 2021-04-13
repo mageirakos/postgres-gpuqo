@@ -99,27 +99,27 @@ static void bfs_bicc_bfs(RelationID relid, const EdgeMask* edges,
 
     for (int i=0; i<relid.size(); i++){
         RelationID lq = LQ[i];
-        if (lq.isSet(LANE_ID)){
-            int x = LANE_ID;
-            
-            EdgeMask e = edges[x-1] - (RelationID)*visited;
-            __syncwarp();
-            atomicOr((RelationID*)&LQ[i+1], e);
-            atomicOr((RelationID*)visited, e);
+        for (int x=LANE_ID; x < RelationID::SIZE; x += WARP_SIZE){
+            if (lq.isSet(x)){
+                EdgeMask e = edges[x-1] - (RelationID)*visited;
+                __syncwarp();
+                atomicOr((RelationID*)&LQ[i+1], e);
+                atomicOr((RelationID*)visited, e);
 
-            LOG_DEBUG("bfs_bicc_bfs(%u): i=%d, x=%d, e=%u\n", 
-                        relid.toUint(), i, x, e.toUint());
+                LOG_DEBUG("bfs_bicc_bfs(%u): i=%d, x=%d, e=%u\n", 
+                            relid.toUint(), i, x, e.toUint());
 
-            while (!e.empty()){
-                int w = e.lowestPos();
+                while (!e.empty()){
+                    int w = e.lowestPos();
 
-                L[w] = i+1; // same for all threads, concurrency not important
-                P[w] = x;   // different but not important which one wins
+                    L[w] = i+1; // same for all threads, concurrency not important
+                    P[w] = x;   // different but not important which one wins
 
-                e.unset(w);
+                    e.unset(w);
+                }
             }
+            __syncwarp();
         }
-        __syncwarp();
     }
     
 }
@@ -127,27 +127,29 @@ static void bfs_bicc_bfs(RelationID relid, const EdgeMask* edges,
 __device__
 static int bfs_bicc(RelationID relid, const EdgeMask* edges, RelationID *blocks)
 {
-    __shared__ uint32_t shared_P[32*BLOCK_DIM/32];
-    __shared__ uint32_t shared_L[32*BLOCK_DIM/32];
-    __shared__ uint32_t shared_Low[32*BLOCK_DIM/32];
-    __shared__ uint32_t shared_Par[32*BLOCK_DIM/32];
-    __shared__ RelationID shared_LQ[32*BLOCK_DIM/32];
-    __shared__ RelationID shared_invalid[BLOCK_DIM/32];
+    __shared__ uint32_t shared_P[RelationID::SIZE*BLOCK_DIM/WARP_SIZE];
+    __shared__ uint32_t shared_L[RelationID::SIZE*BLOCK_DIM/WARP_SIZE];
+    __shared__ uint32_t shared_Low[RelationID::SIZE*BLOCK_DIM/WARP_SIZE];
+    __shared__ uint32_t shared_Par[RelationID::SIZE*BLOCK_DIM/WARP_SIZE];
+    __shared__ RelationID shared_LQ[RelationID::SIZE*BLOCK_DIM/WARP_SIZE];
+    __shared__ RelationID shared_invalid[BLOCK_DIM/WARP_SIZE];
 
     int t_off = threadIdx.x >> 5;
 
-    uint32_t *P = shared_P + t_off*32;
-    uint32_t *L = shared_L + t_off*32;
-    uint32_t *Low = shared_Low + t_off*32;
-    uint32_t *Par = shared_Par + t_off*32;
-    RelationID *LQ = shared_LQ + t_off*32;
+    uint32_t *P = shared_P + t_off*RelationID::SIZE;
+    uint32_t *L = shared_L + t_off*RelationID::SIZE;
+    uint32_t *Low = shared_Low + t_off*RelationID::SIZE;
+    uint32_t *Par = shared_Par + t_off*RelationID::SIZE;
+    RelationID *LQ = shared_LQ + t_off*RelationID::SIZE;
     RelationID *invalid = shared_invalid + t_off;
 
-    P[LANE_ID] = 0;
-    L[LANE_ID] = 0;
-    LQ[LANE_ID] = RelationID(0);
-    Low[LANE_ID] = LANE_ID;
-    Par[LANE_ID] = LANE_ID;
+    for (uint32_t u=LANE_ID; u < RelationID::SIZE; u += WARP_SIZE){
+        P[u] = 0;
+        L[u] = 0;
+        LQ[u] = RelationID(0);
+        Low[u] = u;
+        Par[u] = u;
+    }
 
     if (LANE_ID == 0)
         *invalid = RelationID(0);
@@ -156,48 +158,51 @@ static int bfs_bicc(RelationID relid, const EdgeMask* edges, RelationID *blocks)
 
     bfs_bicc_bfs(relid, edges, P, L, LQ);
 
-    LOG_DEBUG("L[%d]=%u\tP[%d]=%u\n", LANE_ID, L[LANE_ID], LANE_ID, P[LANE_ID]);
+    for (uint32_t u=LANE_ID; u < RelationID::SIZE; u += WARP_SIZE){
+        LOG_DEBUG("L[%d]=%u\tP[%d]=%u\n", u, L[u], u, P[u]);
+    }
 
     for (int i = relid.size()-1; i>0; i--){
         bfs_bicc_bfs_lv_ret s;
-        uint32_t u = LANE_ID;
-        uint32_t v = P[u];
-        bool p1 = LQ[i].isSet(LANE_ID) && Par[u] == u;
-        bool p2 = false;
+        for (uint32_t u=LANE_ID; u < RelationID::SIZE; u += WARP_SIZE){
+            uint32_t v = P[u];
+            bool p1 = LQ[i].isSet(u) && Par[u] == u;
+            bool p2 = false;
 
-        if (p1){
-            LOG_DEBUG("bfs_bicc(%u): iter %d, node %u (parent: %u)\n",
-                                                             relid.toUint(), i, u, v);
+            if (p1){
+                LOG_DEBUG("bfs_bicc(%u): iter %d, node %u (parent: %u)\n",
+                                                                relid.toUint(), i, u, v);
 
-            s = bfs_bicc_bfs_lv(L, v, u, *invalid, relid, edges);
+                s = bfs_bicc_bfs_lv(L, v, u, *invalid, relid, edges);
 
-            LOG_DEBUG("bfs_bicc_bfs_lv(%u, %u, %u): "
-                          "l=%u, vid_low=%u, V_u=%u\n",
-                          relid.toUint(), v, u, s.l, s.vid_low, s.V_u.toUint());
+                LOG_DEBUG("bfs_bicc_bfs_lv(%u, %u, %u): "
+                            "l=%u, vid_low=%u, V_u=%u\n",
+                            relid.toUint(), v, u, s.l, s.vid_low, s.V_u.toUint());
 
-            p2 = (s.l >= L[u]) && ((s.V_u & LQ[i]).lowestPos() == u);    
-        }
-        
-        unsigned pthBlt = __ballot_sync(WARP_MASK, p2);
-        int wScan = __popc(pthBlt & LANE_MASK_LE);
-
-        if (p2){
-            int idx = n_blocks+wScan-1;
-            blocks[idx] = s.V_u | RelationID::nth(v);
-            LOG_DEBUG("[%u] %u is articulation (block[%d]: %u)\n", 
-                        relid.toUint(), v, idx, blocks[idx].toUint());
-            while (!s.V_u.empty()){
-                int w = s.V_u.lowestPos();
-                Low[w] = s.vid_low;
-                Par[w] = v;
-                atomicOr(invalid, RelationID::nth(w));
-
-                s.V_u.unset(w);
+                p2 = (s.l >= L[u]) && ((s.V_u & LQ[i]).lowestPos() == u);    
             }
+            
+            unsigned pthBlt = __ballot_sync(WARP_MASK, p2);
+            int wScan = __popc(pthBlt & LANE_MASK_LE);
+
+            if (p2){
+                int idx = n_blocks+wScan-1;
+                blocks[idx] = s.V_u | RelationID::nth(v);
+                LOG_DEBUG("[%u] %u is articulation (block[%d]: %u)\n", 
+                            relid.toUint(), v, idx, blocks[idx].toUint());
+                while (!s.V_u.empty()){
+                    int w = s.V_u.lowestPos();
+                    Low[w] = s.vid_low;
+                    Par[w] = v;
+                    atomicOr(invalid, RelationID::nth(w));
+
+                    s.V_u.unset(w);
+                }
+            }
+            int new_blocks = __popc(pthBlt); 
+            n_blocks += new_blocks;
+            __syncwarp();
         }
-        int new_blocks = __popc(pthBlt); 
-        n_blocks += new_blocks;
-        __syncwarp();
     }
 
     return n_blocks;
@@ -210,7 +215,7 @@ static JoinRelation dpsubEnumerateBiCC(RelationID relid,
     JoinRelation jr_out;
     jr_out.cost = INFD;
 
-    Assert(n_splits == 32);
+    Assert(n_splits == WARP_SIZE);
 
     int t_off = threadIdx.x >> 5;
 
@@ -220,8 +225,8 @@ static JoinRelation dpsubEnumerateBiCC(RelationID relid,
     stack.ctxStack = ctxStack;
     stack.stackTop = 0;
 
-    __shared__ RelationID shared_blocks[32*BLOCK_DIM/32];
-    RelationID* blocks = shared_blocks + t_off*32;
+    __shared__ RelationID shared_blocks[RelationID::SIZE*BLOCK_DIM/WARP_SIZE];
+    RelationID* blocks = shared_blocks + t_off*RelationID::SIZE;
 
     int n_blocks = bfs_bicc(relid, info->edge_table, blocks);
 
