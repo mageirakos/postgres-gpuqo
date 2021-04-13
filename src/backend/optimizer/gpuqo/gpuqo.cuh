@@ -40,14 +40,6 @@ do { \
 #define NANF std::numeric_limits<float>::nan()
 #endif
 
-// constants for table sizes
-#define KB 1024ULL
-#define MB (KB*1024)
-#define GB (MB*1024)
-
-// ceiled integer division
-#define ceil_div(a,b) (((a)+(b)-1)/(b)) 
-
 typedef thrust::device_vector<RelationID, uninitialized_allocator<RelationID> > uninit_device_vector_relid;
 typedef thrust::device_vector<JoinRelation, uninitialized_allocator<JoinRelation> > uninit_device_vector_joinrel;
 typedef thrust::device_vector<JoinRelationDpsize, uninitialized_allocator<JoinRelationDpsize> > uninit_device_vector_joinrel_dpsize;

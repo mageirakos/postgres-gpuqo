@@ -11,6 +11,7 @@
 #include <iostream>
 
 #include "gpuqo_planner_info.cuh"
+#include <optimizer/gpuqo_common.h>
 
 extern "C" void *palloc0(size_t size);
 extern "C" void *palloc(size_t size);

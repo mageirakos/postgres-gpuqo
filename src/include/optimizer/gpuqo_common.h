@@ -55,5 +55,13 @@ static inline int eqClassIndex(int idx_l, int idx_r, int size){
 		return eqClassIndex(idx_r, idx_l, size);
 }
 
+// constants for table sizes
+#define KB 1024ULL
+#define MB (KB*1024)
+#define GB (MB*1024)
+
+// ceiled integer division
+#define ceil_div(a,b) (((a)+(b)-1)/(b)) 
+
 
 #endif							/* GPUQO_COMMON_H */
