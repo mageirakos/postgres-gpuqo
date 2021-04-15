@@ -68,7 +68,7 @@ void DependencyBuffer<BitmapsetN>::push(
 template<typename BitmapsetN>
 depbuf_entry_t<BitmapsetN> DependencyBuffer<BitmapsetN>::pop(){
     depbuf_entry_t<BitmapsetN> out;
-    int num;
+    int num __attribute__((unused));
     out.first = NULL; 
 
     pthread_mutex_lock(&mutex);

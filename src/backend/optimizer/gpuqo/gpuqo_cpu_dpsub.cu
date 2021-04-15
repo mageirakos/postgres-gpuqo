@@ -71,11 +71,10 @@ public:
         // I do not need to check if they connect to each other since if they 
         // weren't, join_rel would not be self-connected but I know it is
 
-        auto info = CPUAlgorithm<BitmapsetN>::info;
-
         Assert(is_connected(left_rel.id, info->edge_table));
         Assert(is_connected(right_rel.id, info->edge_table));
-        Assert(are_connected_rel(left_rel, right_rel, info));
+        Assert(are_connected_rel(left_rel, right_rel, 
+                                    CPUAlgorithm<BitmapsetN>::info));
 
         return is_disjoint_rel(left_rel, right_rel);
     }
