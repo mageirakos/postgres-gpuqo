@@ -11,8 +11,6 @@
 #ifndef GPUQO_DEBUG_CUH
 #define GPUQO_DEBUG_CUH
 
-#include "gpuqo_planner_info.cuh"
-
 #include <iostream>
 
 // I did not want to include the full c.h for fear of conflicts so I just 
@@ -60,9 +58,18 @@ std::ostream & operator<<(std::ostream &os, const uint2& idxs);
 __host__
 std::ostream & operator<<(std::ostream &os, const ulong2& idxs);
 
+
+// forward declare to prevent import loop
+template<typename BitmapsetN>
+struct JoinRelation;
+
+// forward declare to prevent import loop
 template<typename BitmapsetN>
 __host__
 std::ostream & operator<<(std::ostream &os, const JoinRelation<BitmapsetN>& jr);
+
+template<typename Type>
+struct Bitmapset;
 
 template<typename Type>
 __host__

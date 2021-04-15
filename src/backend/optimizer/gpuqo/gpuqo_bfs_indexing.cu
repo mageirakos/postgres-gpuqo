@@ -38,7 +38,7 @@ void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlan
                 bfs_queue[bfs_queue_back_idx++] = next;
             }
             
-            edges -= edges.lowest();
+            edges ^= next_r;
         }
         seen |= info->edge_table[base_rel_idx];
     }

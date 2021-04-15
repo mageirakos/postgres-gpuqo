@@ -11,6 +11,7 @@
 #include <bitset>
 
 #include "gpuqo_debug.cuh"
+#include "gpuqo_planner_info.cuh"
 
 __host__
 std::ostream & operator<<(std::ostream &os, const uint2& idxs)

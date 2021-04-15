@@ -14,6 +14,7 @@
 #include <type_traits> 
 
 #include "gpuqo_bit_manipulation.cuh"
+#include "gpuqo_debug.cuh"
 
 #define N_TO_SHOW 32
 
@@ -90,17 +91,14 @@ public:
 
     __host__ __device__
     inline Bitmapset<T> allLower() const{
-        if (bits != 0U){
-            return lowest().bits-1;
-        } else {
-            return Bitmapset<T>(0);
-        }
+        Assert(!empty());
+        return lowest().bits-1;
     }
 
     __host__ __device__
     inline Bitmapset<T> allLowerInc() const{
-        // TODO x | (x-1)
-        return unionSet(allLower());
+        Assert(!empty());
+        return bits | (bits-1);
     }
 
     __host__ __device__
@@ -168,6 +166,11 @@ public:
     }
 
     __host__ __device__
+    inline Bitmapset<T> operator^(const Bitmapset<T> &other) const{
+        return bits ^ other.bits;
+    }
+
+    __host__ __device__
     inline Bitmapset<T> operator-(const Bitmapset<T> &other) const{
         return differenceSet(other);
     }
@@ -200,6 +203,12 @@ public:
     __host__ __device__
     inline Bitmapset<T> &operator&=(const Bitmapset<T> &other){
         return *this = intersectionSet(other);
+    }
+
+    __host__ __device__
+    inline Bitmapset<T> &operator^=(const Bitmapset<T> &other){
+        bits ^= other.bits;
+        return *this;
     }
 
     __host__ __device__

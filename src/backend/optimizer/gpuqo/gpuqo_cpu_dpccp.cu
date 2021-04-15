@@ -67,14 +67,14 @@ private:
         BitmapsetN temp = N;
 
         while (!temp.empty()){
-            int idx = temp.highestPos();
-            BitmapsetN v = BitmapsetN::nth(idx);
+            BitmapsetN v = temp.highest();
+
             emit(S, v);
 
             BitmapsetN newX = X | (v.allLowerInc() & N);
             enumerate_csg_rec(v, newX, S);
             
-            temp -= v;
+            temp ^= v;
         }
     }
 
