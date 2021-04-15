@@ -24,7 +24,7 @@ NVCC := $(cuda_path)/bin/nvcc
 NVCCFLAGS = $(CPPFLAGS)
 
 ifeq ($(enable_debug),yes)
-NVCCFLAGS += -g -lineinfo
+NVCCFLAGS += -g -lineinfo -Wno-deprecated-gpu-targets  --forward-unknown-to-host-compiler
 endif
 
 ifneq (,$(findstring -O0,$(CFLAGS)))

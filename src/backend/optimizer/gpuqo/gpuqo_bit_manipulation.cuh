@@ -12,6 +12,10 @@
 
 #include <cstdint>
 
+#ifdef __BMI2__
+#include <immintrin.h>
+#endif
+
 #ifdef __CUDA_ARCH__
 
 template<typename T>
@@ -91,7 +95,7 @@ inline int clz(T x){
  * locations specified by mask; all other bits in dst are set to zero.
  */
  
-#ifndef __BMI2__
+#if !(defined __BMI2__) || (defined __CUDA_ARCH__)
 
 template<typename T>
 __host__ __device__
@@ -107,12 +111,12 @@ inline T pdep(T a, T mask){
 
 #else
 
-inline uint32_t pdep(uint32_t a, uint32_t mask){
-    return _pdep_u32(a, mask);
-}
-
-inline uint64_t pdep(uint64_t a, uint64_t mask){
-    return _pdep_u64(a, mask);
+template<typename T>
+inline T pdep(T a, T mask){
+    if (sizeof(T) == 4)
+        return _pdep_u32(a, mask);
+    else
+        return _pdep_u64(a, mask);
 }
 
 #endif
@@ -125,7 +129,7 @@ inline uint64_t pdep(uint64_t a, uint64_t mask){
  * are set in a.
  */
  
-#ifndef __BMI2__
+#if !(defined __BMI2__) || (defined __CUDA_ARCH__)
 
 template<typename T>
 __host__ __device__
@@ -135,12 +139,12 @@ inline T blsi(T a){
 
 #else
 
-inline uint32_t blsi(uint32_t a){
-    return _blsi_u32(a, mask);
-}
-
-inline uint64_t blsi(uint64_t a){
-    return _blsi_u64(a, mask);
+template<typename T>
+inline T blsi(T a){
+    if (sizeof(T) == 4)
+        return _blsi_u32(a);
+    else
+        return _blsi_u64(a);    
 }
 
 #endif
@@ -152,7 +156,7 @@ inline uint64_t blsi(uint64_t a){
  * unsigned 32-bit integer a.
  */
  
-#ifndef __BMI2__
+#if !(defined __BMI2__) || (defined __CUDA_ARCH__)
 
 template<typename T>
 __host__ __device__
@@ -162,12 +166,12 @@ inline T blsmsk(T a){
 
 #else
 
-inline uint32_t blsmsk(uint32_t a){
-    return _blsmsk_u32(a, mask);
-}
-
-inline uint64_t blsmsk(uint64_t a){
-    return _blsmsk_u64(a, mask);
+template<typename T>
+inline T blsmsk(T a){
+    if (sizeof(T) == 4)
+        return _blsmsk_u32(a);
+    else
+        return _blsmsk_u64(a);
 }
 
 #endif
@@ -179,7 +183,7 @@ inline uint64_t blsmsk(uint64_t a){
  * that corresponds to the lowest set bit in a.
  */
  
-#ifndef __BMI2__
+#if !(defined __BMI2__) || (defined __CUDA_ARCH__)
 
 template<typename T>
 __host__ __device__
@@ -189,12 +193,12 @@ inline T blsr(T a){
 
 #else
 
-inline uint32_t blsr(uint32_t a){
-    return _blsr_u32(a, mask);
-}
-
-inline uint64_t blsr(uint64_t a){
-    return _blsr_u64(a, mask);
+template<typename T>
+inline T blsr(T a){
+    if (sizeof(T) == 4)
+        return _blsr_u32(a);
+    else
+        return _blsr_u64(a);    
 }
 
 #endif
