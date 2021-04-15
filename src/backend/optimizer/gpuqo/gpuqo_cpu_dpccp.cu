@@ -28,33 +28,24 @@ template<typename BitmapsetN>
 class DPccpCPUAlgorithm : public CPUAlgorithm<BitmapsetN>{
 private:
 
-    std::list<BitmapsetN>* get_all_subsets(BitmapsetN set){
-        std::list<BitmapsetN> *out = new std::list<BitmapsetN>;
-        if (set.empty())
-            return out;
-
-        BitmapsetN subset = set.lowest();
-        while (subset != set){
-            out->push_back(subset);
-            subset = nextSubset(subset, set);
-        }
-        out->push_back(set);
-        return out;
-    }
-
     void enumerate_csg_rec(BitmapsetN S, BitmapsetN X, BitmapsetN cmp){
         LOG_DEBUG("enumerate_csg_rec(%u, %u, %u)\n", S.toUint(), X.toUint(), cmp.toUint());
         auto info = CPUAlgorithm<BitmapsetN>::info;
         BitmapsetN N = get_neighbours(S, info->edge_table) - X;
-        std::list<BitmapsetN> *subsets = get_all_subsets(N);
-        for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
-            BitmapsetN emit_set = S | *subset;
-            emit(cmp, emit_set);
+        if (N.empty())
+            return;
+
+        BitmapsetN subset = N.lowest();
+        while (!subset.empty()){
+            emit(cmp, S | subset);
+            subset = nextSubset(subset, N);
         }
-        for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
-            enumerate_csg_rec(S|*subset, X|N, cmp);
+
+        subset = N.lowest();
+        while (!subset.empty()){
+            enumerate_csg_rec(S|subset, X|N, cmp);
+            subset = nextSubset(subset, N);
         }
-        delete subsets; 
     }
 
     void enumerate_csg(){
