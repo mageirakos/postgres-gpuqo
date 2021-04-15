@@ -126,7 +126,7 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t<BitmapsetN> &params)
                         (uint64_t) params.scratchpad_size / threads_per_set, 
                         params.n_sets);
 
-    LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
+    LOG_PROFILE("n_joins_per_thread=%lu, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
             n_joins_per_thread,
             n_sets_per_iteration,
             threads_per_set,

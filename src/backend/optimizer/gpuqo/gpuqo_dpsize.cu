@@ -235,7 +235,7 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
     size_t max_memo_size = gpuqo_max_memo_size_mb * MB / rel_size;
     size_t memo_size = std::min(1UL<<info->n_rels, max_memo_size);
 
-    LOG_PROFILE("Using a scratchpad of size %u (prune threshold: %u)\n", 
+    LOG_PROFILE("Using a scratchpad of size %lu (prune threshold: %lu)\n", 
         scratchpad_size, prune_threshold);
     
     uninit_device_vector<BitmapsetN> gpu_memo_keys(memo_size);
@@ -301,7 +301,7 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
                 n_combinations += ((uint64_t)partition_sizes[j-1]) * partition_sizes[i-j-1];
             }
 
-            LOG_PROFILE("\nStarting iteration %d: %llu combinations (scratchpad: %llu)\n", i, n_combinations, scratchpad_size);
+            LOG_PROFILE("\nStarting iteration %d: %lu combinations (scratchpad: %lu)\n", i, n_combinations, scratchpad_size);
 
             STOP_TIMING(iter_init);
 

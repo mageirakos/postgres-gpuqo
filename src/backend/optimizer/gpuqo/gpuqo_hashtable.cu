@@ -122,7 +122,7 @@ bool HashTable<K,V>::insert(K* in_keys, V* in_values, size_t n){
 template <typename K, typename V>
 __host__
 bool HashTable<K,V>::resize(size_t _capacity){
-    LOG_PROFILE("resize(%u)\n", _capacity);
+    LOG_PROFILE("resize(%lu)\n", _capacity);
     size_t old_capacity = capacity;
     K* old_keys = keys;
     V* old_values = values;

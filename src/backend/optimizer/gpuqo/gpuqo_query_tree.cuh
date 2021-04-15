@@ -33,7 +33,8 @@ void dpsize_buildQueryTree(uint_t<BitmapsetN> idx, Container &gpu_memo_vals, Que
 
     if (jr.left_rel_id.empty() || jr.right_rel_id.empty()){ // error
         printf("ERROR in buildQueryTree: %u has children %u and %u\n",
-                jr.id, jr.left_rel_id, jr.right_rel_id);
+                jr.id.toUint(), 
+                jr.left_rel_id.toUint(), jr.right_rel_id.toUint());
         return;
     }
 
@@ -59,7 +60,7 @@ void dpsub_buildQueryTree(BitmapsetN id, Container &gpu_memo_vals, QueryTree<Bit
 
     if (jr.left_rel_id == 0 || jr.right_rel_id == 0){ // error
         printf("ERROR in buildQueryTree: %u has children %u and %u\n",
-                id, jr.left_rel_id, jr.right_rel_id);
+                id.toUint(), jr.left_rel_id.toUint(), jr.right_rel_id.toUint());
         return;
     }
 

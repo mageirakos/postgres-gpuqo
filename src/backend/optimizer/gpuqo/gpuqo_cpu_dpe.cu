@@ -340,7 +340,7 @@ gpuqo_cpu_dpe(GpuqoPlannerInfo<BitmapsetN>* info, CPUAlgorithm<BitmapsetN> *algo
         delete iter->second;
     }
 
-    LOG_PROFILE("%llu pairs have been evaluated\n", join_func.total_job_count);
+    LOG_PROFILE("%lu pairs have been evaluated\n", join_func.total_job_count);
     
     // TODO move within class
     pthread_cond_destroy(&join_func.depbufs.avail_jobs);

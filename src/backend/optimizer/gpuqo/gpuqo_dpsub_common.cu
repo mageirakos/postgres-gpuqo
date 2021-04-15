@@ -263,11 +263,11 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
             START_TIMING(iteration);
             if ((gpuqo_dpsub_filter_enable && params.tot > filter_threshold) 
                     || (gpuqo_dpsub_csg_enable && params.tot > csg_threshold)){
-                LOG_PROFILE("\nStarting filtered iteration %d: %llu combinations\n", i, params.tot);
+                LOG_PROFILE("\nStarting filtered iteration %d: %lu combinations\n", i, params.tot);
 
                 n_iters = dpsub_filtered_iteration(i, params);
             } else {
-                LOG_PROFILE("\nStarting unfiltered iteration %d: %llu combinations\n", i, params.tot);
+                LOG_PROFILE("\nStarting unfiltered iteration %d: %lu combinations\n", i, params.tot);
 
                 n_iters = dpsub_unfiltered_iteration(i, params);
             }

@@ -386,7 +386,7 @@ static uint32_t dpsub_generic_graph_evaluation(int iter,
     n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
     n_sets_per_iteration = min(params.scratchpad_size, n_pending_sets);
 
-    LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
+    LOG_PROFILE("n_joins_per_thread=%lu, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
         n_joins_per_thread,
         n_sets_per_iteration,
         threads_per_set,
@@ -468,7 +468,7 @@ static uint32_t dpsub_bicc_evaluation(int iter, uint64_t n_remaining_sets,
     n_joins_per_thread = ceil_div(params.n_joins_per_set, threads_per_set);
     n_sets_per_iteration = min(params.scratchpad_size, n_pending_sets);
 
-    LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
+    LOG_PROFILE("n_joins_per_thread=%lu, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
         n_joins_per_thread,
         n_sets_per_iteration,
         threads_per_set,
@@ -530,7 +530,7 @@ static uint32_t dpsub_tree_evaluation(int iter, uint64_t n_remaining_sets,
     n_joins_per_thread = ceil_div(n_joins_per_set, threads_per_set);
     n_sets_per_iteration = min(params.scratchpad_size, n_pending_sets);
 
-    LOG_PROFILE("n_joins_per_thread=%u, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
+    LOG_PROFILE("n_joins_per_thread=%lu, n_sets_per_iteration=%u, threads_per_set=%u, factor=%u\n",
         n_joins_per_thread,
         n_sets_per_iteration,
         threads_per_set,
