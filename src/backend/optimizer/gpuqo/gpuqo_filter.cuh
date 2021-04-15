@@ -14,23 +14,27 @@
 
 #include "gpuqo.cuh"
 
+template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-bool is_disjoint(RelationID left_rel_id, RelationID right_rel_id)
+bool is_disjoint(BitmapsetN left_rel_id, BitmapsetN right_rel_id)
 {
     return !left_rel_id.intersects(right_rel_id);
 }
 
+template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-bool is_disjoint(JoinRelationDetailed &left_rel, JoinRelationDetailed &right_rel)
+bool is_disjoint_rel(JoinRelationDetailed<BitmapsetN> &left_rel, 
+                 JoinRelationDetailed<BitmapsetN> &right_rel)
 { 
     return is_disjoint(left_rel.id, right_rel.id);
 }
 
+template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-bool is_disjoint(JoinRelation &join_rel)
+bool is_disjoint(JoinRelation<BitmapsetN> &join_rel)
 {
     return is_disjoint(
         join_rel.left_rel_id, 
@@ -38,28 +42,31 @@ bool is_disjoint(JoinRelation &join_rel)
     );
 }
 
+template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-bool are_connected(EdgeMask left_edges, RelationID right_id,
-                GpuqoPlannerInfo* info)
+bool are_connected(BitmapsetN left_edges, BitmapsetN right_id,
+                GpuqoPlannerInfo<BitmapsetN>* info)
 {
     return left_edges.intersects(right_id);
 }
 
+template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-bool are_connected(JoinRelationDetailed &left_rel, 
-                    JoinRelationDetailed &right_rel,
-                    GpuqoPlannerInfo* info)
+bool are_connected_rel(JoinRelationDetailed<BitmapsetN> &left_rel, 
+                    JoinRelationDetailed<BitmapsetN> &right_rel,
+                    GpuqoPlannerInfo<BitmapsetN>* info)
 {
     return are_connected(left_rel.edges, right_rel.id, info);
 }
 
+template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-RelationID get_neighbours(RelationID set, EdgeMask* edge_table){
-    RelationID neigs = RelationID(0);
-    RelationID temp = set;
+BitmapsetN get_neighbours(BitmapsetN set, BitmapsetN* edge_table){
+    BitmapsetN neigs = BitmapsetN(0);
+    BitmapsetN temp = set;
     while (!temp.empty()){
         int baserel_idx = temp.lowestPos()-1;
         neigs |= edge_table[baserel_idx];
@@ -74,12 +81,13 @@ RelationID get_neighbours(RelationID set, EdgeMask* edge_table){
  * 
  * NB: `from` must be included in `subset`.
  */
+ template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-RelationID grow(RelationID from, RelationID subset, EdgeMask* edge_table)
+BitmapsetN grow(BitmapsetN from, BitmapsetN subset, BitmapsetN* edge_table)
 {
-    RelationID V = RelationID(0);
-    RelationID N = from;
+    BitmapsetN V = BitmapsetN(0);
+    BitmapsetN N = from;
 
     LOG_DEBUG("grow(%u, %u)\n", from.toUint(), subset.toUint());
 
@@ -108,9 +116,10 @@ RelationID grow(RelationID from, RelationID subset, EdgeMask* edge_table)
     return V;
 }
 
+template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-bool is_connected(RelationID relid, EdgeMask* edge_table)
+bool is_connected(BitmapsetN relid, BitmapsetN* edge_table)
 {
     if (relid.empty()){
         return false;
@@ -125,13 +134,14 @@ bool is_connected(RelationID relid, EdgeMask* edge_table)
  * NB: This algorithm relies on the BFS-order of base relation indices.
  * TODO: improve by cycling only on present base relations.
  */
+template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-bool is_cyclic(RelationID relid, GpuqoPlannerInfo *info)
+bool is_cyclic(BitmapsetN relid, GpuqoPlannerInfo<BitmapsetN> *info)
 {
     // for each base relation
     for (int i=0; i<info->n_rels; i++){
-        RelationID r = RelationID::nth(i+1);
+        BitmapsetN r = BitmapsetN::nth(i+1);
 
         // if it is in relid
         if (relid.intersects(r)){
@@ -147,33 +157,35 @@ bool is_cyclic(RelationID relid, GpuqoPlannerInfo *info)
     return false;
 }
 
-struct filterDisconnectedRelations : public thrust::unary_function<RelationID, bool>
+template<typename BitmapsetN>
+struct filterDisconnectedRelations : public thrust::unary_function<BitmapsetN, bool>
 {
-    GpuqoPlannerInfo* info;
+    GpuqoPlannerInfo<BitmapsetN>* info;
 public:
     filterDisconnectedRelations(
-        GpuqoPlannerInfo* _info
+        GpuqoPlannerInfo<BitmapsetN>* _info
     ) : info(_info)
     {}
 
     __device__
-    bool operator()(RelationID relid) 
+    bool operator()(BitmapsetN relid) 
     {
         return !is_connected(relid, info->edge_table);
     }
 };
 
-struct findCycleInRelation : public thrust::unary_function<RelationID, bool>
+template<typename BitmapsetN>
+struct findCycleInRelation : public thrust::unary_function<BitmapsetN, bool>
 {
-    GpuqoPlannerInfo* info;
+    GpuqoPlannerInfo<BitmapsetN>* info;
 public:
     findCycleInRelation(
-        GpuqoPlannerInfo* _info
+        GpuqoPlannerInfo<BitmapsetN>* _info
     ) : info(_info)
     {}
 
     __device__
-    bool operator()(RelationID relid) 
+    bool operator()(BitmapsetN relid) 
     {
         return is_cyclic(relid, info);
     }

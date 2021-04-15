@@ -10,9 +10,10 @@
 
  #include "gpuqo.cuh"
 
- extern "C" gpuqo_c::QueryTree *gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfo* info_c)
+ template<typename BitmapsetN>
+ static gpuqo_c::QueryTree *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfo* info_c)
  {
-	GpuqoPlannerInfo *info = convertGpuqoPlannerInfo(info_c);
+	GpuqoPlannerInfo<BitmapsetN> *info = convertGpuqoPlannerInfo<BitmapsetN>(info_c);
 
 	if (gpuqo_spanning_tree_enable){
         minimumSpanningTree(info);
@@ -25,7 +26,7 @@
     makeBFSIndexRemapTables(remap_table_fw, remap_table_bw, info);
     remapPlannerInfo(info, remap_table_fw);
 
-	QueryTree* query_tree;
+	QueryTree<BitmapsetN>* query_tree;
 	switch (gpuqo_algorithm)
 	{
 	case GPUQO_DPSIZE:
@@ -56,8 +57,6 @@
 		// impossible branch but without it the compiler complains
 		query_tree = NULL;
 		break;
-	 
-	
 	}
 
 	remapQueryTree(query_tree, remap_table_bw);
@@ -69,3 +68,14 @@
  
 	return convertQueryTree(query_tree);
  }
+
+ extern "C" gpuqo_c::QueryTree *gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfo* info_c){
+	if (info_c->n_rels < 32){
+	   return __gpuqo_run<Bitmapset32>(gpuqo_algorithm, info_c);
+   } else if (info_c->n_rels < 64){
+	   return __gpuqo_run<Bitmapset64>(gpuqo_algorithm, info_c);
+   } else {
+	   printf("ERROR: too many relations\n");
+	   return NULL;	
+   }
+}

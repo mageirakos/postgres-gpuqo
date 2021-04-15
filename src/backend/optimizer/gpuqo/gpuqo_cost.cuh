@@ -26,9 +26,10 @@
 #define INDEXSCAN_COEFF 2
 #define SORT_COEFF      2
 
+template<typename BitmapsetN>
 __host__ __device__
-static bool has_useful_index(RelationID left_rel_id, RelationID right_rel_id, 
-                            GpuqoPlannerInfo* info){
+static bool has_useful_index(BitmapsetN left_rel_id, BitmapsetN right_rel_id, 
+                            GpuqoPlannerInfo<BitmapsetN>* info){
     if (right_rel_id.size() != 1)  // inner must be base rel
         return false;
     // -1 since it's 1-indexed, 
@@ -38,16 +39,18 @@ static bool has_useful_index(RelationID left_rel_id, RelationID right_rel_id,
     return left_rel_id.intersects(info->indexed_edge_table[baserel_right_idx]);
 }
 
+template<typename BitmapsetN>
 __host__ __device__
-static float baserel_cost(BaseRelation &base_rel){
+static float baserel_cost(BaseRelation<BitmapsetN> &base_rel){
     return BASEREL_COEFF * base_rel.tuples;
 }
 
+template<typename BitmapsetN>
 __host__ __device__
 static float 
-calc_join_cost(RelationID left_rel_id, JoinRelation &left_rel,
-                RelationID right_rel_id, JoinRelation &right_rel,
-                float join_rel_rows, GpuqoPlannerInfo* info)
+calc_join_cost(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
+                BitmapsetN right_rel_id, JoinRelation<BitmapsetN> &right_rel,
+                float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
     float hj_cost, nl_cost, inl_cost, sm_cost;
     float min_cost;
@@ -78,11 +81,13 @@ calc_join_cost(RelationID left_rel_id, JoinRelation &left_rel,
     return min_cost;
 }
 
+template<typename BitmapsetN>
 __host__ __device__
 static float 
-estimate_join_selectivity(RelationID left_rel_id, JoinRelation &left_rel,
-                        RelationID right_rel_id, JoinRelation &right_rel,
-                        GpuqoPlannerInfo* info)
+estimate_join_selectivity(
+    BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
+    BitmapsetN right_rel_id, JoinRelation<BitmapsetN> &right_rel,
+    GpuqoPlannerInfo<BitmapsetN>* info)
 {
     float sel = 1.0;
 
@@ -91,7 +96,7 @@ estimate_join_selectivity(RelationID left_rel_id, JoinRelation &left_rel,
         int left_rel_idx = left_rel_id.lowestPos()-1;
         int right_rel_idx = right_rel_id.lowestPos()-1;
 
-        BaseRelation left_br = info->base_rels[left_rel_idx];
+        BaseRelation<BitmapsetN> left_br = info->base_rels[left_rel_idx];
         for (int i=0; i < left_br.n_fk_selecs; i++){
             if (info->fk_selec_idxs[left_br.off_fk_selecs+i] == right_rel_idx){
                 sel *= info->fk_selec_sels[left_br.off_fk_selecs+i];
@@ -106,10 +111,10 @@ estimate_join_selectivity(RelationID left_rel_id, JoinRelation &left_rel,
     // matching id on both sides is kept
     int off = 0;
     for (int i=0; i<info->n_eq_classes; i++){
-        RelationID ec_relids = info->eq_classes[i];
+        BitmapsetN ec_relids = info->eq_classes[i];
         int size = ec_relids.size();
-        RelationID match_l = ec_relids & left_rel_id;
-        RelationID match_r = ec_relids & right_rel_id;
+        BitmapsetN match_l = ec_relids & left_rel_id;
+        BitmapsetN match_r = ec_relids & right_rel_id;
 
         if (!match_l.empty() && !match_r.empty()){
             // more than one on the same equivalence class may match
@@ -128,11 +133,12 @@ estimate_join_selectivity(RelationID left_rel_id, JoinRelation &left_rel,
     return sel;
 }
 
+template<typename BitmapsetN>
 __host__ __device__
 static float 
-estimate_join_rows(RelationID left_rel_id, JoinRelation &left_rel,
-                RelationID right_rel_id, JoinRelation &right_rel,
-                GpuqoPlannerInfo* info)
+estimate_join_rows(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
+                BitmapsetN right_rel_id, JoinRelation<BitmapsetN> &right_rel,
+                GpuqoPlannerInfo<BitmapsetN>* info)
 {
     float sel = estimate_join_selectivity(left_rel_id, left_rel, 
                                             right_rel_id, right_rel, info);

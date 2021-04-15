@@ -24,146 +24,110 @@
 #include "gpuqo_cpu_sequential.cuh"
 #include "gpuqo_cpu_dpe.cuh"
 
-typedef void (*emit_f)(RelationID left_id, RelationID right_id,
-                    GpuqoPlannerInfo* info, memo_t &memo, extra_t extra,
-                    struct DPCPUAlgorithm algorithm);
+template<typename BitmapsetN>
+class DPccpCPUAlgorithm : public CPUAlgorithm<BitmapsetN>{
+private:
 
-struct GpuqoCPUDPCcpExtra{
-    join_f join_function;
-};
+    std::list<BitmapsetN>* get_all_subsets(BitmapsetN set){
+        std::list<BitmapsetN> *out = new std::list<BitmapsetN>;
+        if (set.empty())
+            return out;
 
-
-std::list<RelationID>* get_all_subsets(RelationID set){
-    std::list<RelationID> *out = new std::list<RelationID>;
-    if (set.empty())
+        BitmapsetN subset = set.lowest();
+        while (subset != set){
+            out->push_back(subset);
+            subset = nextSubset(subset, set);
+        }
+        out->push_back(set);
         return out;
-
-    RelationID subset = set.lowest();
-    while (subset != set){
-        out->push_back(subset);
-        subset = nextSubset(subset, set);
     }
-    out->push_back(set);
-    return out;
-}
 
-void enumerate_csg_rec(RelationID S, RelationID X, RelationID cmp, 
-                    GpuqoPlannerInfo* info, emit_f emit_function, memo_t &memo,
-                    extra_t extra, struct DPCPUAlgorithm algorithm){
-    LOG_DEBUG("enumerate_csg_rec(%u, %u, %u)\n", S.toUint(), X.toUint(), cmp.toUint());
-    RelationID N = get_neighbours(S, info->edge_table) - X;
-    std::list<RelationID> *subsets = get_all_subsets(N);
-    for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
-        RelationID emit_set = S | *subset;
-        emit_function(cmp, emit_set, info, memo, extra, algorithm);
+    void enumerate_csg_rec(BitmapsetN S, BitmapsetN X, BitmapsetN cmp){
+        LOG_DEBUG("enumerate_csg_rec(%u, %u, %u)\n", S.toUint(), X.toUint(), cmp.toUint());
+        auto info = CPUAlgorithm<BitmapsetN>::info;
+        BitmapsetN N = get_neighbours(S, info->edge_table) - X;
+        std::list<BitmapsetN> *subsets = get_all_subsets(N);
+        for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
+            BitmapsetN emit_set = S | *subset;
+            emit(cmp, emit_set);
+        }
+        for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
+            enumerate_csg_rec(S|*subset, X|N, cmp);
+        }
+        delete subsets; 
     }
-    for (auto subset=subsets->begin(); subset!=subsets->end(); ++subset){
-        enumerate_csg_rec(S|*subset, X|N, cmp,
-            info, emit_function, memo, extra, algorithm);
+
+    void enumerate_csg(){
+        auto info = CPUAlgorithm<BitmapsetN>::info;
+        for (int i=info->n_rels; i>=1; i--){
+            BitmapsetN subset = BitmapsetN::nth(i);
+
+            emit(subset, BitmapsetN(0));
+            enumerate_csg_rec(subset, subset.allLowerInc(), BitmapsetN(0));
+        }
     }
-    delete subsets; 
-}
 
-void enumerate_csg(GpuqoPlannerInfo* info, emit_f emit_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
-    for (int i=info->n_rels; i>=1; i--){
-        RelationID subset = RelationID::nth(i);
+    void enumerate_cmp(BitmapsetN S){
+        LOG_DEBUG("enumerate_cmp(%u)\n", S.toUint());
+        auto info = CPUAlgorithm<BitmapsetN>::info;
 
-        emit_function(subset, RelationID(0), info, memo, extra, algorithm);
+        BitmapsetN X = S.allLowerInc();
+        BitmapsetN N = get_neighbours(S, info->edge_table) - X;
+        BitmapsetN temp = N;
 
-        enumerate_csg_rec(subset, subset.allLowerInc(), RelationID(0),
-            info, emit_function, memo, extra, algorithm);
+        while (!temp.empty()){
+            int idx = temp.highestPos();
+            BitmapsetN v = BitmapsetN::nth(idx);
+            emit(S, v);
 
+            BitmapsetN newX = X | (v.allLowerInc() & N);
+            enumerate_csg_rec(v, newX, S);
+            
+            temp -= v;
+        }
     }
-}
 
-void enumerate_cmp(RelationID S, GpuqoPlannerInfo* info, emit_f emit_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
-    LOG_DEBUG("enumerate_cmp(%u)\n", S.toUint());
-    RelationID X = S.allLowerInc();
-    RelationID N = get_neighbours(S, info->edge_table) - X;
-    RelationID temp = N;
-    while (!temp.empty()){
-        int idx = temp.highestPos();
-        RelationID v = RelationID::nth(idx);
-        emit_function(S, v, info, memo, extra, algorithm);
+    void emit(BitmapsetN left_id, BitmapsetN right_id){
+        LOG_DEBUG("gpuqo_cpu_dpccp_emit(%u, %u)\n", left_id.toUint(), right_id.toUint());
+        auto &memo = *CPUAlgorithm<BitmapsetN>::memo;
 
-        RelationID newX = X | (v.allLowerInc() & N);
-        enumerate_csg_rec(v, newX, S, info, emit_function, memo, extra, 
-                        algorithm);
-        
-        temp -= v;
+        if (!left_id.empty() && !right_id.empty()){
+            auto left = memo.find(left_id);
+            auto right = memo.find(right_id);
+
+            Assert(left != memo.end() && right != memo.end());
+
+            JoinRelationCPU<BitmapsetN> *left_rel = left->second;
+            JoinRelationCPU<BitmapsetN> *right_rel = right->second;
+            BitmapsetN joinset = left_id | right_id;
+            int level = joinset.size();
+
+            (*CPUAlgorithm<BitmapsetN>::join)(level, true, *right_rel, *left_rel);
+
+        } else if (!left_id.empty()) {
+            enumerate_cmp(left_id);
+        } else{
+            enumerate_cmp(right_id);
+        }
     }
-}
 
-void gpuqo_cpu_dpccp_init(GpuqoPlannerInfo* info, memo_t &memo, extra_t &extra){
-    extra.alg = (void*) new GpuqoCPUDPCcpExtra;
-}
+public:
 
-
-void gpuqo_cpu_dpccp_emit(RelationID left_id, RelationID right_id,
-                        GpuqoPlannerInfo* info, memo_t &memo, 
-                        extra_t extra, struct DPCPUAlgorithm algorithm){
-    LOG_DEBUG("gpuqo_cpu_dpccp_emit(%u, %u)\n", left_id.toUint(), right_id.toUint());
-
-    struct GpuqoCPUDPCcpExtra* mExtra = (struct GpuqoCPUDPCcpExtra*) extra.alg;
-
-    if (!left_id.empty() && !right_id.empty()){
-        auto left = memo.find(left_id);
-        auto right = memo.find(right_id);
-
-        Assert(left != memo.end() && right != memo.end());
-
-        JoinRelationCPU *left_rel = left->second;
-        JoinRelationCPU *right_rel = right->second;
-        RelationID joinset = left_id | right_id;
-        int level = joinset.size();
-
-        mExtra->join_function(level, true, *right_rel, *left_rel, info, 
-                memo, extra, algorithm
-        );
-
-    } else if (!left_id.empty()) {
-        enumerate_cmp(left_id, info, gpuqo_cpu_dpccp_emit, 
-                memo, extra, algorithm);
-    } else{
-        enumerate_cmp(right_id, info, gpuqo_cpu_dpccp_emit, 
-                memo, extra, algorithm);
+    virtual void enumerate()
+    {
+        enumerate_csg();
     }
-}
 
-void gpuqo_cpu_dpccp_enumerate(GpuqoPlannerInfo* info, join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
-    struct GpuqoCPUDPCcpExtra* mExtra = (struct GpuqoCPUDPCcpExtra*) extra.alg;
-    mExtra->join_function = join_function;
-
-    enumerate_csg(info, gpuqo_cpu_dpccp_emit, memo, extra,  algorithm);
-}
-
-bool gpuqo_cpu_dpccp_check_join(int level, JoinRelationCPU &left_rel,
-                            JoinRelationCPU &right_rel, GpuqoPlannerInfo* info, 
-                            memo_t &memo, extra_t extra){
-    
-    // No check is necessary since dpccp guarantees all joinpairs are valid
-    Assert(is_disjoint(left_rel, right_rel) 
-        && are_connected(left_rel, right_rel, info));
-    return true;
-}
-
-void gpuqo_cpu_dpccp_post_join(int level, bool newrel, JoinRelationCPU &join_rel, 
-                            JoinRelationCPU &left_rel, JoinRelationCPU &right_rel,
-                            GpuqoPlannerInfo* info, 
-                            memo_t &memo, extra_t extra){
-    // nothing to do
-}
-
-void gpuqo_cpu_dpccp_teardown(GpuqoPlannerInfo* info, memo_t &memo, extra_t extra){
-    delete ((struct GpuqoCPUDPCcpExtra*) extra.alg);
-}
-
-DPCPUAlgorithm gpuqo_cpu_dpccp_alg = {
-    .init_function = gpuqo_cpu_dpccp_init,
-    .enumerate_function = gpuqo_cpu_dpccp_enumerate,
-    .check_join_function = gpuqo_cpu_dpccp_check_join,
-    .post_join_function = gpuqo_cpu_dpccp_post_join,
-    .teardown_function = gpuqo_cpu_dpccp_teardown
+    virtual bool check_join(int level, 
+        JoinRelationCPU<BitmapsetN> &left_rel, 
+        JoinRelationCPU<BitmapsetN>&right_rel)
+    {      
+        // No check is necessary since dpccp guarantees all joinpairs are valid
+        Assert(is_disjoint_rel(left_rel, right_rel) 
+            && are_connected_rel(left_rel, right_rel, 
+                CPUAlgorithm<BitmapsetN>::info));
+        return true;
+    }
 };
 
 /* gpuqo_cpu_dpccp
@@ -171,19 +135,29 @@ DPCPUAlgorithm gpuqo_cpu_dpccp_alg = {
  *	 Sequential CPU baseline for GPU query optimization using the DP size
  *   algorithm.
  */
-QueryTree*
-gpuqo_cpu_dpccp(GpuqoPlannerInfo* info)
+template<typename BitmapsetN>
+QueryTree<BitmapsetN>*
+gpuqo_cpu_dpccp(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    return gpuqo_cpu_sequential(info, gpuqo_cpu_dpccp_alg);
+    DPccpCPUAlgorithm<BitmapsetN> alg;
+    return gpuqo_cpu_sequential(info, &alg);
 }
+
+template QueryTree<Bitmapset32>* gpuqo_cpu_dpccp<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
+template QueryTree<Bitmapset64>* gpuqo_cpu_dpccp<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);
 
 /* gpuqo_dpe_dpccp
  *
  *	 Parallel CPU baseline for GPU query optimization using the DP size
  *   algorithm.
  */
-QueryTree*
-gpuqo_dpe_dpccp(GpuqoPlannerInfo* info)
+template<typename BitmapsetN>
+QueryTree<BitmapsetN>*
+gpuqo_dpe_dpccp(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    return gpuqo_cpu_dpe(info, gpuqo_cpu_dpccp_alg);
+    DPccpCPUAlgorithm<BitmapsetN> alg;
+    return gpuqo_cpu_dpe(info, &alg);
 }
+
+template QueryTree<Bitmapset32>* gpuqo_dpe_dpccp<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
+template QueryTree<Bitmapset64>* gpuqo_dpe_dpccp<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);

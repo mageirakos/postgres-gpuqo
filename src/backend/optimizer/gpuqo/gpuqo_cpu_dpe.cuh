@@ -12,6 +12,7 @@
 
 #include "gpuqo_cpu_common.cuh"
 
-extern QueryTree* gpuqo_cpu_dpe(GpuqoPlannerInfo* info, DPCPUAlgorithm algorithm);
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_cpu_dpe(GpuqoPlannerInfo<BitmapsetN>* info, CPUAlgorithm<BitmapsetN> *algorithm);
 
 #endif							/* GPUQO_CPU_DPE_CUH */

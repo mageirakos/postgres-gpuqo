@@ -17,9 +17,9 @@
 
 // KERNELS IMPLEMENTATION
 
-template<typename K, typename V, typename Kint>
+template<typename K, typename V>
 __global__ 
-void HashTable_insert(HashTable<K,V,Kint> hashtable, K* in_keys, V* in_values, size_t n)
+void HashTable_insert(HashTable<K,V> hashtable, K* in_keys, V* in_values, size_t n)
 {
     unsigned int threadid = blockIdx.x*blockDim.x + threadIdx.x;
     if (threadid < n){
@@ -32,9 +32,9 @@ void HashTable_insert(HashTable<K,V,Kint> hashtable, K* in_keys, V* in_values, s
     }
 }
 
-template<typename K, typename V, typename Kint>
+template<typename K, typename V>
 __global__
-void HashTable_lookup(HashTable<K,V,Kint> hashtable, K* in_keys, V* out_values, size_t n)
+void HashTable_lookup(HashTable<K,V> hashtable, K* in_keys, V* out_values, size_t n)
 {
     unsigned int threadid = blockIdx.x*blockDim.x + threadIdx.x;
     if (threadid < n)
@@ -50,9 +50,9 @@ void HashTable_lookup(HashTable<K,V,Kint> hashtable, K* in_keys, V* out_values, 
 
 // HOST FUNCTIONS IMPLEMENTATION
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __host__
-HashTable<K,V,Kint>::HashTable(size_t _initial_capacity, size_t _max_capacity){
+HashTable<K,V>::HashTable(size_t _initial_capacity, size_t _max_capacity){
     // capacity must be a multiple of 2
     max_capacity = floorPow2(_max_capacity);
     capacity = min(ceilPow2(_initial_capacity),max_capacity);
@@ -66,40 +66,40 @@ HashTable<K,V,Kint>::HashTable(size_t _initial_capacity, size_t _max_capacity){
     debugDump();
 }
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __host__
-bool HashTable<K,V,Kint>::lookup(K* in_keys, V* out_values, size_t n){
+bool HashTable<K,V>::lookup(K* in_keys, V* out_values, size_t n){
 
     // Have CUDA calculate the thread block size
     int mingridsize;
     int threadblocksize;
-    cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, HashTable_lookup<K,V,Kint>, 0, 0);
+    cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, HashTable_lookup<K,V>, 0, 0);
 
     // Lookup all the keys on the hash table
     int gridsize = (n + threadblocksize - 1) / threadblocksize;
-    HashTable_lookup<K,V,Kint><<<gridsize, threadblocksize>>>(*this, in_keys, out_values, n);
+    HashTable_lookup<K,V><<<gridsize, threadblocksize>>>(*this, in_keys, out_values, n);
     
     return deviceErrorCheck();
 }
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __host__
-bool HashTable<K,V,Kint>::_insert(K* in_keys, V* in_values, size_t n){
+bool HashTable<K,V>::_insert(K* in_keys, V* in_values, size_t n){
     // Have CUDA calculate the thread block size
     int mingridsize;
     int threadblocksize;
-    cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, HashTable_insert<K,V,Kint>, 0, 0);
+    cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, HashTable_insert<K,V>, 0, 0);
 
     // Insert all the keys into the hash table
     int gridsize = (n + threadblocksize - 1) / threadblocksize;
-    HashTable_insert<K,V,Kint><<<gridsize, threadblocksize>>>(*this, in_keys, in_values, n);
+    HashTable_insert<K,V><<<gridsize, threadblocksize>>>(*this, in_keys, in_values, n);
     
     return deviceErrorCheck();
 }
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __host__
-bool HashTable<K,V,Kint>::insert(K* in_keys, V* in_values, size_t n){
+bool HashTable<K,V>::insert(K* in_keys, V* in_values, size_t n){
     LOG_DEBUG("HashTable::insert(%llx, %llx, %u)\n", in_keys, in_values, n);
 
     debugDump();
@@ -119,9 +119,9 @@ bool HashTable<K,V,Kint>::insert(K* in_keys, V* in_values, size_t n){
     return res;
 }
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __host__
-bool HashTable<K,V,Kint>::resize(size_t _capacity){
+bool HashTable<K,V>::resize(size_t _capacity){
     LOG_PROFILE("resize(%u)\n", _capacity);
     size_t old_capacity = capacity;
     K* old_keys = keys;
@@ -145,9 +145,9 @@ bool HashTable<K,V,Kint>::resize(size_t _capacity){
     return deviceErrorCheck();
 }
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __host__
-V HashTable<K,V,Kint>::get(K key){
+V HashTable<K,V>::get(K key){
     V val;
     K* dev_key;
     bool ok;
@@ -177,9 +177,9 @@ err:
     throw "key not found!";
 }
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __host__
-bool HashTable<K,V,Kint>::deviceMalloc(){
+bool HashTable<K,V>::deviceMalloc(){
     cudaMalloc(&keys, sizeof(K) * capacity);    
     cudaMemset(keys, 0, sizeof(K) * capacity);
     LOG_DEBUG("cudaMalloc(%llx, %u)\n", keys, sizeof(K) * capacity);
@@ -190,9 +190,9 @@ bool HashTable<K,V,Kint>::deviceMalloc(){
     return deviceErrorCheck();
 }
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __host__
-bool HashTable<K,V,Kint>::deviceErrorCheck(){
+bool HashTable<K,V>::deviceErrorCheck(){
     cudaDeviceSynchronize();
 
     cudaError_t err = cudaGetLastError();
@@ -207,9 +207,9 @@ bool HashTable<K,V,Kint>::deviceErrorCheck(){
     return true;
 }
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __host__
-void HashTable<K,V,Kint>::debugDump(){
+void HashTable<K,V>::debugDump(){
 #ifdef GPUQO_DEBUG
     std::vector<K> local_keys(capacity);
     cudaMemcpy(&local_keys[0], keys, sizeof(K)*capacity, cudaMemcpyDeviceToHost);
@@ -218,14 +218,13 @@ void HashTable<K,V,Kint>::debugDump(){
 #endif
 }
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __host__
-void HashTable<K,V,Kint>::free(){
+void HashTable<K,V>::free(){
     cudaFree(keys);    
     cudaFree(values);    
 }
 
-
 // explicit specification
-template class HashTable<RelationID,JoinRelation,unsigned int>;
-template class HashTable<RelationID,JoinRelation,size_t>;
+template class HashTable<Bitmapset32,JoinRelation<Bitmapset32>>;
+template class HashTable<Bitmapset64,JoinRelation<Bitmapset64>>;

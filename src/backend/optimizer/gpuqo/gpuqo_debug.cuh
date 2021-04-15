@@ -60,8 +60,9 @@ std::ostream & operator<<(std::ostream &os, const uint2& idxs);
 __host__
 std::ostream & operator<<(std::ostream &os, const ulong2& idxs);
 
+template<typename BitmapsetN>
 __host__
-std::ostream & operator<<(std::ostream &os, const JoinRelation& jr);
+std::ostream & operator<<(std::ostream &os, const JoinRelation<BitmapsetN>& jr);
 
 template<typename Type>
 __host__

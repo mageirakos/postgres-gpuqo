@@ -10,15 +10,21 @@
 
 #include "gpuqo_dependency_buffer.cuh"
 
-DependencyBuffer::DependencyBuffer(int n_rels) 
-        : n_rels(n_rels) {
+template<typename BitmapsetN>
+DependencyBuffer<BitmapsetN>::DependencyBuffer(int n_rels) 
+        : n_rels(n_rels) 
+{
     pthread_mutex_init(&mutex, NULL);
-    queue_lookup_pairs = new std::pair<depbuf_queue_t, depbuf_lookup_t>[n_rels*n_rels];
+    queue_lookup_pairs = new std::pair<depbuf_queue_t<BitmapsetN>, depbuf_lookup_t<BitmapsetN> >[n_rels*n_rels];
     first_non_empty = n_rels*n_rels;
 }
 
-void DependencyBuffer::push(JoinRelationDPE *join_rel,  
-                        JoinRelationDPE *left_rel, JoinRelationDPE *right_rel){
+template<typename BitmapsetN>
+void DependencyBuffer<BitmapsetN>::push(
+            JoinRelationDPE<BitmapsetN> *join_rel,  
+            JoinRelationDPE<BitmapsetN> *left_rel, 
+            JoinRelationDPE<BitmapsetN> *right_rel)
+{
     // push is not thread-safe
     int left_size = left_rel->id.size();
     int right_size = right_rel->id.size();
@@ -27,14 +33,14 @@ void DependencyBuffer::push(JoinRelationDPE *join_rel,
     int index = big_size * n_rels + small_size;
 
     auto id_entry_pair = queue_lookup_pairs[index].second.find(join_rel->id);
-    depbuf_entry_t* entry;
+    depbuf_entry_t<BitmapsetN>* entry;
     if (id_entry_pair == queue_lookup_pairs[index].second.end()){
         int num = join_rel->num_entry.fetch_add(1, std::memory_order_consume);
         Assert(num >= 0);
         
-        depbuf_entry_t temp = std::make_pair(
+        depbuf_entry_t<BitmapsetN> temp = std::make_pair(
             join_rel, 
-            new join_list_t
+            new join_list_t<BitmapsetN>
         );
 
         if (left_rel->num_entry.load(std::memory_order_consume) == 0 
@@ -59,8 +65,9 @@ void DependencyBuffer::push(JoinRelationDPE *join_rel,
     entry->second->push_back(std::make_pair(left_rel, right_rel));
 }
 
-depbuf_entry_t DependencyBuffer::pop(){
-    depbuf_entry_t out;
+template<typename BitmapsetN>
+depbuf_entry_t<BitmapsetN> DependencyBuffer<BitmapsetN>::pop(){
+    depbuf_entry_t<BitmapsetN> out;
     int num;
     out.first = NULL; 
 
@@ -85,11 +92,13 @@ exit:
     return out;
 }
 
-bool DependencyBuffer::empty(){
+template<typename BitmapsetN>
+bool DependencyBuffer<BitmapsetN>::empty(){
     return first_non_empty >= n_rels*n_rels;
 }
 
-void DependencyBuffer::clear(){
+template<typename BitmapsetN>
+void DependencyBuffer<BitmapsetN>::clear(){
     for (int i = 0; i < n_rels*n_rels; i++){
         queue_lookup_pairs[i].first.clear();
         queue_lookup_pairs[i].second.clear();
@@ -97,7 +106,8 @@ void DependencyBuffer::clear(){
     first_non_empty = n_rels*n_rels;
 }
 
-size_t DependencyBuffer::size(){
+template<typename BitmapsetN>
+size_t DependencyBuffer<BitmapsetN>::size(){
     size_t s = 0;
     for (int i = 0; i < n_rels*n_rels; i++){
         s += queue_lookup_pairs[i].first.size();
@@ -105,7 +115,11 @@ size_t DependencyBuffer::size(){
     return s;
 }
 
-DependencyBuffer::~DependencyBuffer(){
+template<typename BitmapsetN>
+DependencyBuffer<BitmapsetN>::~DependencyBuffer(){
     delete queue_lookup_pairs;
     pthread_mutex_destroy(&mutex);
 }
+
+template class DependencyBuffer<Bitmapset32>;
+template class DependencyBuffer<Bitmapset64>;

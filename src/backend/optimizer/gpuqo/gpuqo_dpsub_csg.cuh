@@ -17,143 +17,155 @@
 #include "gpuqo_filter.cuh"
 #include "gpuqo_dpsub.cuh"
 
-typedef struct ext_loop_stack_elem_t{
-    RelationID S;
-    RelationID X;
-    RelationID I;
-    RelationID N;
-} ext_loop_stack_elem_t;
+template<typename BitmapsetN>
+struct ext_loop_stack_elem_t{
+    BitmapsetN S;
+    BitmapsetN X;
+    BitmapsetN I;
+    BitmapsetN N;
+};
 
-typedef struct emit_stack_elem_t{
-    RelationID S;
-    RelationID X;
-    RelationID I;
-} emit_stack_elem_t;
+template<typename BitmapsetN>
+struct emit_stack_elem_t{
+    BitmapsetN S;
+    BitmapsetN X;
+    BitmapsetN I;
+};
 
-typedef ccc_stack_t<emit_stack_elem_t> csg_stack_t;
+template<typename BitmapsetN>
+using csg_stack_t = ccc_stack_t<emit_stack_elem_t<BitmapsetN> >;
 
-template<int MAX_RELS, int STACK_SIZE>
+template<typename BitmapsetN, int MAX_RELS, int STACK_SIZE>
 __device__
-static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
-                    JoinRelation &jr_out, join_stack_t &join_stack,
-                    HashTableType &memo, GpuqoPlannerInfo* info);
+static void enumerate_sub_csg(BitmapsetN T, BitmapsetN I, BitmapsetN E,
+                    JoinRelation<BitmapsetN> &jr_out, 
+                    ccc_stack_t<BitmapsetN> &join_stack,
+                    HashTableDpsub<BitmapsetN> &memo, 
+                    GpuqoPlannerInfo<BitmapsetN>* info);
 
-template<int STACK_SIZE>
+template<typename BitmapsetN, int STACK_SIZE>
 __device__ 
-static void enumerate_sub_csg_emit(RelationID T, RelationID emit_S, 
-            RelationID emit_X, RelationID I, RelationID E,
-            ext_loop_stack_elem_t* loop_stack, int &loop_stack_size,
-            JoinRelation &jr_out, join_stack_t &join_stack, 
-            HashTableType &memo, GpuqoPlannerInfo* info);
+static void enumerate_sub_csg_emit(BitmapsetN T, BitmapsetN emit_S, 
+            BitmapsetN emit_X, BitmapsetN I, BitmapsetN E,
+            ext_loop_stack_elem_t<BitmapsetN>* loop_stack, int &loop_stack_size,
+            JoinRelation<BitmapsetN> &jr_out, 
+            ccc_stack_t<BitmapsetN> &join_stack, 
+            HashTableDpsub<BitmapsetN> &memo, 
+            GpuqoPlannerInfo<BitmapsetN>* info);
 
-__device__
-static JoinRelation dpsubEnumerateCsg(RelationID relid, uint32_t cid_bits, 
-                                int n_splits, HashTableType &memo, 
-                                GpuqoPlannerInfo* info)
-{ 
-    // TODO check
-    Assert(n_splits % WARP_SIZE == 0 && popc(n_splits) == 1);
 
-    RelationID cid = RelationID(cid_bits);
+template<typename BitmapsetN>
+struct dpsubEnumerateCsg{
+    __device__
+    JoinRelation<BitmapsetN> operator()(BitmapsetN relid, 
+                                    uint32_t cid_bits, 
+                                    int n_splits, HashTableDpsub<BitmapsetN> &memo, 
+                                    GpuqoPlannerInfo<BitmapsetN>* info)
+    { 
+        // TODO check
+        Assert(n_splits % WARP_SIZE == 0 && popc(n_splits) == 1);
 
-    RelationID split_mask = RelationID(floorPow2(n_splits)).allLower();
-    RelationID cmp_cid = split_mask - cid;
+        BitmapsetN cid = BitmapsetN(cid_bits);
 
-    JoinRelation jr_out;
-    jr_out.cost = INFD;
+        BitmapsetN split_mask = BitmapsetN(floorPow2(n_splits)).allLower();
+        BitmapsetN cmp_cid = split_mask - cid;
 
-    volatile __shared__ join_stack_elem_t ctxStack[BLOCK_DIM];
-    join_stack_t join_stack;
-    join_stack.ctxStack = ctxStack;
-    join_stack.stackTop = 0;
+        JoinRelation<BitmapsetN> jr_out;
+        jr_out.cost = INFD;
 
-    Assert(split_mask.size() <= relid.size());
-    LOG_DEBUG("[%u, %u] split_mask=%u, cmp_cid=%u\n", 
-        relid.toUint(), cid.toUint(), split_mask.toUint(), cmp_cid.toUint());
+        volatile __shared__ BitmapsetN ctxStack[BLOCK_DIM];
+        ccc_stack_t<BitmapsetN> join_stack;
+        join_stack.ctxStack = ctxStack;
+        join_stack.stackTop = 0;
 
-    Assert((cid|cmp_cid) == split_mask);
-    Assert(!cid.intersects(cmp_cid));
+        Assert(split_mask.size() <= relid.size());
+        LOG_DEBUG("[%u, %u] split_mask=%u, cmp_cid=%u\n", 
+            relid.toUint(), cid.toUint(), split_mask.toUint(), cmp_cid.toUint());
 
-    RelationID inc_set = expandToMask(cid, relid);
-    RelationID exc_set = expandToMask(cmp_cid, relid);
-    
-    enumerate_sub_csg<RelationID::SIZE,RelationID::SIZE*2>(relid, inc_set, exc_set, jr_out, join_stack, 
-        memo, info);
+        Assert((cid|cmp_cid) == split_mask);
+        Assert(!cid.intersects(cmp_cid));
 
-    if (LANE_ID < join_stack.stackTop){
-        int pos = W_OFFSET + join_stack.stackTop - LANE_ID - 1;
-        Assert(pos >= W_OFFSET && pos < W_OFFSET + WARP_SIZE);
-        RelationID l = join_stack.ctxStack[pos];
-        RelationID r = relid - l;
+        BitmapsetN inc_set = expandToMask(cid, relid);
+        BitmapsetN exc_set = expandToMask(cmp_cid, relid);
+        
+        enumerate_sub_csg<BitmapsetN,BitmapsetN::SIZE,BitmapsetN::SIZE*2>(relid, inc_set, exc_set, jr_out, join_stack, 
+            memo, info);
 
-        LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", 
-                W_OFFSET, LANE_ID, pos, l.toUint(), r.toUint());
+        if (LANE_ID < join_stack.stackTop){
+            int pos = W_OFFSET + join_stack.stackTop - LANE_ID - 1;
+            Assert(pos >= W_OFFSET && pos < W_OFFSET + WARP_SIZE);
+            BitmapsetN l = join_stack.ctxStack[pos];
+            BitmapsetN r = relid - l;
 
-        JoinRelation left_rel = *memo.lookup(l);
-        JoinRelation right_rel = *memo.lookup(r);
-        do_join(jr_out, l, left_rel, r, right_rel, info);
+            LOG_DEBUG("[%d: %d] Consuming stack (%d): l=%u, r=%u\n", 
+                    W_OFFSET, LANE_ID, pos, l.toUint(), r.toUint());
+
+            JoinRelation<BitmapsetN> left_rel = *memo.lookup(l);
+            JoinRelation<BitmapsetN> right_rel = *memo.lookup(r);
+            do_join(jr_out, l, left_rel, r, right_rel, info);
+        }
+        
+        return jr_out;
     }
-    
-    return jr_out;
-}
+};
 
-template<int STACK_SIZE>
+template<typename BitmapsetN, int STACK_SIZE>
 __device__ 
-static void enumerate_sub_csg_emit(RelationID T, RelationID emit_S, 
-            RelationID emit_X, RelationID I, RelationID E,
-            ext_loop_stack_elem_t* loop_stack, int &loop_stack_size,
-            JoinRelation &jr_out, join_stack_t &join_stack, 
-            HashTableType &memo, GpuqoPlannerInfo* info){
+static void enumerate_sub_csg_emit(BitmapsetN T, BitmapsetN emit_S, 
+            BitmapsetN emit_X, BitmapsetN I, BitmapsetN E,
+            ext_loop_stack_elem_t<BitmapsetN>* loop_stack, int &loop_stack_size,
+            JoinRelation<BitmapsetN> &jr_out, ccc_stack_t<BitmapsetN> &join_stack, 
+            HashTableDpsub<BitmapsetN> &memo, GpuqoPlannerInfo<BitmapsetN>* info){
     // LOG_DEBUG("enumerate_sub_csg_emit(%u, %u, %u, %u, %u)\n",
     //         T.toUint(), emit_S.toUint(), emit_X.toUint(), I.toUint(), E.toUint());
     Assert(emit_S.isSubset(T));
     Assert(I.isSubset(T));
     Assert(emit_S.empty() || is_connected(emit_S, info->edge_table));
 
-    try_join<false,true>(T, jr_out, emit_S, T-emit_S, 
+    try_join<BitmapsetN,false,true>(T, jr_out, emit_S, T-emit_S, 
             !emit_S.empty() && I.isSubset(emit_S), 
             join_stack, memo, info);
 
-    RelationID new_N = (get_neighbours(emit_S,info->edge_table)-emit_X) & (T-E);
+    BitmapsetN new_N = (get_neighbours(emit_S,info->edge_table)-emit_X) & (T-E);
     
     // If possible, directly move to smaller I (it does not make 
     // sense to explore other rels in I first since it won't be 
     // possible to go back)
-    RelationID lowI = (I - emit_S).lowest();
+    BitmapsetN lowI = (I - emit_S).lowest();
     if (lowI.intersects(new_N)){
         new_N = lowI;
     }
 
     // do not add useless elements to stack
     if (!new_N.empty()){
-        loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
+        loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t<BitmapsetN>){
             emit_S, emit_X, I, new_N
         };
         Assert(loop_stack_size < STACK_SIZE);
     }
 }
 
-template<int MAX_RELS, int STACK_SIZE>
+template<typename BitmapsetN, int MAX_RELS, int STACK_SIZE>
 __device__
-static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
-                    JoinRelation &jr_out, join_stack_t &join_stack,
-                    HashTableType &memo, GpuqoPlannerInfo* info){
-    RelationID R = I | E;
+static void enumerate_sub_csg(BitmapsetN T, BitmapsetN I, BitmapsetN E,
+                    JoinRelation<BitmapsetN> &jr_out, ccc_stack_t<BitmapsetN> &join_stack,
+                    HashTableDpsub<BitmapsetN> &memo, GpuqoPlannerInfo<BitmapsetN>* info){
+    BitmapsetN R = I | E;
 
     Assert(I.isSubset(T));
 
     // S, X, I, N
-    ext_loop_stack_elem_t loop_stack[STACK_SIZE];
+    ext_loop_stack_elem_t<BitmapsetN> loop_stack[STACK_SIZE];
     int loop_stack_size = 0;
 
-    volatile __shared__ emit_stack_elem_t ctxStack[BLOCK_DIM];
-    csg_stack_t stack;
+    volatile __shared__ emit_stack_elem_t<BitmapsetN> ctxStack[BLOCK_DIM];
+    csg_stack_t<BitmapsetN> stack;
     stack.ctxStack = ctxStack;
     stack.stackTop = 0;
 
     LOG_DEBUG("[%d: %d] lanemask_le=%u\n", W_OFFSET, LANE_ID, LANE_MASK_LE);
 
-    RelationID temp;
+    BitmapsetN temp;
     if (!I.empty()){
         temp = I.lowest();
     } else{
@@ -161,10 +173,10 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
     }
 
     while (!temp.empty()){
-        RelationID v = temp.lowest();
+        BitmapsetN v = temp.lowest();
         
-        loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
-            RelationID(0),
+        loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t<BitmapsetN>){
+            BitmapsetN(0),
             v.allLowerInc(),
             I,
             v
@@ -175,15 +187,15 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
 
     bool all_empty = false;
     while (!all_empty || stack.stackTop != 0){
-        RelationID emit_S;
-        RelationID emit_X;
-        RelationID next_subset = RelationID(0);
+        BitmapsetN emit_S;
+        BitmapsetN emit_X;
+        BitmapsetN next_subset = BitmapsetN(0);
 
         if (loop_stack_size != 0){
-            ext_loop_stack_elem_t top = loop_stack[--loop_stack_size];
-            RelationID S = top.S;
-            RelationID X = top.X;
-            RelationID N = top.N;
+            ext_loop_stack_elem_t<BitmapsetN> top = loop_stack[--loop_stack_size];
+            BitmapsetN S = top.S;
+            BitmapsetN X = top.X;
+            BitmapsetN N = top.N;
             I = top.I;
             E = R - I;
 
@@ -197,7 +209,7 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
             emit_X = X | N;
 
             if (!next_subset.empty()){
-                loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t){
+                loop_stack[loop_stack_size++] = (ext_loop_stack_elem_t<BitmapsetN>){
                     emit_S, X, I, N
                 };
                 Assert(loop_stack_size < STACK_SIZE);
@@ -225,7 +237,8 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 stack.stackTop -= reducedNTaken;
                 Assert(stack.stackTop >= 0);
 
-                enumerate_sub_csg_emit<STACK_SIZE>(T, emit_S, emit_X, I, E, 
+                enumerate_sub_csg_emit<BitmapsetN,STACK_SIZE>(
+                                T, emit_S, emit_X, I, E, 
                                 loop_stack, loop_stack_size,
                                 jr_out, join_stack, memo, info);
             } else{
@@ -261,11 +274,12 @@ static void enumerate_sub_csg(RelationID T, RelationID I, RelationID E,
                 // pending join
                 // this thread will not touch any queue
 
-                emit_S = RelationID(0);
+                emit_S = BitmapsetN(0);
                 emit_X = T;
             }
 
-            enumerate_sub_csg_emit<STACK_SIZE>(T, emit_S, emit_X, I, E, 
+            enumerate_sub_csg_emit<BitmapsetN,STACK_SIZE>(
+                T, emit_S, emit_X, I, E, 
                 loop_stack, loop_stack_size,
                 jr_out, join_stack, memo, info);
 

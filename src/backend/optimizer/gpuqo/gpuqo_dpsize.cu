@@ -45,31 +45,32 @@ int gpuqo_min_memo_size_mb;
  *
  *	 unrank algorithm for DPsize GPU variant
  */
-struct unrankDPSize : public thrust::unary_function< RelationID::type,thrust::tuple<RelationID, RelationID::type2> >
+template<typename BitmapsetN>
+struct unrankDPSize : public thrust::unary_function< uint64_t,thrust::tuple<BitmapsetN, uint2_t<BitmapsetN> > >
 {
-    thrust::device_ptr<RelationID> memo_keys;
-    thrust::device_ptr<JoinRelationDpsize> memo_vals;
-    thrust::device_ptr<RelationID::type> partition_offsets;
-    thrust::device_ptr<RelationID::type> partition_sizes;
+    thrust::device_ptr<BitmapsetN> memo_keys;
+    thrust::device_ptr<JoinRelationDpsize<BitmapsetN> > memo_vals;
+    thrust::device_ptr<uint_t<BitmapsetN> > partition_offsets;
+    thrust::device_ptr<uint_t<BitmapsetN> > partition_sizes;
     int iid;
     uint64_t offset;
 public:
     unrankDPSize(
-        thrust::device_ptr<RelationID> _memo_keys,
-        thrust::device_ptr<JoinRelationDpsize> _memo_vals,
-        thrust::device_ptr<RelationID::type> _partition_offsets,
-        thrust::device_ptr<RelationID::type> _partition_sizes,
+        thrust::device_ptr<BitmapsetN> _memo_keys,
+        thrust::device_ptr<JoinRelationDpsize<BitmapsetN> > _memo_vals,
+        thrust::device_ptr<uint_t<BitmapsetN> > _partition_offsets,
+        thrust::device_ptr<uint_t<BitmapsetN> > _partition_sizes,
         int _iid,
-        RelationID::type _offset
+        uint64_t _offset
     ) : memo_keys(_memo_keys), memo_vals(_memo_vals), 
         partition_offsets(_partition_offsets), 
         partition_sizes(_partition_sizes), iid(_iid), offset(_offset)
     {}
 
         __device__
-        thrust::tuple<RelationID, RelationID::type2> operator()(uint64_t cid) 
+        thrust::tuple<BitmapsetN, uint2_t<BitmapsetN> > operator()(uint64_t cid) 
         {
-            __shared__ uint64_t offsets[RelationID::SIZE];
+            __shared__ uint64_t offsets[BitmapsetN::SIZE];
             int n_active = __popc(__activemask());
 
             for (int i = threadIdx.x; i <= iid-2; i += n_active){
@@ -77,8 +78,8 @@ public:
             }
             __syncthreads();
     
-            RelationID::type lp = 0;
-            RelationID::type rp = iid - 2;
+            uint32_t lp = 0;
+            uint32_t rp = iid - 2;
             uint64_t o = offsets[lp];
             cid += offset;
 
@@ -87,68 +88,69 @@ public:
                 lp++;
                 rp--;
 
-                Assert(lp <= iid-2 && lp < RelationID::SIZE);
-                Assert(rp <= iid-2 && rp < RelationID::SIZE);
+                Assert(lp <= iid-2 && lp < BitmapsetN::SIZE);
+                Assert(rp <= iid-2 && rp < BitmapsetN::SIZE);
 
                 o = offsets[lp];
             }
 
-            RelationID::type l = cid / partition_sizes[rp];
-            RelationID::type r = cid % partition_sizes[rp];
+            uint_t<BitmapsetN> l = cid / partition_sizes[rp];
+            uint_t<BitmapsetN> r = cid % partition_sizes[rp];
             if (r % 2 == 0)
                 r = r/2;
             else
                 r = ceil_div(partition_sizes[rp], 2) + r/2;
     
-            RelationID relid;
-            RelationID::type2 out;
+            BitmapsetN relid;
+            uint2_t<BitmapsetN> out;
             out.x = partition_offsets[lp] + l;
             out.y = partition_offsets[rp] + r;
     
-            LOG_DEBUG("%llu: %lu %lu\n", 
+            LOG_DEBUG("%lu: %lu %lu\n", 
                 cid, 
-                out.x,
-                out.y
+                (uint64_t)out.x,
+                (uint64_t)out.y
             );
 
-            RelationID lid = memo_keys[out.x];
-            RelationID rid = memo_keys[out.y];
+            BitmapsetN lid = memo_keys[out.x];
+            BitmapsetN rid = memo_keys[out.y];
     
             relid = lid | rid;
     
-            return thrust::tuple<RelationID, RelationID::type2>(relid, out);
+            return thrust::make_tuple(relid, out);
         }
 };
 
 
-struct filterJoinedDisconnected : public thrust::unary_function<thrust::tuple<RelationID, RelationID::type2>, bool>
+template<typename BitmapsetN>
+struct filterJoinedDisconnected : public thrust::unary_function<thrust::tuple<BitmapsetN, uint2_t<BitmapsetN> >, bool>
 {
-    thrust::device_ptr<RelationID> memo_keys;
-    thrust::device_ptr<JoinRelationDpsize> memo_vals;
-    GpuqoPlannerInfo* info;
+    thrust::device_ptr<BitmapsetN> memo_keys;
+    thrust::device_ptr<JoinRelationDpsize<BitmapsetN> > memo_vals;
+    GpuqoPlannerInfo<BitmapsetN>* info;
 public:
     filterJoinedDisconnected(
-        thrust::device_ptr<RelationID> _memo_keys,
-        thrust::device_ptr<JoinRelationDpsize> _memo_vals,
-        GpuqoPlannerInfo* _info
+        thrust::device_ptr<BitmapsetN> _memo_keys,
+        thrust::device_ptr<JoinRelationDpsize<BitmapsetN> > _memo_vals,
+        GpuqoPlannerInfo<BitmapsetN>* _info
     ) : memo_keys(_memo_keys), memo_vals(_memo_vals), info(_info)
     {}
 
     __device__
-    bool operator()(thrust::tuple<RelationID, RelationID::type2> t) 
+    bool operator()(thrust::tuple<BitmapsetN, uint2_t<BitmapsetN> > t) 
     {
-        RelationID relid = t.get<0>();
-        RelationID::type2 idxs = t.get<1>();
+        BitmapsetN relid = thrust::get<0>(t);
+        uint2_t<BitmapsetN> idxs = thrust::get<1>(t);
 
-        LOG_DEBUG("%d %d: %u %u\n", 
+        LOG_DEBUG("%d %d: %lu %lu\n", 
             blockIdx.x,
             threadIdx.x,
-            idxs.x,
-            idxs.y
+            (uint64_t)idxs.x,
+            (uint64_t)idxs.y
         );
         
-        JoinRelationDpsize& left_rel = memo_vals.get()[idxs.x];
-        RelationID& right_id = memo_keys.get()[idxs.y];
+        JoinRelationDpsize<BitmapsetN>& left_rel = memo_vals.get()[idxs.x];
+        BitmapsetN& right_id = memo_keys.get()[idxs.y];
 
         if (!is_disjoint(left_rel.id, right_id)) // not disjoint
             return true;
@@ -158,26 +160,26 @@ public:
     }
 };
 
-
-struct joinCost : public thrust::unary_function<RelationID::type2,JoinRelationDpsize>
+template<typename BitmapsetN>
+struct joinCost : public thrust::unary_function<uint2_t<BitmapsetN>,JoinRelationDpsize<BitmapsetN> >
 {
-    thrust::device_ptr<RelationID> memo_keys;
-    thrust::device_ptr<JoinRelationDpsize> memo_vals;
-    GpuqoPlannerInfo* info;
+    thrust::device_ptr<BitmapsetN> memo_keys;
+    thrust::device_ptr<JoinRelationDpsize<BitmapsetN> > memo_vals;
+    GpuqoPlannerInfo<BitmapsetN>* info;
 public:
     joinCost(
-        thrust::device_ptr<RelationID> _memo_keys,
-        thrust::device_ptr<JoinRelationDpsize> _memo_vals,
-        GpuqoPlannerInfo* _info
+        thrust::device_ptr<BitmapsetN> _memo_keys,
+        thrust::device_ptr<JoinRelationDpsize<BitmapsetN> > _memo_vals,
+        GpuqoPlannerInfo<BitmapsetN>* _info
     ) : memo_keys(_memo_keys), memo_vals(_memo_vals), info(_info)
     {}
 
     __device__
-    JoinRelationDpsize operator()(RelationID::type2 idxs){
-        JoinRelationDpsize jr;
+    JoinRelationDpsize<BitmapsetN> operator()(uint2_t<BitmapsetN> idxs){
+        JoinRelationDpsize<BitmapsetN> jr;
 
-        JoinRelationDpsize& left_rel = memo_vals.get()[idxs.x];
-        JoinRelationDpsize& right_rel = memo_vals.get()[idxs.y];
+        JoinRelationDpsize<BitmapsetN>& left_rel = memo_vals.get()[idxs.x];
+        JoinRelationDpsize<BitmapsetN>& right_rel = memo_vals.get()[idxs.y];
 
         jr.id = left_rel.id | right_rel.id;
         jr.left_rel_id = left_rel.id;
@@ -192,18 +194,19 @@ public:
     }
 };
 
-struct joinRelToUint2 : public thrust::unary_function<thrust::tuple<RelationID,JoinRelationDpsize>,thrust::tuple<RelationID,RelationID::type2> >
+template<typename BitmapsetN>
+struct joinRelToUint2 : public thrust::unary_function<thrust::tuple<BitmapsetN,JoinRelationDpsize<BitmapsetN> >,thrust::tuple<BitmapsetN,uint2_t<BitmapsetN> > >
 {
 public:
     joinRelToUint2() {}
 
     __device__
-    thrust::tuple<RelationID,RelationID::type2> operator()(thrust::tuple<RelationID,JoinRelationDpsize> t){
-        JoinRelationDpsize& jr = t.get<1>();
-        RelationID::type2 idxs;
+    thrust::tuple<BitmapsetN,uint2_t<BitmapsetN> > operator()(thrust::tuple<BitmapsetN,JoinRelationDpsize<BitmapsetN> > t){
+        JoinRelationDpsize<BitmapsetN>& jr = thrust::get<1>(t);
+        uint2_t<BitmapsetN> idxs;
         idxs.x = jr.left_rel_idx;
         idxs.y = jr.right_rel_idx;
-        return thrust::make_tuple(t.get<0>(), idxs);
+        return thrust::make_tuple(thrust::get<0>(t), idxs);
     }
 };
 
@@ -211,7 +214,8 @@ public:
  *
  *	 GPU query optimization using the DP size variant.
  */
-QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
+template<typename BitmapsetN>
+QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
 {
     DECLARE_TIMING(gpuqo_dpsize);
     DECLARE_NV_TIMING(init);
@@ -220,13 +224,13 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsize);
     START_TIMING(init);
 
-    size_t scr_entry_size = sizeof(RelationID::type2)+sizeof(RelationID);
+    size_t scr_entry_size = sizeof(uint2_t<BitmapsetN>)+sizeof(BitmapsetN);
     size_t scratchpad_size = gpuqo_scratchpad_size_mb * MB / scr_entry_size;
     // at least 2*gpuqo_n_parallel otherwise it would be very inefficient
     if (scratchpad_size < 2*gpuqo_n_parallel)
         scratchpad_size = 2*gpuqo_n_parallel;
 
-    size_t rel_size = sizeof(JoinRelationDpsize)+sizeof(RelationID);
+    size_t rel_size = sizeof(JoinRelationDpsize<BitmapsetN>)+sizeof(BitmapsetN);
     size_t prune_threshold = scratchpad_size - gpuqo_n_parallel;
     size_t max_memo_size = gpuqo_max_memo_size_mb * MB / rel_size;
     size_t memo_size = std::min(1UL<<info->n_rels, max_memo_size);
@@ -234,23 +238,23 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
     LOG_PROFILE("Using a scratchpad of size %u (prune threshold: %u)\n", 
         scratchpad_size, prune_threshold);
     
-    uninit_device_vector<RelationID> gpu_memo_keys(memo_size);
-    uninit_device_vector<JoinRelationDpsize> gpu_memo_vals(memo_size);
-    thrust::host_vector<RelationID::type> partition_offsets(info->n_rels);
-    thrust::host_vector<RelationID::type> partition_sizes(info->n_rels);
-    thrust::device_vector<RelationID::type> gpu_partition_offsets(info->n_rels);
-    thrust::device_vector<RelationID::type> gpu_partition_sizes(info->n_rels);
-    QueryTree* out = NULL;
+    uninit_device_vector<BitmapsetN> gpu_memo_keys(memo_size);
+    uninit_device_vector<JoinRelationDpsize<BitmapsetN> > gpu_memo_vals(memo_size);
+    thrust::host_vector<uint_t<BitmapsetN> > partition_offsets(info->n_rels);
+    thrust::host_vector<uint_t<BitmapsetN> > partition_sizes(info->n_rels);
+    thrust::device_vector<uint_t<BitmapsetN> > gpu_partition_offsets(info->n_rels);
+    thrust::device_vector<uint_t<BitmapsetN> > gpu_partition_sizes(info->n_rels);
+    QueryTree<BitmapsetN>* out = NULL;
 
     for(int i=0; i<info->n_rels; i++){
         gpu_memo_keys[i] = info->base_rels[i].id;
 
-        JoinRelationDpsize t;
+        JoinRelationDpsize<BitmapsetN> t;
         t.id = info->base_rels[i].id;
         t.left_rel_idx = 0; 
-        t.left_rel_id = RelationID(0);
+        t.left_rel_id = BitmapsetN(0);
         t.right_rel_idx = 0; 
-        t.right_rel_id = RelationID(0);
+        t.right_rel_id = BitmapsetN(0);
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
         t.edges = info->edge_table[i];
@@ -263,10 +267,10 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
     gpu_partition_sizes = partition_sizes;
 
     // scratchpad size is increased on demand, starting from a minimum capacity
-    uninit_device_vector<RelationID> gpu_scratchpad_keys(scratchpad_size);
-    uninit_device_vector<RelationID::type2> gpu_scratchpad_vals(scratchpad_size);
+    uninit_device_vector<BitmapsetN> gpu_scratchpad_keys(scratchpad_size);
+    uninit_device_vector<uint2_t<BitmapsetN> > gpu_scratchpad_vals(scratchpad_size);
 
-    GpuqoPlannerInfo* gpu_info = copyToDeviceGpuqoPlannerInfo(info);
+    GpuqoPlannerInfo<BitmapsetN>* gpu_info = copyToDeviceGpuqoPlannerInfo<BitmapsetN>(info);
 
     STOP_TIMING(init);
 
@@ -332,7 +336,7 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
                             gpu_scratchpad_keys.begin(),
                             gpu_scratchpad_vals.begin()
                         )),
-                        joinRelToUint2()
+                        joinRelToUint2<BitmapsetN>()
                     );
 
                     // I now have already ps[i-1] joinrels in the sratchpad
@@ -374,7 +378,7 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
                             gpu_scratchpad_keys.begin()+(chunk_size+temp_size),
                             gpu_scratchpad_vals.begin()+(chunk_size+temp_size)
                         )),
-                        unrankDPSize(
+                        unrankDPSize<BitmapsetN>(
                             gpu_memo_keys.data(), 
                             gpu_memo_vals.data(), 
                             gpu_partition_offsets.data(), 
@@ -409,7 +413,7 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
                             gpu_scratchpad_keys.begin()+(temp_size+chunk_size),
                             gpu_scratchpad_vals.begin()+(temp_size+chunk_size)
                         )),
-                        filterJoinedDisconnected(
+                        filterJoinedDisconnected<BitmapsetN>(
                             gpu_memo_keys.data(), 
                             gpu_memo_vals.data(),
                             gpu_info
@@ -421,18 +425,18 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
                     LOG_DEBUG("After remove_if\n");
                     DUMP_VECTOR(
                         gpu_scratchpad_keys.begin()+temp_size, 
-                        newEnd.get_iterator_tuple().get<0>()
+                        thrust::get<0>(newEnd.get_iterator_tuple())
                     );
                     DUMP_VECTOR(
                         gpu_scratchpad_vals.begin()+temp_size, 
-                        newEnd.get_iterator_tuple().get<1>()
+                        thrust::get<1>(newEnd.get_iterator_tuple())
                     );
 
                     // get how many rels remain after filter and add it to 
                     // temp_size
                     temp_size += thrust::distance(
                         gpu_scratchpad_keys.begin()+temp_size,
-                        newEnd.get_iterator_tuple().get<0>()
+                        thrust::get<0>(newEnd.get_iterator_tuple())
                     );
 
                     // increase offset for next iteration and/or for exit check 
@@ -474,7 +478,7 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
                     gpu_scratchpad_keys.begin() + temp_size,
                     thrust::make_transform_iterator(
                         gpu_scratchpad_vals.begin(),
-                        joinCost(
+                        joinCost<BitmapsetN>(
                             gpu_memo_keys.data(), 
                             gpu_memo_vals.data(),
                             gpu_info
@@ -482,8 +486,8 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
                     ),
                     gpu_memo_keys.begin()+partition_offsets[i-1],
                     gpu_memo_vals.begin()+partition_offsets[i-1],
-                    thrust::equal_to<RelationID>(),
-                    thrust::minimum<JoinRelationDpsize>()
+                    thrust::equal_to<BitmapsetN>(),
+                    thrust::minimum<JoinRelationDpsize<BitmapsetN> >()
                 );
     
                 STOP_TIMING(compute_prune);
@@ -530,7 +534,7 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
 
         START_TIMING(build_qt);
             
-        dpsize_buildQueryTree(partition_offsets[info->n_rels-1], gpu_memo_vals, &out);
+        dpsize_buildQueryTree<BitmapsetN,uninit_device_vector<JoinRelationDpsize<BitmapsetN> > >(partition_offsets[info->n_rels-1], gpu_memo_vals, &out);
     
         STOP_TIMING(build_qt);
     
@@ -557,3 +561,6 @@ QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info)
 
     return out;
 }
+
+template QueryTree<Bitmapset32>* gpuqo_dpsize<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
+template QueryTree<Bitmapset64>* gpuqo_dpsize<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);

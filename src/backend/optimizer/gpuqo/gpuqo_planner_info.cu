@@ -70,25 +70,26 @@ gpuqo_c::Bitmapset* convertBitmapset(Bitmapset set){
 	return result;
 }
 
-GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
-	unsigned int size = sizeof(GpuqoPlannerInfo);
+template<typename BitmapsetN>
+GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
+	unsigned int size = sizeof(GpuqoPlannerInfo<BitmapsetN>);
 	size += sizeof(unsigned int) * info_c->n_fk_selecs;
 	size += sizeof(float) * info_c->n_fk_selecs;
-	size += sizeof(RelationID) * info_c->n_eq_classes;
+	size += sizeof(BitmapsetN) * info_c->n_eq_classes;
 	size += sizeof(float) * info_c->n_eq_class_sels;
 	size += ceil_div(size, 8)*8; // ceil to 64 bits multiples
 
 	char* p = new char[size];
 
-	GpuqoPlannerInfo *info = (GpuqoPlannerInfo*) p;
-	p += sizeof(GpuqoPlannerInfo);
+	GpuqoPlannerInfo<BitmapsetN> *info = (GpuqoPlannerInfo<BitmapsetN>*) p;
+	p += sizeof(GpuqoPlannerInfo<BitmapsetN>);
 
 	info->size = size;
 	info->n_rels = info_c->n_rels;
 
 	for (int i=0; i < info->n_rels; i++){
-		info->edge_table[i] = convertBitmapset<RelationID>(info_c->edge_table[i]);
-		info->indexed_edge_table[i] = convertBitmapset<RelationID>(info_c->indexed_edge_table[i]);
+		info->edge_table[i] = convertBitmapset<BitmapsetN>(info_c->edge_table[i]);
+		info->indexed_edge_table[i] = convertBitmapset<BitmapsetN>(info_c->indexed_edge_table[i]);
 	}
 
 	info->n_fk_selecs = info_c->n_fk_selecs;
@@ -100,7 +101,7 @@ GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
 
 	int offset = 0;
 	for (int i=0; i < info->n_rels; i++){
-		info->base_rels[i].id = convertBitmapset<RelationID>(info_c->base_rels[i].id);
+		info->base_rels[i].id = convertBitmapset<BitmapsetN>(info_c->base_rels[i].id);
 		info->base_rels[i].rows = info_c->base_rels[i].rows;
 		info->base_rels[i].tuples = info_c->base_rels[i].tuples;
 
@@ -122,8 +123,8 @@ GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
 	info->n_eq_classes = info_c->n_eq_classes;
 	info->n_eq_class_sels = info_c->n_eq_class_sels;
 
-	RelationID* eq_classes = (RelationID*) p;
-	p += sizeof(RelationID) * info->n_eq_classes;
+	BitmapsetN* eq_classes = (BitmapsetN*) p;
+	p += sizeof(BitmapsetN) * info->n_eq_classes;
 	float* eq_class_sels = (float*) p;
 	p += sizeof(float) * info->n_eq_class_sels;
 
@@ -131,7 +132,7 @@ GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
 	int i = 0;
 	offset = 0;
 	while (ec != NULL){
-		eq_classes[i] = convertBitmapset<RelationID>(ec->relids);
+		eq_classes[i] = convertBitmapset<BitmapsetN>(ec->relids);
 
 		int s = eq_classes[i].size();
 		int n = eqClassNSels(s);
@@ -147,16 +148,20 @@ GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
 
 	return info;
 }
+
+template GpuqoPlannerInfo<Bitmapset32>* convertGpuqoPlannerInfo<Bitmapset32>(gpuqo_c::GpuqoPlannerInfo *info_c);
+template GpuqoPlannerInfo<Bitmapset64>* convertGpuqoPlannerInfo<Bitmapset64>(gpuqo_c::GpuqoPlannerInfo *info_c);
  
-GpuqoPlannerInfo* copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo *info){
-	GpuqoPlannerInfo tmp_info = *info;
+template<typename BitmapsetN>
+GpuqoPlannerInfo<BitmapsetN>* copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN> *info){
+	GpuqoPlannerInfo<BitmapsetN> tmp_info = *info;
 
 	char* p;
 	
 	cudaMalloc(&p, info->size);
 	
-	GpuqoPlannerInfo *info_gpu = (GpuqoPlannerInfo*) p;
-	p += sizeof(GpuqoPlannerInfo);
+	GpuqoPlannerInfo<BitmapsetN> *info_gpu = (GpuqoPlannerInfo<BitmapsetN>*) p;
+	p += sizeof(GpuqoPlannerInfo<BitmapsetN>);
 	
 	tmp_info.fk_selec_idxs = (unsigned int*) p;
 	p += sizeof(unsigned int) * info->n_fk_selecs;
@@ -168,27 +173,31 @@ GpuqoPlannerInfo* copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo *info){
 	cudaMemcpy((void*)tmp_info.fk_selec_sels, info->fk_selec_sels, 
 		sizeof(float) * info->n_fk_selecs, cudaMemcpyHostToDevice);
 	
-	tmp_info.eq_classes = (RelationID*) p;
-	p += sizeof(RelationID) * info->n_eq_classes;
+	tmp_info.eq_classes = (BitmapsetN*) p;
+	p += sizeof(BitmapsetN) * info->n_eq_classes;
 	cudaMemcpy((void*)tmp_info.eq_classes, info->eq_classes, 
-		sizeof(RelationID) * info->n_eq_classes, cudaMemcpyHostToDevice);
+		sizeof(BitmapsetN) * info->n_eq_classes, cudaMemcpyHostToDevice);
 	
 	tmp_info.eq_class_sels = (float*) p;
 	p += sizeof(float) * info->n_eq_class_sels;
 	cudaMemcpy((void*)tmp_info.eq_class_sels, info->eq_class_sels, 
 		sizeof(float) * info->n_eq_class_sels, cudaMemcpyHostToDevice);
 	
-	cudaMemcpy(info_gpu, &tmp_info, sizeof(GpuqoPlannerInfo), cudaMemcpyHostToDevice);
+	cudaMemcpy(info_gpu, &tmp_info, sizeof(GpuqoPlannerInfo<BitmapsetN>), cudaMemcpyHostToDevice);
 
 	return info_gpu;
 }
 
-gpuqo_c::QueryTree* convertQueryTree(QueryTree* qt){
+template GpuqoPlannerInfo<Bitmapset32>* copyToDeviceGpuqoPlannerInfo<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32> *info);
+template GpuqoPlannerInfo<Bitmapset64>* copyToDeviceGpuqoPlannerInfo<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64> *info);
+
+template<typename BitmapsetN>
+gpuqo_c::QueryTree* convertQueryTree(QueryTree<BitmapsetN>* qt){
 	if (qt == NULL)
 		return NULL;
 	
 	gpuqo_c::QueryTree *result = (gpuqo_c::QueryTree *) palloc(sizeof(gpuqo_c::QueryTree));
-	result->id = convertBitmapset<RelationID>(qt->id);
+	result->id = convertBitmapset<BitmapsetN>(qt->id);
 	result->left = convertQueryTree(qt->left);
 	result->right = convertQueryTree(qt->right);
 	result->cost = qt->cost;
@@ -198,4 +207,7 @@ gpuqo_c::QueryTree* convertQueryTree(QueryTree* qt){
 
 	return result;
 }
+
+template gpuqo_c::QueryTree* convertQueryTree<Bitmapset32>(QueryTree<Bitmapset32>* qt);
+template gpuqo_c::QueryTree* convertQueryTree<Bitmapset64>(QueryTree<Bitmapset64>* qt);
   

@@ -36,23 +36,24 @@
 #include "gpuqo_dpsub.cuh"
 #include "gpuqo_dpsub_enum_all_subs.cuh"
 
-struct dpsubEnumerateAllSubsFunctor : public pairs_enum_func_t 
+template<typename BitmapsetN>
+struct dpsubEnumerateAllSubsFunctor : public pairs_enum_func_t<BitmapsetN>
 {
-    HashTableType memo;
-    GpuqoPlannerInfo* info;
+    HashTableDpsub<BitmapsetN> memo;
+    GpuqoPlannerInfo<BitmapsetN>* info;
     int n_splits;
 public:
     dpsubEnumerateAllSubsFunctor(
-        HashTableType _memo,
-        GpuqoPlannerInfo* _info,
+        HashTableDpsub<BitmapsetN> _memo,
+        GpuqoPlannerInfo<BitmapsetN>* _info,
         int _n_splits
     ) : memo(_memo), info(_info), n_splits(_n_splits)
     {}
 
     __device__
-    JoinRelation operator()(RelationID relid, uint32_t cid)
+    JoinRelation<BitmapsetN> operator()(BitmapsetN relid, uint32_t cid)
     {
-        return dpsubEnumerateAllSubs(relid, cid, n_splits,
+        return dpsubEnumerateAllSubs<BitmapsetN>{}(relid, cid, n_splits,
             memo, info);
     }
 };
@@ -61,48 +62,53 @@ public:
  *	 unrank algorithm for DPsub GPU variant with embedded evaluation and 
  *   partial pruning.
  */
-template<typename BinaryFunction>
-struct unrankEvaluateDPSub : public thrust::unary_function< RelationID::type,thrust::tuple<RelationID, JoinRelation> >
+template<typename BitmapsetN, typename BinaryFunction>
+struct unrankEvaluateDPSub : public thrust::unary_function< uint_t<BitmapsetN>,thrust::tuple<BitmapsetN, JoinRelation<BitmapsetN> > >
 {
-    thrust::device_ptr<RelationID::type> binoms;
+    thrust::device_ptr<uint_t<BitmapsetN> > binoms;
     int sq;
     int qss;
-    RelationID::type offset;
+    uint_t<BitmapsetN> offset;
     int n_splits;
     BinaryFunction enum_functor;
 public:
     unrankEvaluateDPSub(
         BinaryFunction _enum_functor,
         int _sq,
-        thrust::device_ptr<RelationID::type> _binoms,
+        thrust::device_ptr<uint_t<BitmapsetN> > _binoms,
         int _qss,
-        RelationID::type _offset,
+        uint_t<BitmapsetN> _offset,
         int _n_splits
     ) : enum_functor(_enum_functor), sq(_sq), binoms(_binoms), 
         qss(_qss), offset(_offset), n_splits(_n_splits)
     {}
  
     __device__
-    thrust::tuple<RelationID, JoinRelation> operator()(RelationID::type tid)
+    thrust::tuple<BitmapsetN, JoinRelation<BitmapsetN> > operator()(uint_t<BitmapsetN> tid)
     {
-        RelationID::type real_id = tid + offset;
-        RelationID::type sid = real_id / n_splits;
-        RelationID::type cid = real_id % n_splits;
+        uint_t<BitmapsetN> real_id = tid + offset;
+        uint_t<BitmapsetN> sid = real_id / n_splits;
+        uint_t<BitmapsetN> cid = real_id % n_splits;
 
-        LOG_DEBUG("[%u] n_splits=%d, sid=%u, cid=[%u,%u)\n", 
-                tid, n_splits, sid, cid, cid+ceil_div(((RelationID::type)1)<<qss, n_splits));
+        LOG_DEBUG("[%u] n_splits=%d, sid=%lu, cid=[%lu,%lu)\n", 
+                tid, n_splits, (uint64_t)sid, 
+                (uint64_t)cid, 
+                (uint64_t)(cid+ceil_div(((uint_t<BitmapsetN>)1)<<qss, 
+                n_splits))
+        );
 
-        RelationID s = dpsub_unrank_sid(sid, qss, sq, binoms.get());
-        RelationID relid = s<<1;
+        BitmapsetN s = dpsub_unrank_sid<BitmapsetN>(sid, qss, sq, binoms.get());
+        BitmapsetN relid = s<<1;
 
         LOG_DEBUG("[%u] s=%u\n", tid, s.toUint());
 
-        JoinRelation jr_out = enum_functor(relid, cid);
-        return thrust::tuple<RelationID, JoinRelation>(relid, jr_out);
+        JoinRelation<BitmapsetN> jr_out = enum_functor(relid, cid);
+        return thrust::tuple<BitmapsetN, JoinRelation<BitmapsetN> >(relid, jr_out);
     }
 };
 
-int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
+template<typename BitmapsetN>
+int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t<BitmapsetN> &params){
     uint64_t n_joins_per_thread;
     uint32_t n_sets_per_iteration;
     uint32_t threads_per_set;
@@ -150,8 +156,8 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
                 params.gpu_scratchpad_keys.begin()+n_threads,
                 params.gpu_scratchpad_vals.begin()+n_threads
             )),
-            unrankEvaluateDPSub<dpsubEnumerateAllSubsFunctor>(
-                dpsubEnumerateAllSubsFunctor(
+            unrankEvaluateDPSub<BitmapsetN, dpsubEnumerateAllSubsFunctor<BitmapsetN> >(
+                dpsubEnumerateAllSubsFunctor<BitmapsetN>(
                     *params.memo,
                     params.gpu_info,
                     threads_per_set
@@ -178,3 +184,6 @@ int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params){
 
     return n_iters;
 }
+
+template int dpsub_unfiltered_iteration<Bitmapset32>(int, dpsub_iter_param_t<Bitmapset32>&);
+template int dpsub_unfiltered_iteration<Bitmapset64>(int, dpsub_iter_param_t<Bitmapset64>&);

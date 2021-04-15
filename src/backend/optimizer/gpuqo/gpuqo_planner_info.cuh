@@ -29,91 +29,105 @@ typedef Bitmapset32 RelationID;
 
 // structure representing join of two relations used by CUDA and CPU code 
 // of GPUQO
+template<typename BitmapsetN>
 struct JoinRelation{
-	RelationID left_rel_id;
-	RelationID right_rel_id;
+	BitmapsetN left_rel_id;
+	BitmapsetN right_rel_id;
 	float rows;
 	float cost;
 
 public:
 	__host__ __device__
-	bool operator<(const JoinRelation &o) const
+	bool operator<(const JoinRelation<BitmapsetN> &o) const
 	{
 		return cost < o.cost;
 	}
 
 	__host__ __device__
-	bool operator>(const JoinRelation &o) const
+	bool operator>(const JoinRelation<BitmapsetN> &o) const
 	{
 		return cost > o.cost;
 	}
 
 	__host__ __device__
-	bool operator==(const JoinRelation &o) const
+	bool operator==(const JoinRelation<BitmapsetN> &o) const
 	{
 		return cost == o.cost;
 	}
 
 	__host__ __device__
-	bool operator<=(const JoinRelation &o) const
+	bool operator<=(const JoinRelation<BitmapsetN> &o) const
 	{
 		return cost <= o.cost;
 	}
 
 	__host__ __device__
-	bool operator>=(const JoinRelation &o) const
+	bool operator>=(const JoinRelation<BitmapsetN> &o) const
 	{
 		return cost >= o.cost;
 	}
 };
 
-struct JoinRelationDetailed : public JoinRelation{
-	RelationID id;
-	EdgeMask edges;
+template<typename BitmapsetN>
+struct JoinRelationDetailed : public JoinRelation<BitmapsetN>{
+	BitmapsetN id;
+	BitmapsetN edges;
 };
 
-struct JoinRelationDpsize : public JoinRelationDetailed {
-	RelationID::type left_rel_idx;
-	RelationID::type right_rel_idx;
+template<typename BitmapsetN>
+struct JoinRelationDpsize : public JoinRelationDetailed<BitmapsetN> {
+	uint_t<BitmapsetN> left_rel_idx;
+	uint_t<BitmapsetN> right_rel_idx;
 };
 
-typedef struct QueryTree{
-	RelationID id;
+template<typename BitmapsetN>
+struct QueryTree{
+	BitmapsetN id;
 	float rows;
 	float cost;
 	struct QueryTree* left;
 	struct QueryTree* right;
-} QueryTree;
+};
 
-
+template<typename BitmapsetN>
 struct BaseRelation{
-	RelationID id;
+	BitmapsetN id;
 	float rows;
 	float tuples;
 	int off_fk_selecs;
 	int n_fk_selecs;
 };
 
+template<typename BitmapsetN>
 struct GpuqoPlannerInfo{
 	unsigned int size;
 	int n_rels;
-	BaseRelation base_rels[RelationID::SIZE];
-	EdgeMask edge_table[RelationID::SIZE];
-	EdgeMask indexed_edge_table[RelationID::SIZE];
-	RelationID subtrees[RelationID::SIZE];
+	BaseRelation<BitmapsetN> base_rels[BitmapsetN::SIZE];
+	BitmapsetN edge_table[BitmapsetN::SIZE];
+	BitmapsetN indexed_edge_table[BitmapsetN::SIZE];
+	BitmapsetN subtrees[BitmapsetN::SIZE];
 	int n_fk_selecs;
 	unsigned int* fk_selec_idxs;
 	float* fk_selec_sels;
 	int n_eq_classes;
 	int n_eq_class_sels;
-	RelationID* eq_classes;
+	BitmapsetN* eq_classes;
 	float* eq_class_sels;
 };
 
-GpuqoPlannerInfo* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c);
-GpuqoPlannerInfo* copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo *info);
-GpuqoPlannerInfo* deleteGpuqoPlannerInfo(GpuqoPlannerInfo *info);
+template<typename BitmapsetN>
+GpuqoPlannerInfo<BitmapsetN>* 
+convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c);
 
-gpuqo_c::QueryTree* convertQueryTree(QueryTree *info);
+template<typename BitmapsetN>
+GpuqoPlannerInfo<BitmapsetN>* 
+copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN> *info);
+
+template<typename BitmapsetN>
+GpuqoPlannerInfo<BitmapsetN>* 
+deleteGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN> *info);
+
+template<typename BitmapsetN>
+gpuqo_c::QueryTree* convertQueryTree(QueryTree<BitmapsetN> *info);
 
 #endif							/* GPUQO_PLANNER_INFO_CUH */

@@ -24,77 +24,61 @@
 #include "gpuqo_cpu_sequential.cuh"
 #include "gpuqo_cpu_dpe.cuh"
 
-void gpuqo_cpu_dpsub_init(GpuqoPlannerInfo* info, memo_t &memo, extra_t &extra){
-    // nothing to do
-}
+template<typename BitmapsetN>
+class DPsubCPUAlgorithm : public CPUAlgorithm<BitmapsetN> {
+public:
+    virtual void enumerate()
+    {
+        auto info = CPUAlgorithm<BitmapsetN>::info;
+        // first bit is zero
+        for (BitmapsetN i=1; i < BitmapsetN::nth(info->n_rels); i++){
+            BitmapsetN join_id = i << 1; // first bit is 0 in Postgres
 
-void gpuqo_cpu_dpsub_enumerate(GpuqoPlannerInfo* info, join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
+            if (!is_connected(join_id, info->edge_table))
+                continue;
 
-    // first bit is zero
-    for (RelationID i=1; i < RelationID::nth(info->n_rels); i++){
-        RelationID join_id = i << 1; // first bit is 0 in Postgres
+            BitmapsetN left_id = join_id.lowest();
+            BitmapsetN right_id;
+            while (left_id != join_id){
+                right_id = join_id - left_id;
 
-        if (!is_connected(join_id, info->edge_table))
-            continue;
+                if (!left_id.empty() && !right_id.empty()){
+                    auto memo = *CPUAlgorithm<BitmapsetN>::memo;
+                    auto left = memo.find(left_id);
+                    auto right = memo.find(right_id);
 
-        RelationID left_id = join_id.lowest();
-        RelationID right_id;
-        while (left_id != join_id){
-            right_id = join_id - left_id;
+                    if (left != memo.end() && right != memo.end()){
+                        JoinRelationCPU<BitmapsetN> *left_rel = left->second;
+                        JoinRelationCPU<BitmapsetN> *right_rel = right->second;
+                        int level = join_id.size();
 
-            if (!left_id.empty() && !right_id.empty()){
-                auto left = memo.find(left_id);
-                auto right = memo.find(right_id);
-
-                if (left != memo.end() && right != memo.end()){
-                    JoinRelationCPU *left_rel = left->second;
-                    JoinRelationCPU *right_rel = right->second;
-                    int level = join_id.size();
-
-                    join_function(level, false, *right_rel, *left_rel, info,    
-                            memo, extra, algorithm
-                    );
+                        (*CPUAlgorithm<BitmapsetN>::join)(level, false, *right_rel, *left_rel);
+                    }
                 }
-            }
 
-            left_id = nextSubset(left_id, join_id);
+                left_id = nextSubset(left_id, join_id);
+            }
         }
     }
-}
 
-bool gpuqo_cpu_dpsub_check_join(int level, JoinRelationCPU &left_rel,
-    JoinRelationCPU &right_rel, GpuqoPlannerInfo* info, 
-    memo_t &memo, extra_t extra){
+    virtual bool check_join(int level, JoinRelationCPU<BitmapsetN> &left_rel,
+        JoinRelationCPU<BitmapsetN> &right_rel)
+    {
 
-    // I do not need to check self-connectedness of the single joinrels since 
-    // if they were not connected, they wouldn't have been generated and 
-    // I would not have been able to find them in the memo
-    // I do not need to check if they connect to each other since if they 
-    // weren't, join_rel would not be self-connected but I know it is
+        // I do not need to check self-connectedness of the single joinrels since 
+        // if they were not connected, they wouldn't have been generated and 
+        // I would not have been able to find them in the memo
+        // I do not need to check if they connect to each other since if they 
+        // weren't, join_rel would not be self-connected but I know it is
 
-    Assert(is_connected(left_rel.id, info->edge_table));
-    Assert(is_connected(right_rel.id, info->edge_table));
-    Assert(are_connected(left_rel, right_rel, info));
+        auto info = CPUAlgorithm<BitmapsetN>::info;
 
-    return is_disjoint(left_rel, right_rel);
-}
-void gpuqo_cpu_dpsub_post_join(int level, bool newrel, JoinRelationCPU &join_rel, 
-                            JoinRelationCPU &left_rel, JoinRelationCPU &right_rel,
-                            GpuqoPlannerInfo* info, memo_t &memo, 
-                            extra_t extra){
-    // nothing to do
-}
+        Assert(is_connected(left_rel.id, info->edge_table));
+        Assert(is_connected(right_rel.id, info->edge_table));
+        Assert(are_connected_rel(left_rel, right_rel, info));
 
-void gpuqo_cpu_dpsub_teardown(GpuqoPlannerInfo* info, memo_t &memo, extra_t extra){
-    // nothing to do
-}
-
-DPCPUAlgorithm gpuqo_cpu_dpsub_alg = {
-    .init_function = gpuqo_cpu_dpsub_init,
-    .enumerate_function = gpuqo_cpu_dpsub_enumerate,
-    .check_join_function = gpuqo_cpu_dpsub_check_join,
-    .post_join_function = gpuqo_cpu_dpsub_post_join,
-    .teardown_function = gpuqo_cpu_dpsub_teardown
+        return is_disjoint_rel(left_rel, right_rel);
+    }
 };
 
 /* gpuqo_cpu_dpsub
@@ -102,22 +86,29 @@ DPCPUAlgorithm gpuqo_cpu_dpsub_alg = {
  *	 Sequential CPU baseline for GPU query optimization using the DP sub
  *   algorithm.
  */
-QueryTree*
-gpuqo_cpu_dpsub(GpuqoPlannerInfo* info)
+template<typename BitmapsetN>
+QueryTree<BitmapsetN>*
+gpuqo_cpu_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    return gpuqo_cpu_sequential(info, gpuqo_cpu_dpsub_alg);
+    DPsubCPUAlgorithm<BitmapsetN> alg;
+    return gpuqo_cpu_sequential(info, &alg);
 }
 
+template QueryTree<Bitmapset32>* gpuqo_cpu_dpsub<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
+template QueryTree<Bitmapset64>* gpuqo_cpu_dpsub<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);
 
 /* gpuqo_dpe_dpsub
  *
  *	 Parallel CPU baseline for GPU query optimization using the DP sub
  *   algorithm.
  */
-QueryTree*
-gpuqo_dpe_dpsub(GpuqoPlannerInfo* info)
+template<typename BitmapsetN>
+QueryTree<BitmapsetN>*
+gpuqo_dpe_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    return gpuqo_cpu_dpe(info, gpuqo_cpu_dpsub_alg);
+    DPsubCPUAlgorithm<BitmapsetN> alg;
+    return gpuqo_cpu_dpe(info, &alg);
 }
 
-
+template QueryTree<Bitmapset32>* gpuqo_dpe_dpsub<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
+template QueryTree<Bitmapset64>* gpuqo_dpe_dpsub<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);

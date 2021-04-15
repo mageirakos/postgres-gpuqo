@@ -17,32 +17,84 @@
 #include "gpuqo_filter.cuh"
 #include "gpuqo_dpsub.cuh"
 
-__device__
-static JoinRelation dpsubEnumerateTreeSimple(RelationID relid, 
-                        uint32_t cid, int n_splits,
-                        HashTableType &memo, GpuqoPlannerInfo* info)
-{
-    JoinRelation jr_out;
-    jr_out.cost = INFD;
+template<typename BitmapsetN>
+struct dpsubEnumerateTreeSimple{
+    __device__
+    JoinRelation<BitmapsetN> operator()(BitmapsetN relid, 
+                            uint32_t cid, int n_splits,
+                            HashTableDpsub<BitmapsetN> &memo, 
+                            GpuqoPlannerInfo<BitmapsetN>* info)
+    {
+        JoinRelation<BitmapsetN> jr_out;
+        jr_out.cost = INFD;
 
-    uint32_t n_possible_joins = relid.size();
+        uint32_t n_possible_joins = relid.size();
 
-    for (uint32_t i = cid; i < n_possible_joins; i += n_splits){
-        RelationID base_rel_id = expandToMask(RelationID::nth(i), relid);
-        // TODO check if I can rely on this in general...
-        RelationID permitted = relid - base_rel_id.allLower();
+        for (uint32_t i = cid; i < n_possible_joins; i += n_splits){
+            BitmapsetN base_rel_id = expandToMask(BitmapsetN::nth(i), relid);
+            // TODO check if I can rely on this in general...
+            BitmapsetN permitted = relid - base_rel_id.allLower();
 
-        LOG_DEBUG("%d %d: %u (%u)\n", 
-            blockIdx.x,
-            threadIdx.x,
-            base_rel_id.toUint(),
-            relid.toUint()
-        );
+            LOG_DEBUG("%d %d: %u (%u)\n", 
+                blockIdx.x,
+                threadIdx.x,
+                base_rel_id.toUint(),
+                relid.toUint()
+            );
 
-        RelationID l = grow(base_rel_id, permitted, info->edge_table);
-        RelationID r = relid - l;
+            BitmapsetN l = grow(base_rel_id, permitted, info->edge_table);
+            BitmapsetN r = relid - l;
 
-        if (!l.empty() && !r.empty()){
+            if (!l.empty() && !r.empty()){
+                Assert(is_connected(l, info->edge_table));
+                Assert(is_connected(r, info->edge_table));
+                Assert(is_disjoint(l, r));
+                
+                LOG_DEBUG("%d %d: %u %u (%u)\n", 
+                    blockIdx.x,
+                    threadIdx.x,
+                    l.toUint(),
+                    r.toUint(), 
+                    relid.toUint()
+                );
+
+                JoinRelation<BitmapsetN> left_rel = *memo.lookup(l);
+                JoinRelation<BitmapsetN> right_rel = *memo.lookup(r);
+                do_join(jr_out, l, left_rel, r, right_rel, info);
+                do_join(jr_out, r, right_rel, l, left_rel, info);
+            }
+        }
+
+        return jr_out;
+    }
+};
+
+
+template<typename BitmapsetN>
+struct dpsubEnumerateTreeWithSubtrees{
+    __device__
+    JoinRelation<BitmapsetN> operator()(
+                            BitmapsetN relid, 
+                            uint32_t cid, int n_splits,
+                            HashTableDpsub<BitmapsetN> &memo, 
+                            GpuqoPlannerInfo<BitmapsetN>* info)
+    { 
+        JoinRelation<BitmapsetN> jr_out;
+        jr_out.cost = INFD;
+
+        uint32_t n_possible_joins = relid.size();
+
+        for (uint32_t i = cid; i < n_possible_joins; i += n_splits){
+            BitmapsetN base_rel_id = expandToMask(BitmapsetN::nth(i), relid);
+            int base_rel_idx = base_rel_id.lowestPos()-1;
+
+            Assert(base_rel_idx < info->n_rels);
+
+            BitmapsetN S = info->subtrees[base_rel_idx] & relid;
+
+            BitmapsetN l = S;
+            BitmapsetN r = relid - S;
+
             LOG_DEBUG("%d %d: %u %u (%u)\n", 
                 blockIdx.x,
                 threadIdx.x,
@@ -51,55 +103,21 @@ static JoinRelation dpsubEnumerateTreeSimple(RelationID relid,
                 relid.toUint()
             );
 
-            JoinRelation left_rel = *memo.lookup(l);
-            JoinRelation right_rel = *memo.lookup(r);
-            do_join(jr_out, l, left_rel, r, right_rel, info);
-            do_join(jr_out, r, right_rel, l, left_rel, info);
+            if (!l.empty() && !r.empty()){
+                Assert(is_connected(l, info->edge_table));
+                Assert(is_connected(r, info->edge_table));
+                Assert(is_disjoint(l, r));
+
+                JoinRelation<BitmapsetN> left_rel = *memo.lookup(l);
+                JoinRelation<BitmapsetN> right_rel = *memo.lookup(r);
+
+                do_join(jr_out, l, left_rel, r, right_rel, info);
+                do_join(jr_out, r, right_rel, l, left_rel, info);
+            }
         }
+
+        return jr_out;
     }
-
-    return jr_out;
-}
-
-__device__
-static JoinRelation dpsubEnumerateTreeWithSubtrees(RelationID relid, 
-                        uint32_t cid, int n_splits,
-                        HashTableType &memo, GpuqoPlannerInfo* info)
-{ 
-    JoinRelation jr_out;
-    jr_out.cost = INFD;
-
-    uint32_t n_possible_joins = relid.size();
-
-    for (uint32_t i = cid; i < n_possible_joins; i += n_splits){
-        RelationID base_rel_id = expandToMask(RelationID::nth(i), relid);
-        int base_rel_idx = base_rel_id.lowestPos()-1;
-
-        Assert(base_rel_idx < info->n_rels);
-
-        RelationID S = info->subtrees[base_rel_idx] & relid;
-
-        RelationID l = S;
-        RelationID r = relid - S;
-
-        LOG_DEBUG("%d %d: %u %u (%u)\n", 
-            blockIdx.x,
-            threadIdx.x,
-            l.toUint(),
-            r.toUint(), 
-            relid.toUint()
-        );
-
-        if (!l.empty() && !r.empty()){
-            JoinRelation left_rel = *memo.lookup(l);
-            JoinRelation right_rel = *memo.lookup(r);
-
-            do_join(jr_out, l, left_rel, r, right_rel, info);
-            do_join(jr_out, r, right_rel, l, left_rel, info);
-        }
-    }
-
-    return jr_out;
-}
+};
 
 #endif              // GPUQO_DPSUB_ENUM_TREE_CUH

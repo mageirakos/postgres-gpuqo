@@ -23,59 +23,82 @@
 #include "gpuqo_cost.cuh"
 #include "gpuqo_filter.cuh"
 
-struct JoinRelationCPU : public JoinRelationDetailed{
-	struct JoinRelationCPU* left_rel_ptr;
-	struct JoinRelationCPU* right_rel_ptr;
+template<typename BitmapsetN>
+struct JoinRelationCPU : public JoinRelationDetailed<BitmapsetN>{
+	struct JoinRelationCPU<BitmapsetN>* left_rel_ptr;
+	struct JoinRelationCPU<BitmapsetN>* right_rel_ptr;
 #ifdef USE_ASSERT_CHECKING
 	bool referenced;
 #endif
 };
 
-typedef std::vector< std::list<JoinRelationCPU*> > vector_list_t;
-typedef std::unordered_map<RelationID, JoinRelationCPU*> memo_t;
+template<typename BitmapsetN>
+using vector_list_t = std::vector< std::list<JoinRelationCPU<BitmapsetN>*> >;
 
-typedef struct extra_t{
-	// algorithm extras 
-	void* alg;
+template<typename BitmapsetN>
+using memo_t = std::unordered_map<BitmapsetN, JoinRelationCPU<BitmapsetN>*>;
 
-	// implementation extras (e.g. depbuf in DPE)
-	void* impl;
-} extra_t;
+// forward declaration
+template<typename BitmapsetN>
+class CPUAlgorithm;
 
-struct DPCPUAlgorithm;
+template<typename BitmapsetN>
+class CPUJoinFunction {
+protected:
+	GpuqoPlannerInfo<BitmapsetN>* info;
+	memo_t<BitmapsetN>* memo;
+	CPUAlgorithm<BitmapsetN>* alg;
+public:
+	CPUJoinFunction() {}
 
-typedef void (*join_f)(int level, bool try_swap, JoinRelationCPU &left_rel,
-					JoinRelationCPU &right_rel, GpuqoPlannerInfo* info, 
-					memo_t &memo, extra_t extra, 
-					struct DPCPUAlgorithm algorithm);
-typedef bool (*check_join_f)(int level, JoinRelationCPU &left_rel,
- 					JoinRelationCPU &right_rel, GpuqoPlannerInfo* info, 
-					memo_t &memo, extra_t extra);
-typedef void (*post_join_f)(int level,  bool new_rel, JoinRelationCPU &join_rel,
-					JoinRelationCPU &left_rel, JoinRelationCPU &right_rel,
-					GpuqoPlannerInfo* info, memo_t &memo, extra_t extra);
-typedef void (*enumerate_f)(GpuqoPlannerInfo* info, join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm);
-typedef void (*init_f)(GpuqoPlannerInfo* info, memo_t &memo, extra_t &extra);
-typedef void (*teardown_f)(GpuqoPlannerInfo* info, memo_t &memo, extra_t extra);
+	CPUJoinFunction(GpuqoPlannerInfo<BitmapsetN>* _info, 
+					memo_t<BitmapsetN>* _memo, CPUAlgorithm<BitmapsetN>* _alg) 
+		: info(_info), memo(_memo), alg(_alg) {}
+	
+	virtual void operator()(int level, bool try_swap, 
+		JoinRelationCPU<BitmapsetN> &left_rel,
+		JoinRelationCPU<BitmapsetN> &right_rel) {}
+};
 
-typedef struct DPCPUAlgorithm{
-	init_f init_function;
-	enumerate_f enumerate_function;
-	check_join_f check_join_function;
-	post_join_f post_join_function;
-	teardown_f teardown_function;
-} DPCPUAlgorithm;
+template<typename BitmapsetN>
+class CPUAlgorithm{
+protected:
+	GpuqoPlannerInfo<BitmapsetN>* info;
+	memo_t<BitmapsetN>* memo;
+	CPUJoinFunction<BitmapsetN> *join;
+public:
+	virtual void init(GpuqoPlannerInfo<BitmapsetN>* _info, 
+					memo_t<BitmapsetN>* _memo,
+					CPUJoinFunction<BitmapsetN> *_join)
+	{
+		info = _info;
+		memo = _memo;
+		join = _join;
+	}
 
-extern void build_query_tree(JoinRelationCPU *jr, memo_t &memo, QueryTree **qt);
+	virtual bool check_join(int level, JoinRelationCPU<BitmapsetN> &left_rel,
+			JoinRelationCPU<BitmapsetN> &right_rel) {return true;}
 
-template<typename T>
-T* build_join_relation(T &left_rel,T &right_rel);
+	virtual void post_join(int level,  bool new_rel, 		
+		   JoinRelationCPU<BitmapsetN> &join_rel,
+		   JoinRelationCPU<BitmapsetN> &left_rel, 
+		   JoinRelationCPU<BitmapsetN> &right_rel) {}
 
-template<typename T>
-T* make_join_relation(T &left_rel,T &right_rel, GpuqoPlannerInfo* info);
+	virtual void enumerate() {}
+};
 
-template<typename T>
-bool do_join(int level, T* &join_rel, T &left_rel, T &right_rel, 
-            GpuqoPlannerInfo* info, memo_t &memo, extra_t extra);
+template<typename BitmapsetN>
+extern void build_query_tree(JoinRelationCPU<BitmapsetN> *jr,
+						memo_t<BitmapsetN> &memo, QueryTree<BitmapsetN> **qt);
+
+template<typename JR>
+JR* build_join_relation(JR &left_rel, JR &right_rel);
+
+template<typename BitmapsetN, typename JR>
+JR* make_join_relation(JR &left_rel, JR &right_rel, GpuqoPlannerInfo<BitmapsetN>* info);
+
+template<typename BitmapsetN, typename JR>
+bool do_join(int level, JR* &join_rel, JR &left_rel, JR &right_rel, 
+            GpuqoPlannerInfo<BitmapsetN>* info, memo_t<BitmapsetN> &memo);
 
 #endif							/* GPUQO_CPU_COMMON_CUH */

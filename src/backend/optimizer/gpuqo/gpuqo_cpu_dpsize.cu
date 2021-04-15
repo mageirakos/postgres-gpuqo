@@ -24,74 +24,69 @@
 #include "gpuqo_cpu_sequential.cuh"
 #include "gpuqo_cpu_dpe.cuh"
 
-struct GpuqoCPUDPSizeExtra{
-    vector_list_t rels_per_level;
+template<typename BitmapsetN>
+class DPsizeCPUAlgorithm : public CPUAlgorithm<BitmapsetN> {
+private:
 
-    GpuqoCPUDPSizeExtra(int n_rels) : rels_per_level(n_rels+1) {}
-};
+    vector_list_t<BitmapsetN> rels_per_level;
 
-void gpuqo_cpu_dpsize_init(GpuqoPlannerInfo* info, memo_t &memo, extra_t &extra){
-    extra.alg = (void*) new GpuqoCPUDPSizeExtra(info->n_rels);
-    struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) extra.alg;
+public:
 
-    for(auto iter = memo.begin(); iter != memo.end(); ++iter){
-        mExtra->rels_per_level[1].push_back(iter->second);
-    }
-}
+    virtual void init(GpuqoPlannerInfo<BitmapsetN>* _info, 
+        memo_t<BitmapsetN>* _memo,
+        CPUJoinFunction<BitmapsetN> *_join)
+    {
+        CPUAlgorithm<BitmapsetN>::init(_info, _memo, _join);
 
-void gpuqo_cpu_dpsize_enumerate(GpuqoPlannerInfo* info, join_f join_function, memo_t &memo, extra_t extra, struct DPCPUAlgorithm algorithm){
-    struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) extra.alg;
+        rels_per_level = vector_list_t<BitmapsetN>(CPUAlgorithm<BitmapsetN>::info->n_rels+1);
 
-    DECLARE_TIMING(iteration);
+        auto &memo = *CPUAlgorithm<BitmapsetN>::memo;
 
-    for (int join_s=2; join_s<=info->n_rels; join_s++){
-        LOG_PROFILE("\nStarting iteration %d\n", join_s);
-        START_TIMING(iteration);
-        for (int big_s = join_s-1; big_s >= (join_s+1)/2; big_s--){
-            int small_s = join_s-big_s;
-            for (auto big_i = mExtra->rels_per_level[big_s].begin(); 
-                    big_i != mExtra->rels_per_level[big_s].end(); ++big_i){
-                for (auto small_i = mExtra->rels_per_level[small_s].begin(); 
-                        small_i != mExtra->rels_per_level[small_s].end(); ++small_i){
-                    join_function(join_s, true, **big_i, **small_i, 
-                        info, memo, extra, algorithm
-                    );
-                }
-            } 
+        for(auto iter = memo.begin(); iter != memo.end(); ++iter){
+            rels_per_level[1].push_back(iter->second);
         }
-        STOP_TIMING(iteration);
-        PRINT_TIMING(iteration);
     }
 
-}
+    virtual void enumerate(){
+        DECLARE_TIMING(iteration);
 
-bool gpuqo_cpu_dpsize_check_join(int level, JoinRelationCPU &left_rel,             
-                            JoinRelationCPU &right_rel, GpuqoPlannerInfo* info,
-                            memo_t &memo, extra_t extra){
+        GpuqoPlannerInfo<BitmapsetN>* info = CPUAlgorithm<BitmapsetN>::info;
 
-    return (is_disjoint(left_rel, right_rel) 
-        && are_connected(left_rel, right_rel, info));
-}
+        for (int join_s=2; join_s<=info->n_rels; join_s++){
+            LOG_PROFILE("\nStarting iteration %d\n", join_s);
+            START_TIMING(iteration);
+            for (int big_s = join_s-1; big_s >= (join_s+1)/2; big_s--){
+                int small_s = join_s-big_s;
+                for (auto big_i = rels_per_level[big_s].begin(); 
+                        big_i != rels_per_level[big_s].end(); ++big_i){
+                    for (auto small_i = rels_per_level[small_s].begin(); 
+                             small_i != rels_per_level[small_s].end(); ++small_i){
+                        (*CPUAlgorithm<BitmapsetN>::join)(join_s, true, **big_i, **small_i);
+                    }
+                } 
+            }
+            STOP_TIMING(iteration);
+            PRINT_TIMING(iteration);
+        }
 
-void gpuqo_cpu_dpsize_post_join(int level, bool newrel, JoinRelationCPU &join_rel, 
-                            JoinRelationCPU &left_rel, JoinRelationCPU &right_rel,
-                            GpuqoPlannerInfo* info, memo_t &memo, 
-                            extra_t extra){
-    struct GpuqoCPUDPSizeExtra* mExtra = (struct GpuqoCPUDPSizeExtra*) extra.alg;
-    if (newrel)
-        mExtra->rels_per_level[level].push_back(&join_rel);
-}
+    }
 
-void gpuqo_cpu_dpsize_teardown(GpuqoPlannerInfo* info, memo_t &memo, extra_t extra){
-    delete ((struct GpuqoCPUDPSizeExtra*) extra.alg);
-}
+    virtual bool check_join(int level, 
+                    JoinRelationCPU<BitmapsetN> &left_rel,             
+                    JoinRelationCPU<BitmapsetN> &right_rel)
+    {
+        return (is_disjoint_rel(left_rel, right_rel) 
+            && are_connected_rel(left_rel, right_rel, CPUAlgorithm<BitmapsetN>::info));
+    }
 
-DPCPUAlgorithm gpuqo_cpu_dpsize_alg = {
-    .init_function = gpuqo_cpu_dpsize_init,
-    .enumerate_function = gpuqo_cpu_dpsize_enumerate,
-    .check_join_function = gpuqo_cpu_dpsize_check_join,
-    .post_join_function = gpuqo_cpu_dpsize_post_join,
-    .teardown_function = gpuqo_cpu_dpsize_teardown
+    virtual void post_join(int level, bool newrel, 
+                JoinRelationCPU<BitmapsetN> &join_rel, 
+                JoinRelationCPU<BitmapsetN> &left_rel, 
+                JoinRelationCPU<BitmapsetN> &right_rel)
+    {
+        if (newrel)
+            rels_per_level[level].push_back(&join_rel);
+    }
 };
 
 /* gpuqo_cpu_dpsize
@@ -99,21 +94,30 @@ DPCPUAlgorithm gpuqo_cpu_dpsize_alg = {
  *	 Sequential CPU baseline for GPU query optimization using the DP size
  *   algorithm.
  */
-QueryTree*
-gpuqo_cpu_dpsize(GpuqoPlannerInfo* info)
+template<typename BitmapsetN>
+QueryTree<BitmapsetN>*
+gpuqo_cpu_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    return gpuqo_cpu_sequential(info, gpuqo_cpu_dpsize_alg);
+    DPsizeCPUAlgorithm<BitmapsetN> alg;
+    return gpuqo_cpu_sequential(info, &alg);
 }
+
+template QueryTree<Bitmapset32>* gpuqo_cpu_dpsize<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
+template QueryTree<Bitmapset64>* gpuqo_cpu_dpsize<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);
 
 /* gpuqo_cpu_dpsize
  *
  *	 Parallel CPU baseline for GPU query optimization using the DP size
  *   algorithm.
  */
-QueryTree*
-gpuqo_dpe_dpsize(GpuqoPlannerInfo* info)
+template<typename BitmapsetN>
+QueryTree<BitmapsetN>*
+gpuqo_dpe_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    return gpuqo_cpu_dpe(info, gpuqo_cpu_dpsize_alg);
+    DPsizeCPUAlgorithm<BitmapsetN> alg;
+    return gpuqo_cpu_dpe(info, &alg);
 }
 
+template QueryTree<Bitmapset32>* gpuqo_dpe_dpsize<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
+template QueryTree<Bitmapset64>* gpuqo_dpe_dpsize<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);
 

@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * gpuqo_query_tree.cuh
- *	  declaration of QueryTree-related functions used in cu files
+ *	  declaration of QueryTree<BitmapsetN>-related functions used in cu files
  * 
  * src/include/optimizer/gpuqo_query_tree.cuh
  *
@@ -15,25 +15,12 @@
 #include "gpuqo.cuh"
 #include "gpuqo_hashtable.cuh"
 
-
-template <typename T, typename Container, typename idx_t>
-static
-T buildQueryTree_get(Container v, idx_t idx){
-    return v[idx];
-}
-
-template<> 
-JoinRelation buildQueryTree_get(HashTableType ht, RelationID idx){
-    return ht.get(idx);
-}
-
-
-template <typename Container>
-void dpsize_buildQueryTree(RelationID::type idx, Container &gpu_memo_vals, QueryTree **qt)
+template <typename BitmapsetN, typename Container>
+void dpsize_buildQueryTree(uint_t<BitmapsetN> idx, Container &gpu_memo_vals, QueryTree<BitmapsetN> **qt)
 {
-    JoinRelationDpsize jr = buildQueryTree_get<JoinRelationDpsize, Container, RelationID::type>(gpu_memo_vals, idx);
+    JoinRelationDpsize<BitmapsetN> jr = gpu_memo_vals[idx];
 
-    (*qt) = (QueryTree*) malloc(sizeof(QueryTree));
+    (*qt) = (QueryTree<BitmapsetN>*) malloc(sizeof(QueryTree<BitmapsetN>));
     (*qt)->id = jr.id;
     (*qt)->left = NULL;
     (*qt)->right = NULL;
@@ -50,16 +37,16 @@ void dpsize_buildQueryTree(RelationID::type idx, Container &gpu_memo_vals, Query
         return;
     }
 
-    dpsize_buildQueryTree<Container>(jr.left_rel_idx, gpu_memo_vals, &((*qt)->left));
-    dpsize_buildQueryTree<Container>(jr.right_rel_idx, gpu_memo_vals, &((*qt)->right));
+    dpsize_buildQueryTree<BitmapsetN, Container>(jr.left_rel_idx, gpu_memo_vals, &((*qt)->left));
+    dpsize_buildQueryTree<BitmapsetN, Container>(jr.right_rel_idx, gpu_memo_vals, &((*qt)->right));
 }
 
-template <typename Container>
-void dpsub_buildQueryTree(RelationID id, Container &gpu_memo_vals, QueryTree **qt)
+template <typename BitmapsetN, typename Container>
+void dpsub_buildQueryTree(BitmapsetN id, Container &gpu_memo_vals, QueryTree<BitmapsetN> **qt)
 {
-    JoinRelation jr = buildQueryTree_get<JoinRelation, Container, RelationID>(gpu_memo_vals, id);
+    JoinRelation<BitmapsetN> jr = gpu_memo_vals.get(id);
 
-    (*qt) = (QueryTree*) malloc(sizeof(QueryTree));
+    (*qt) = (QueryTree<BitmapsetN>*) malloc(sizeof(QueryTree<BitmapsetN>));
     (*qt)->id = id;
     (*qt)->left = NULL;
     (*qt)->right = NULL;
@@ -76,8 +63,8 @@ void dpsub_buildQueryTree(RelationID id, Container &gpu_memo_vals, QueryTree **q
         return;
     }
 
-    dpsub_buildQueryTree<Container>(jr.left_rel_id, gpu_memo_vals, &((*qt)->left));
-    dpsub_buildQueryTree<Container>(jr.right_rel_id, gpu_memo_vals, &((*qt)->right));
+    dpsub_buildQueryTree<BitmapsetN, Container>(jr.left_rel_id, gpu_memo_vals, &((*qt)->left));
+    dpsub_buildQueryTree<BitmapsetN, Container>(jr.right_rel_id, gpu_memo_vals, &((*qt)->right));
 }
 
 #endif							/* GPUQO_QUERY_TREE_CUH */

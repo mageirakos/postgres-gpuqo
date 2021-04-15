@@ -26,48 +26,60 @@
 #define W_OFFSET WARP_ID
 #define LANE_MASK_LE (WARP_MASK >> (WARP_SIZE-1-LANE_ID))
 
-typedef RelationID join_stack_elem_t;
-
 template <typename stack_elem_t>
 struct ccc_stack_t{
     volatile stack_elem_t* ctxStack;
     int stackTop;
 };
 
-typedef struct ccc_stack_t<join_stack_elem_t> join_stack_t;
-
-typedef struct dpsub_iter_param_t{
-    GpuqoPlannerInfo* info;
-    GpuqoPlannerInfo* gpu_info;
-    RelationID out_relid;
-    HashTableType* memo;
-    thrust::host_vector<RelationID::type> binoms;
-    thrust::device_vector<RelationID::type> gpu_binoms;
-    uninit_device_vector<RelationID> gpu_pending_keys;
-    uninit_device_vector<RelationID> gpu_scratchpad_keys;
-    uninit_device_vector<JoinRelation> gpu_scratchpad_vals;
-    uninit_device_vector<RelationID> gpu_reduced_keys;
-    uninit_device_vector<JoinRelation> gpu_reduced_vals;
+template<typename BitmapsetN>
+struct dpsub_iter_param_t{
+    GpuqoPlannerInfo<BitmapsetN>* info;
+    GpuqoPlannerInfo<BitmapsetN>* gpu_info;
+    BitmapsetN out_relid;
+    HashTableDpsub<BitmapsetN>* memo;
+    thrust::host_vector<uint_t<BitmapsetN> > binoms;
+    thrust::device_vector<uint_t<BitmapsetN> > gpu_binoms;
+    uninit_device_vector<BitmapsetN> gpu_pending_keys;
+    uninit_device_vector<BitmapsetN> gpu_scratchpad_keys;
+    uninit_device_vector<JoinRelation<BitmapsetN> > gpu_scratchpad_vals;
+    uninit_device_vector<BitmapsetN> gpu_reduced_keys;
+    uninit_device_vector<JoinRelation<BitmapsetN> > gpu_reduced_vals;
     uint64_t n_sets;
     uint64_t n_joins_per_set;
     uint64_t tot;
     uint32_t scratchpad_size;
-} dpsub_iter_param_t;
+};
 
-typedef thrust::pair<uninit_device_vector<RelationID>::iterator, uninit_device_vector<JoinRelation>::iterator> scatter_iter_t;
+template<typename BitmapsetN>
+using scatter_iter_t =  thrust::pair<typename uninit_device_vector<BitmapsetN>::iterator, typename uninit_device_vector<JoinRelation<BitmapsetN> >::iterator>;
 
-typedef thrust::binary_function<RelationID, RelationID::type, JoinRelation> pairs_enum_func_t;
+template<typename BitmapsetN>
+using pairs_enum_func_t = thrust::binary_function<BitmapsetN, uint_t<BitmapsetN>, JoinRelation<BitmapsetN> >;
 
-int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t &params);
-int dpsub_filtered_iteration(int iter, dpsub_iter_param_t &params);
+template<typename BitmapsetN>
+int dpsub_unfiltered_iteration(int iter, dpsub_iter_param_t<BitmapsetN> &params);
 
-void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t &params);
-void dpsub_scatter(scatter_iter_t scatter_from_iters, 
-                scatter_iter_t scatter_to_iters, dpsub_iter_param_t &params);
-void dpsub_scatter(int n_sets, dpsub_iter_param_t &params);
+template<typename BitmapsetN>
+int dpsub_filtered_iteration(int iter, dpsub_iter_param_t<BitmapsetN> &params);
 
-typedef JoinRelation (*dpsub_filtered_evaluate_t)(RelationID, uint32_t, int, 
-    HashTableType&, GpuqoPlannerInfo*);
+template<typename BitmapsetN>
+void dpsub_prune_scatter(int threads_per_set, int n_threads, 
+                            dpsub_iter_param_t<BitmapsetN> &params);
+
+template<typename BitmapsetN>
+void dpsub_scatter(scatter_iter_t<BitmapsetN> scatter_from_iters, 
+                scatter_iter_t<BitmapsetN> scatter_to_iters,
+                dpsub_iter_param_t<BitmapsetN> &params);
+
+template<typename BitmapsetN>
+void dpsub_scatter(int n_sets, dpsub_iter_param_t<BitmapsetN> &params);
+
+template<typename BitmapsetN>
+using dpsub_filtered_evaluate_t = JoinRelation<BitmapsetN> (*)(
+                                    BitmapsetN, uint32_t, int, 
+                                    HashTableDpsub<BitmapsetN>&, 
+                                    GpuqoPlannerInfo<BitmapsetN>*);
 
 EXTERN_PROTOTYPE_TIMING(unrank);
 EXTERN_PROTOTYPE_TIMING(filter);
@@ -81,14 +93,15 @@ EXTERN_PROTOTYPE_TIMING(iteration);
  *
  * Note: the unranked sets are in lexicographical order
  */
+template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-RelationID dpsub_unrank_sid(RelationID::type sid, uint32_t qss, uint32_t sq, RelationID::type* binoms){
-    RelationID s = RelationID::nth(sq).allLower();
+BitmapsetN dpsub_unrank_sid(uint_t<BitmapsetN> sid, uint32_t qss, uint32_t sq, uint_t<BitmapsetN>* binoms){
+    BitmapsetN s = BitmapsetN::nth(sq).allLower();
     int qss_tmp = qss, sq_tmp = sq;
 
     while (sq_tmp > 0 && sq_tmp > qss_tmp){
-        RelationID::type o = BINOM(binoms, sq, sq_tmp-1, sq_tmp-qss_tmp-1);
+        uint_t<BitmapsetN> o = BINOM(binoms, sq, sq_tmp-1, sq_tmp-qss_tmp-1);
         if (sid < o){
             s.unset(sq_tmp-1);
         } else {
@@ -106,17 +119,18 @@ RelationID dpsub_unrank_sid(RelationID::type sid, uint32_t qss, uint32_t sq, Rel
  *
  * https://graphics.stanford.edu/~seander/bithacks.html#NextBitPermutation
  */
+ template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
-RelationID dpsub_unrank_next(RelationID v){
+BitmapsetN dpsub_unrank_next(BitmapsetN v){
     return v.nextPermutation();
 }
 
-template<bool CHECK_LEFT, bool CHECK_RIGHT>
+template<typename BitmapsetN, bool CHECK_LEFT, bool CHECK_RIGHT>
 __device__
 __forceinline__
-bool check_join(RelationID left_id, RelationID right_id, 
-                GpuqoPlannerInfo* info) {
+bool check_join(BitmapsetN left_id, BitmapsetN right_id, 
+                GpuqoPlannerInfo<BitmapsetN>* info) {
     // make sure those subsets are valid
     if ((!CHECK_LEFT || is_connected(left_id, info->edge_table)) 
         && (!CHECK_RIGHT || is_connected(right_id, info->edge_table))
@@ -143,12 +157,13 @@ bool check_join(RelationID left_id, RelationID right_id,
     }
 }
 
+template<typename BitmapsetN>
 __device__
 __forceinline__
-void do_join(JoinRelation &jr_out, 
-             RelationID left_rel_id, JoinRelation &left_rel, 
-             RelationID right_rel_id, JoinRelation &right_rel, 
-             GpuqoPlannerInfo* info) {
+void do_join(JoinRelation<BitmapsetN> &jr_out, 
+             BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel, 
+             BitmapsetN right_rel_id, JoinRelation<BitmapsetN> &right_rel, 
+             GpuqoPlannerInfo<BitmapsetN>* info) {
     LOG_DEBUG("[%3d,%3d] Joining %u and %u (%u)\n", 
                 blockIdx.x, threadIdx.x,
                 left_rel_id.toUint(), right_rel_id.toUint(),
@@ -168,22 +183,21 @@ void do_join(JoinRelation &jr_out,
     }
 }
 
-template<bool CHECK_LEFT, bool CHECK_RIGHT>
+template<typename BitmapsetN, bool CHECK_LEFT, bool CHECK_RIGHT>
 __device__
-void try_join(RelationID jr, JoinRelation &jr_out, RelationID l, RelationID r, 
-                bool additional_predicate, join_stack_t &stack, 
-                HashTableType &memo, GpuqoPlannerInfo* info)
+void try_join(BitmapsetN jr, JoinRelation<BitmapsetN> &jr_out, 
+                BitmapsetN l, BitmapsetN r, 
+                bool additional_predicate, ccc_stack_t<BitmapsetN> &stack, 
+                HashTableDpsub<BitmapsetN> &memo, 
+                GpuqoPlannerInfo<BitmapsetN>* info)
 {
     LOG_DEBUG("[%d, %d] try_join(%u, %u, %s)\n", 
                 blockIdx.x, threadIdx.x, l.toUint(), r.toUint(),
                 additional_predicate ? "true" : "false");
 
     bool p;
-    if (CHECK_LEFT || CHECK_RIGHT){
-        p = additional_predicate && check_join<CHECK_LEFT, CHECK_RIGHT>(l, r, info);
-    } else {
-        p = additional_predicate;
-    }
+    p = additional_predicate && 
+            check_join<BitmapsetN, CHECK_LEFT, CHECK_RIGHT>(l, r, info);
 
     Assert(__activemask() == WARP_MASK);
 
@@ -210,8 +224,8 @@ void try_join(RelationID jr, JoinRelation &jr_out, RelationID l, RelationID r,
 
         Assert(!l.empty() && !r.empty());
 
-        JoinRelation left_rel = *memo.lookup(l);
-        JoinRelation right_rel = *memo.lookup(r);
+        JoinRelation<BitmapsetN> left_rel = *memo.lookup(l);
+        JoinRelation<BitmapsetN> right_rel = *memo.lookup(r);
         do_join(jr_out, l, left_rel, r, right_rel, info);
 
     } else{

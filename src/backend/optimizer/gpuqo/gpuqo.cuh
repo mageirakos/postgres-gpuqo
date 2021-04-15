@@ -43,22 +43,44 @@ do { \
 template<typename T>
 using uninit_device_vector = thrust::device_vector<T, uninitialized_allocator<T> >;
 
-extern QueryTree* gpuqo_dpsize(GpuqoPlannerInfo* info);
-extern QueryTree* gpuqo_dpsub(GpuqoPlannerInfo* info);
-extern QueryTree* gpuqo_cpu_dpsize(GpuqoPlannerInfo* info);
-extern QueryTree* gpuqo_cpu_dpsub(GpuqoPlannerInfo* info);
-extern QueryTree* gpuqo_cpu_dpccp(GpuqoPlannerInfo* info);
-extern QueryTree* gpuqo_dpe_dpsize(GpuqoPlannerInfo* info);
-extern QueryTree* gpuqo_dpe_dpsub(GpuqoPlannerInfo* info);
-extern QueryTree* gpuqo_dpe_dpccp(GpuqoPlannerInfo* info);
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info);
 
-extern void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlannerInfo* info);
-extern RelationID remap_relid(RelationID id, int *remap_table);
-extern void remapEdgeTable(EdgeMask* edge_table, int n, int* remap_table);
-extern void remapPlannerInfo(GpuqoPlannerInfo* info, int* remap_table);
-extern void remapQueryTree(QueryTree* qt, int* remap_table);
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info);
 
-extern void minimumSpanningTree(GpuqoPlannerInfo *info);
-extern void buildSubTrees(RelationID* subtrees, GpuqoPlannerInfo *info);
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_cpu_dpsize(GpuqoPlannerInfo<BitmapsetN>* info);
+
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_cpu_dpsub(GpuqoPlannerInfo<BitmapsetN>* info);
+
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_cpu_dpccp(GpuqoPlannerInfo<BitmapsetN>* info);
+
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_dpe_dpsize(GpuqoPlannerInfo<BitmapsetN>* info);
+
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_dpe_dpsub(GpuqoPlannerInfo<BitmapsetN>* info);
+
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_dpe_dpccp(GpuqoPlannerInfo<BitmapsetN>* info);
+
+
+template<typename BitmapsetN>
+extern void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlannerInfo<BitmapsetN>* info);
+
+template<typename BitmapsetN>
+extern void remapPlannerInfo(GpuqoPlannerInfo<BitmapsetN>* info, int* remap_table);
+
+template<typename BitmapsetN>
+extern void remapQueryTree(QueryTree<BitmapsetN>* qt, int* remap_table);
+
+template<typename BitmapsetN>
+extern void minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info);
+
+template<typename BitmapsetN>
+extern void buildSubTrees(BitmapsetN* subtrees, GpuqoPlannerInfo<BitmapsetN> *info);
 
 #endif							/* GPUQO_CUH */

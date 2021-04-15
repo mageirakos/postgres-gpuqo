@@ -44,12 +44,13 @@ PROTOTYPE_TIMING(iteration);
 // User-configured option
 int gpuqo_n_parallel;
 
-void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t &params){
+template<typename BitmapsetN>
+void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t<BitmapsetN> &params){
     // give possibility to user to interrupt
     CHECK_FOR_INTERRUPTS();
 
-    scatter_iter_t scatter_from_iters;
-    scatter_iter_t scatter_to_iters;
+    scatter_iter_t<BitmapsetN> scatter_from_iters;
+    scatter_iter_t<BitmapsetN> scatter_to_iters;
 
     if (threads_per_set != 1){
         START_TIMING(prune);
@@ -64,8 +65,8 @@ void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t 
             params.gpu_scratchpad_vals.begin(),
             params.gpu_reduced_keys.begin(),
             params.gpu_reduced_vals.begin(),
-            thrust::equal_to<RelationID>(),
-            thrust::minimum<JoinRelation>()
+            thrust::equal_to<BitmapsetN>(),
+            thrust::minimum<JoinRelation<BitmapsetN> >()
         );
         STOP_TIMING(prune);
     } else{
@@ -86,12 +87,16 @@ void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t 
     dpsub_scatter(scatter_from_iters, scatter_to_iters, params);
 }
 
-void dpsub_scatter(int n_sets, dpsub_iter_param_t &params){
+template void dpsub_prune_scatter<Bitmapset32>(int, int, dpsub_iter_param_t<Bitmapset32>&);
+template void dpsub_prune_scatter<Bitmapset64>(int, int, dpsub_iter_param_t<Bitmapset64>&);
+
+template<typename BitmapsetN>
+void dpsub_scatter(int n_sets, dpsub_iter_param_t<BitmapsetN> &params){
     // give possibility to user to interrupt
     CHECK_FOR_INTERRUPTS();
 
-    scatter_iter_t scatter_from_iters;
-    scatter_iter_t scatter_to_iters;
+    scatter_iter_t<BitmapsetN> scatter_from_iters;
+    scatter_iter_t<BitmapsetN> scatter_to_iters;
 
 
     scatter_from_iters = thrust::make_pair(
@@ -109,7 +114,13 @@ void dpsub_scatter(int n_sets, dpsub_iter_param_t &params){
     dpsub_scatter(scatter_from_iters, scatter_to_iters, params);
 }
 
-void dpsub_scatter(scatter_iter_t scatter_from_iters, scatter_iter_t scatter_to_iters, dpsub_iter_param_t &params){
+template void dpsub_scatter<Bitmapset32>(int, dpsub_iter_param_t<Bitmapset32>&);
+template void dpsub_scatter<Bitmapset64>(int, dpsub_iter_param_t<Bitmapset64>&);
+
+template<typename BitmapsetN>
+void dpsub_scatter(scatter_iter_t<BitmapsetN> scatter_from_iters, 
+                   scatter_iter_t<BitmapsetN> scatter_to_iters, 
+                   dpsub_iter_param_t<BitmapsetN> &params){
     // give possibility to user to interrupt
     CHECK_FOR_INTERRUPTS();
 
@@ -125,12 +136,16 @@ void dpsub_scatter(scatter_iter_t scatter_from_iters, scatter_iter_t scatter_to_
     STOP_TIMING(scatter);
 }
 
+template void dpsub_scatter<Bitmapset32>(scatter_iter_t<Bitmapset32>,scatter_iter_t<Bitmapset32>, dpsub_iter_param_t<Bitmapset32>&);
+template void dpsub_scatter<Bitmapset64>(scatter_iter_t<Bitmapset64>,scatter_iter_t<Bitmapset64>, dpsub_iter_param_t<Bitmapset64>&);
+
 /* gpuqo_dpsub
  *
  *	 GPU query optimization using the DP size variant.
  */
-QueryTree*
-gpuqo_dpsub(GpuqoPlannerInfo* info)
+template<typename BitmapsetN>
+QueryTree<BitmapsetN>*
+gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
 {
     DECLARE_TIMING(gpuqo_dpsub);
     DECLARE_NV_TIMING(init);
@@ -139,28 +154,29 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     START_TIMING(gpuqo_dpsub);
     START_TIMING(init);
 
-    size_t min_memo_cap = (size_t) gpuqo_min_memo_size_mb * MB / sizeof(JoinRelation);
-    size_t max_memo_cap = (size_t) gpuqo_max_memo_size_mb * MB / sizeof(JoinRelation);
+    size_t entry_size = sizeof(JoinRelation<BitmapsetN>)+sizeof(BitmapsetN);
+    size_t min_memo_cap = (size_t) gpuqo_min_memo_size_mb * MB / entry_size;
+    size_t max_memo_cap = (size_t) gpuqo_max_memo_size_mb * MB / entry_size;
     size_t req_memo_size = 1ULL<<(info->n_rels);
 
     size_t memo_cap = std::min(req_memo_size*2, min_memo_cap);
 
-    dpsub_iter_param_t params;
+    dpsub_iter_param_t<BitmapsetN> params;
     params.info = info;
-    params.gpu_info = copyToDeviceGpuqoPlannerInfo(info);
-    params.memo = new HashTableType(memo_cap, max_memo_cap);
-    thrust::host_vector<RelationID> ini_memo_keys(info->n_rels+1);
-    thrust::host_vector<JoinRelation> ini_memo_vals(info->n_rels+1);
-    thrust::device_vector<RelationID> ini_memo_keys_gpu(info->n_rels+1);
-    thrust::device_vector<JoinRelation> ini_memo_vals_gpu(info->n_rels+1);
+    params.gpu_info = copyToDeviceGpuqoPlannerInfo<BitmapsetN>(info);
+    params.memo = new HashTableDpsub<BitmapsetN>(memo_cap, max_memo_cap);
+    thrust::host_vector<BitmapsetN> ini_memo_keys(info->n_rels+1);
+    thrust::host_vector<JoinRelation<BitmapsetN>> ini_memo_vals(info->n_rels+1);
+    thrust::device_vector<BitmapsetN> ini_memo_keys_gpu(info->n_rels+1);
+    thrust::device_vector<JoinRelation<BitmapsetN>> ini_memo_vals_gpu(info->n_rels+1);
 
-    QueryTree* out = NULL;
-    params.out_relid = RelationID(0);
+    QueryTree<BitmapsetN>* out = NULL;
+    params.out_relid = BitmapsetN(0);
 
     for(int i=0; i<info->n_rels; i++){
-        JoinRelation t;
-        t.left_rel_id = RelationID(0); 
-        t.left_rel_id = RelationID(0); 
+        JoinRelation<BitmapsetN> t;
+        t.left_rel_id = BitmapsetN(0); 
+        t.left_rel_id = BitmapsetN(0); 
         t.cost = baserel_cost(info->base_rels[i]); 
         t.rows = info->base_rels[i].rows; 
         ini_memo_keys[i] = info->base_rels[i].id;
@@ -170,9 +186,9 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     }
     
     // add dummy relation
-    JoinRelation dummy_jr;
-	dummy_jr.left_rel_id = RelationID(0);
-	dummy_jr.right_rel_id = RelationID(0);
+    JoinRelation<BitmapsetN> dummy_jr;
+	dummy_jr.left_rel_id = BitmapsetN(0);
+	dummy_jr.right_rel_id = BitmapsetN(0);
     dummy_jr.rows = 0.0;
 	dummy_jr.cost = 0.0;
     
@@ -190,16 +206,16 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
     );
 
     int binoms_size = (info->n_rels+1)*(info->n_rels+1);
-    params.binoms = thrust::host_vector<RelationID::type>(binoms_size);
-    precompute_binoms<RelationID::type>(params.binoms, info->n_rels);
+    params.binoms = thrust::host_vector<uint_t<BitmapsetN> >(binoms_size);
+    precompute_binoms<uint_t<BitmapsetN> >(params.binoms, info->n_rels);
     params.gpu_binoms = params.binoms;
 
     params.scratchpad_size = (
         (
             gpuqo_scratchpad_size_mb * MB
         ) / (
-            sizeof(RelationID)*gpuqo_dpsub_filter_keys_overprovisioning + 
-            (sizeof(RelationID) + sizeof(JoinRelation))
+            sizeof(BitmapsetN)*gpuqo_dpsub_filter_keys_overprovisioning + 
+            (sizeof(BitmapsetN) + sizeof(JoinRelation<BitmapsetN>))
         )
     );  
 
@@ -208,11 +224,11 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
     LOG_PROFILE("Using a scratchpad of size %u\n", params.scratchpad_size);
 
-    params.gpu_pending_keys = uninit_device_vector<RelationID>(PENDING_KEYS_SIZE(params));
-    params.gpu_scratchpad_keys = uninit_device_vector<RelationID>(params.scratchpad_size);
-    params.gpu_scratchpad_vals = uninit_device_vector<JoinRelation>(params.scratchpad_size);
-    params.gpu_reduced_keys = uninit_device_vector<RelationID>(params.scratchpad_size);
-    params.gpu_reduced_vals = uninit_device_vector<JoinRelation>(params.scratchpad_size);
+    params.gpu_pending_keys = uninit_device_vector<BitmapsetN>(PENDING_KEYS_SIZE(params));
+    params.gpu_scratchpad_keys = uninit_device_vector<BitmapsetN>(params.scratchpad_size);
+    params.gpu_scratchpad_vals = uninit_device_vector<JoinRelation<BitmapsetN>>(params.scratchpad_size);
+    params.gpu_reduced_keys = uninit_device_vector<BitmapsetN>(params.scratchpad_size);
+    params.gpu_reduced_vals = uninit_device_vector<JoinRelation<BitmapsetN>>(params.scratchpad_size);
 
     STOP_TIMING(init);
 
@@ -268,7 +284,7 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
         START_TIMING(build_qt);
             
-        dpsub_buildQueryTree(params.out_relid, *params.memo, &out);
+        dpsub_buildQueryTree<BitmapsetN,HashTableDpsub<BitmapsetN> >(params.out_relid, *params.memo, &out);
     
         STOP_TIMING(build_qt);
     
@@ -295,3 +311,6 @@ gpuqo_dpsub(GpuqoPlannerInfo* info)
 
     return out;
 }
+
+template QueryTree<Bitmapset32>* gpuqo_dpsub<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>* info);
+template QueryTree<Bitmapset64>* gpuqo_dpsub<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>* info);

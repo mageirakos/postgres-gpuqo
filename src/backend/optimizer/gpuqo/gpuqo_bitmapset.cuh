@@ -99,6 +99,7 @@ public:
 
     __host__ __device__
     inline Bitmapset<T> allLowerInc() const{
+        // TODO x | (x-1)
         return unionSet(allLower());
     }
 
@@ -307,7 +308,7 @@ inline Bitmapset<Type> atomicOr(Bitmapset<Type> *address, Bitmapset<Type> val){
 
 namespace std {
     template<typename T>
-    struct hash<Bitmapset<T>> {
+    struct hash<Bitmapset<T> > {
         inline size_t operator()(const Bitmapset<T>& x) const {
             return hash<T>{}(x.bits);
         }
@@ -316,5 +317,11 @@ namespace std {
 
 typedef Bitmapset<unsigned int> Bitmapset32;
 typedef Bitmapset<unsigned long long int> Bitmapset64;
+
+template<typename BitmapsetN>
+using uint_t = typename BitmapsetN::type;
+
+template<typename BitmapsetN>
+using uint2_t = typename BitmapsetN::type2;
 
 #endif							/* GPUQO_BITMAPSET_CUH */

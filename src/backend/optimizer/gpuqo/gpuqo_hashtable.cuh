@@ -18,7 +18,7 @@
 #include "gpuqo.cuh"
 #include "gpuqo_debug.cuh"
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 class HashTable{
 private:
     K* keys;
@@ -30,7 +30,7 @@ private:
     size_t n_elems_ub;
 
     __device__
-    Kint hash(K key){
+    size_t hash(K key){
         return key.hash() & (capacity-1);
     }
 
@@ -75,47 +75,46 @@ public:
     void free();
 };
 
-template<typename K, typename V, typename Kint> 
+template<typename K, typename V> 
 __host__
-HashTable<K,V,Kint>* createHashTable(size_t capacity);
+HashTable<K,V>* createHashTable(size_t capacity);
 
-typedef HashTable<Bitmapset32,JoinRelation,unsigned int> HashTable32;
-typedef HashTable<Bitmapset64,JoinRelation,size_t> HashTable64;
-
-typedef HashTable32 HashTableType;
-
+template<typename BitmapsetN>
+using HashTableDpsub = HashTable<BitmapsetN,JoinRelation<BitmapsetN> >;
 
 // DEVICE FUNCTIONS IMPLEMENTATION
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __device__
-V* HashTable<K,V,Kint>::lookup(K key){
-    Kint slot = hash(key);
-    Kint first_slot = slot;
+V* HashTable<K,V>::lookup(K key){
+    size_t slot = hash(key);
+    size_t first_slot = slot;
     do {
         if (keys[slot] == key){
-            LOG_DEBUG("%u: found %u (%u)\n", key.toUint(), slot, hash(key));
+            LOG_DEBUG("%u: found %lu (%lu)\n", key.toUint(), slot, first_slot);
             return &values[slot];
         } else if (keys[slot].empty()){
             // NB: elements cannot be deleted!
-            LOG_DEBUG("%u: not found %u (%u)\n", key.toUint(), slot, hash(key));
+            printf("%u: not found %lu (%lu)\n", key.toUint(), slot, first_slot);
             return NULL;
         }
 
-        LOG_DEBUG("%u: inc %u (%u)\n", key.toUint(), slot, hash(key));
+        LOG_DEBUG("%u: inc %lu (%lu)\n", key.toUint(), slot, first_slot);
 
         slot = (slot + 1) & (capacity-1);
     } while (slot != first_slot);
+
+    printf("%u: not found %lu (%lu), table is full\n", key.toUint(), slot, first_slot);
 
     // I checked all available positions
     return NULL;
 }
 
-template <typename K, typename V, typename Kint>
+template <typename K, typename V>
 __device__
-void HashTable<K,V,Kint>::insert(K key, V value){
-    Kint slot = hash(key);
-    Kint first_slot = slot;
+void HashTable<K,V>::insert(K key, V value){
+    size_t slot = hash(key);
+    size_t first_slot = slot;
     do {
         K prev = atomicCAS(&keys[slot], K(0), key);
         if (prev.empty() || prev == key){
