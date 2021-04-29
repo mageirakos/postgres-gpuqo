@@ -21,10 +21,12 @@ OBJS += $(NVLINK)
 OBJS += $(NVOBJS)
 
 NVCC := $(cuda_path)/bin/nvcc
-NVCCFLAGS = $(CPPFLAGS)
+NVCCFLAGS ?= $(CPPFLAGS) 
+
+NVCCFLAGS += -Wno-deprecated-gpu-targets  --forward-unknown-to-host-compiler
 
 ifeq ($(enable_debug),yes)
-NVCCFLAGS += -g -lineinfo -Wno-deprecated-gpu-targets  --forward-unknown-to-host-compiler
+NVCCFLAGS += -g -lineinfo 
 endif
 
 ifneq (,$(findstring -O0,$(CFLAGS)))
