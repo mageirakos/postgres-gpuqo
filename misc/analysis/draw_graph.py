@@ -10,16 +10,8 @@ import pydot
 COLORSCHEME='dark28'
 COLORSCHEME_CYCLE = 8
 
-nodes = defaultdict(lambda: {
-    'visited': False,
-    'depth': -1,
-    'low': 1 << 30,
-    'parent': None,
-    'articulation': False,
-    'blocks': []
-})
-edges = defaultdict(list)
-
+nodes = None
+edges = None
 block_idx = 0
 
 
@@ -116,41 +108,124 @@ def get_articulation_points_unrolled():
         else:
             print(f"end {u}")
 
+def bfs_bicc_bfs(r):
+    print(f"bfs_bicc_bfs({r})")
+
+    P = {}
+    L = {}
+    LQ = defaultdict(list)
+    visited = defaultdict(lambda: False)
+
+    P[r] = r
+    L[r] = 0
+    LQ[0] = [r]
+
+    Q = [r]
+    visited[r] = True
+
+    while Q:
+        print(Q)
+        x = Q.pop(0)
+
+        for w in edges[x]:
+            if not visited[w]:
+                P[w] = x
+                L[w] = L[x]+1
+                LQ[L[w]].append(w)
+                Q.append(w)
+                visited[w] = True
+
+    return P, L, LQ
+
+
+def bfs_bicc_bfs_lv(L, v, u, visited):
+    print(f"bfs_bicc_bfs_lv({L}, {v}, {u})")
+    Q = [u]
+    V_u = [u]
+    visited[u] = True
+    visited[v] = True
+    vid_low = u
+    while Q:
+        x = Q.pop(0)
+        print(Q, x, [w if not visited[w] else f"!{w}" for w in edges[x]])
+        for w in edges[x]:
+            if nodes[w]['valid'] and not visited[w]:
+                if L[w] < L[u]:
+                    return (L[w], 0, [])
+                else:
+                    Q.append(w)
+                    V_u.append(w)
+                    visited[w] = True
+                    if w < vid_low:
+                        vid_low = w
+    
+    return (L[u], vid_low, V_u)
+
+def bfs_bicc(r):
+    for v in edges:
+        nodes[v]['articulation'] = False
+        nodes[v]['visited'] = False
+        nodes[v]['low'] = v
+        nodes[v]['par'] = v
+        nodes[v]['valid'] = True
+
+    block_idx = 0
+    
+    P, L, LQ = bfs_bicc_bfs(r)
+
+    print(f"bfs_bicc_bfs -> {P}, {L}, {LQ}")
+
+    for i in sorted(LQ.keys(), reverse=True)[:-1]:
+        print("i =", i)
+        Q_i = LQ[i]
+        for u in Q_i:
+            if nodes[u]['par'] == u:
+                v = P[u]
+                print("u =", u, "; v = ", v)
+                visited = {w:nodes[w]['visited'] for w in nodes}
+                l, vid_low, V_u = bfs_bicc_bfs_lv(L, v, u, visited)
+                print("bfs_bicc_bfs_lv ->", l, vid_low, V_u)
+                if l >= L[u]:
+                    nodes[v]['articulation'] = True
+                    print(v, "is articulation")
+                    for w in V_u:
+                        assert(nodes[w]['valid'])
+                        nodes[w]['low'] = vid_low
+                        nodes[w]['par'] = v
+                        nodes[w]['valid'] = False
+                        nodes[w]['blocks'].append(block_idx)
+                    nodes[v]['blocks'].append(block_idx)
+                    block_idx += 1
+
+    for v in nodes:
+        nodes[v]['blocks'] = list(set(nodes[v]['blocks']))
+        print(v, nodes[v]['par'], nodes[v]['low'], nodes[v]['blocks'])
+
 def block2col(block_id):
     return str((block_id-1) % COLORSCHEME_CYCLE + 1)
 
-graph = pydot.Dot('my_graph', graph_type='graph')
+def draw_graph(edges_):
+    graph = pydot.Dot('my_graph', graph_type='graph')
 
-record = False
-for line in stdin:
-    print(line, end='')
-    if "Edges:" in line:
-        record = True
-        continue
-    
-    if not record:
-        continue
+    global nodes, edges, block_idx
+    nodes = defaultdict(lambda: {
+        'visited': False,
+        'depth': -1,
+        'low': 1 << 30,
+        'parent': None,
+        'articulation': False,
+        'blocks': [],
+        'par': -1,
+    })
+    edges = edges_
+    block_idx = 0
 
-    if not line[0].isdigit():
-        break
-
-    colon_split = line.split(':')
-
-    node_id = int(colon_split[0])
-
-    edges_str = ':'.join(colon_split[1:])
-
-    for edge_desc in edges_str.split(';'):
-        if edge_desc.strip():
-            other_node_id = int(edge_desc.split()[0])
-            edges[node_id].append(other_node_id)
-
-if edges:
-    get_articulation_points_unrolled()
+    # get_articulation_points_unrolled()
     # get_articulation_points(1, 0, [])
+    bfs_bicc(1)
 
-    pprint(nodes)
-    pprint(edges)
+    # pprint(nodes)
+    # pprint(edges)
 
     for node in edges.keys():
         if len(nodes[node]["blocks"]) > 1:
@@ -178,7 +253,7 @@ if edges:
             'fontcolor': 'white',
             'penwidth': penwidth,
         }
-        print(node, style_kwargs)
+        # print(node, style_kwargs)
             
         graph.add_node(pydot.Node(
             str(node),
@@ -200,15 +275,48 @@ if edges:
                     colorscheme=COLORSCHEME,
                     color=col
                 ))
+    return graph
 
-    if len(argv) > 1:
-        out_filename = argv[1]
-        out_file = out_filename
-    else:
-        out_file, out_filename = mkstemp()
 
-    graph.write_png(out_file)
-    print(f"Output written to {out_filename}")
+if __name__ == "__main__":
+    edges = defaultdict(list)
 
-    if len(argv) == 1:
-        system(f"xdg-open {out_filename}")
+    block_idx = 0
+
+    record = False
+    for line in stdin:
+        print(line, end='')
+        if "Edges:" in line:
+            record = True
+            continue
+        
+        if not record:
+            continue
+
+        if not line[0].isdigit():
+            break
+
+        colon_split = line.split(':')
+
+        node_id = int(colon_split[0])
+
+        edges_str = ':'.join(colon_split[1:])
+
+        for edge_desc in edges_str.split(';'):
+            if edge_desc.strip():
+                other_node_id = int(edge_desc.split()[0])
+                edges[node_id].append(other_node_id)
+    
+    if edges:
+        if len(argv) > 1:
+            out_filename = argv[1]
+            out_file = out_filename
+        else:
+            out_file, out_filename = mkstemp()
+
+        graph = draw_graph(edges)
+        graph.write_png(out_file)
+        print(f"Output written to {out_filename}")
+
+        if len(argv) == 1:
+            system(f"xdg-open {out_filename}")

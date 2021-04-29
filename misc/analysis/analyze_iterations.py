@@ -32,29 +32,32 @@ def load_results(filename):
                     iteration = int(line.split(':')[0].split()[-1])
                     steps_time = {}
                 elif 'took' in line:
+                    time_str = line.split()[2]
+                    if 'ms' in time_str:
+                        time = float(time_str[:-2])
+                    else:
+                        time = float(time_str)
+                        
                     if 'iteration' in line:
-                        iteration_time = float(line.split()[2][:-2])
                         steps_tot_time = sum(steps_time.values())
-                        steps_time['other'] = iteration_time-steps_tot_time
+                        steps_time['other'] = time-steps_tot_time
 
                         queries[query]['iterations'][iteration] = {
-                            'time': iteration_time,
+                            'time': time,
                             'steps': steps_time
                         }
 
                         steps_time = {}
                     elif 'gpuqo' in line:
-                        tot_time = float(line.split()[2][:-2])
-                        queries[query]['time'] = tot_time
+                        queries[query]['time'] = time
                         steps_tot_time = sum(steps_time.values())
-                        steps_time['other'] = tot_time-steps_tot_time
+                        steps_time['other'] = time-steps_tot_time
                         queries[query]['steps'] = steps_time
 
                         steps_time = {}
                     else:
                         step = line.split()[0]
-                        step_time = float(line.split()[2][:-2])
-                        steps_time[step] = step_time
+                        steps_time[step] = time
                 else:
                     print(f"Ignoring line: {line}")
             except Exception as e:
