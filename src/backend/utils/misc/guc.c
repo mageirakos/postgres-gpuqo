@@ -463,7 +463,9 @@ const struct config_enum_entry gpuqo_algorithm_options[] = {
 	{"dpsub", GPUQO_DPSUB, false},
 	{"cpu_dpsize", GPUQO_CPU_DPSIZE, false},
 	{"cpu_dpsub", GPUQO_CPU_DPSUB, false},
+	{"parallel_cpu_dpsub", GPUQO_CPU_DPSUB_PARALLEL, false},
 	{"cpu_dpsub_bicc", GPUQO_CPU_DPSUB_BICC, false},
+	{"parallel_cpu_dpsub_bicc", GPUQO_CPU_DPSUB_BICC_PARALLEL, false},
 	{"cpu_dpccp", GPUQO_CPU_DPCCP, false},
 	{"dpe_dpsize", GPUQO_DPE_DPSIZE, false},
 	{"dpe_dpsub", GPUQO_DPE_DPSUB, false},
@@ -2206,7 +2208,17 @@ static struct config_int ConfigureNamesInt[] =
 			GUC_EXPLAIN
 		},
 		&gpuqo_dpe_n_threads,
-		4, 2, INT_MAX,
+		4, 1, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_cpu_dpsub_parallel_chunk_size", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the parallelization granularity in terms of number of sets."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_cpu_dpsub_parallel_chunk_size,
+		64, 1, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{

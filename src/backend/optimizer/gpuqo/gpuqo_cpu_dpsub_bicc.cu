@@ -266,3 +266,18 @@ gpuqo_cpu_dpsub_bicc(GpuqoPlannerInfo<BitmapsetN>* info)
 template QueryTree<Bitmapset32>* gpuqo_cpu_dpsub_bicc<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
 template QueryTree<Bitmapset64>* gpuqo_cpu_dpsub_bicc<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);
 
+/* gpuqo_cpu_dpsub_bicc_parallel
+ *
+ *	 Parallel CPU baseline for GPU query optimization using the DP sub
+ *   algorithm with BiCC optimization.
+ */
+template<typename BitmapsetN>
+QueryTree<BitmapsetN>*
+gpuqo_cpu_dpsub_bicc_parallel(GpuqoPlannerInfo<BitmapsetN>* info)
+{
+    DPsubBiCCCPUAlgorithm<BitmapsetN, level_hashtable<BitmapsetN>, true> alg;
+    return gpuqo_cpu_dpsub_generic_parallel(info, &alg);
+}
+
+template QueryTree<Bitmapset32>* gpuqo_cpu_dpsub_bicc_parallel<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
+template QueryTree<Bitmapset64>* gpuqo_cpu_dpsub_bicc_parallel<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);

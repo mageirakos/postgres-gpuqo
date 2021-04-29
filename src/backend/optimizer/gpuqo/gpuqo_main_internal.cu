@@ -41,8 +41,14 @@
 	case GPUQO_CPU_DPSUB:
 		query_tree = gpuqo_cpu_dpsub(info);
 		break;
+	case GPUQO_CPU_DPSUB_PARALLEL:
+		query_tree = gpuqo_cpu_dpsub_parallel(info);
+		break;
 	case GPUQO_CPU_DPSUB_BICC:
 		query_tree = gpuqo_cpu_dpsub_bicc(info);
+		break;
+	case GPUQO_CPU_DPSUB_BICC_PARALLEL:
+		query_tree = gpuqo_cpu_dpsub_bicc_parallel(info);
 		break;
 	case GPUQO_CPU_DPCCP:
 		query_tree = gpuqo_cpu_dpccp(info);

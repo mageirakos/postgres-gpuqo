@@ -59,6 +59,9 @@ template<typename BitmapsetN>
 extern QueryTree<BitmapsetN>* gpuqo_cpu_dpsub_bicc(GpuqoPlannerInfo<BitmapsetN>* info);
 
 template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_cpu_dpsub_bicc_parallel(GpuqoPlannerInfo<BitmapsetN>* info);
+
+template<typename BitmapsetN>
 extern QueryTree<BitmapsetN>* gpuqo_cpu_dpccp(GpuqoPlannerInfo<BitmapsetN>* info);
 
 template<typename BitmapsetN>
@@ -66,6 +69,9 @@ extern QueryTree<BitmapsetN>* gpuqo_dpe_dpsize(GpuqoPlannerInfo<BitmapsetN>* inf
 
 template<typename BitmapsetN>
 extern QueryTree<BitmapsetN>* gpuqo_dpe_dpsub(GpuqoPlannerInfo<BitmapsetN>* info);
+
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_cpu_dpsub_parallel(GpuqoPlannerInfo<BitmapsetN>* info);
 
 template<typename BitmapsetN>
 extern QueryTree<BitmapsetN>* gpuqo_dpe_dpccp(GpuqoPlannerInfo<BitmapsetN>* info);

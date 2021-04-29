@@ -15,7 +15,9 @@ typedef enum GpuqoAlgorithm {
 	GPUQO_DPSUB,
 	GPUQO_CPU_DPSIZE,
 	GPUQO_CPU_DPSUB,
+	GPUQO_CPU_DPSUB_PARALLEL,
 	GPUQO_CPU_DPSUB_BICC,
+	GPUQO_CPU_DPSUB_BICC_PARALLEL,
 	GPUQO_CPU_DPCCP,
 	GPUQO_DPE_DPSIZE,
 	GPUQO_DPE_DPSUB,
@@ -34,6 +36,7 @@ extern int gpuqo_dpsub_filter_keys_overprovisioning;
 extern bool gpuqo_dpsub_csg_enable;
 extern int gpuqo_dpsub_csg_threshold;
 extern int gpuqo_dpe_n_threads;
+extern int gpuqo_cpu_dpsub_parallel_chunk_size;
 extern int gpuqo_dpe_pairs_per_depbuf;
 extern bool gpuqo_dpsub_tree_enable;
 extern bool gpuqo_dpsub_bicc_enable;

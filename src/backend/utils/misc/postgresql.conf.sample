@@ -411,6 +411,7 @@
 #gpuqo_dpsub_csg = on
 #gpuqo_dpsub_csg_threshold = 128
 #gpuqo_dpe_n_threads = 4
+#gpuqo_cpu_dpsub_parallel_chunk_size = 64
 #gpuqo_dpe_pairs_per_depbuf = 128
 #gpuqo_dpsub_tree = off
 #gpuqo_spanning_tree = off
