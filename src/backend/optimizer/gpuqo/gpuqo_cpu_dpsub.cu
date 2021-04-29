@@ -43,7 +43,7 @@ public:
                 right_id = join_id - left_id;
 
                 if (!left_id.empty() && !right_id.empty()){
-                    auto memo = *CPUAlgorithm<BitmapsetN>::memo;
+                    auto &memo = *CPUAlgorithm<BitmapsetN>::memo;
                     auto left = memo.find(left_id);
                     auto right = memo.find(right_id);
 
@@ -52,7 +52,7 @@ public:
                         JoinRelationCPU<BitmapsetN> *right_rel = right->second;
                         int level = join_id.size();
 
-                        (*CPUAlgorithm<BitmapsetN>::join)(level, false, *right_rel, *left_rel);
+                        (*CPUAlgorithm<BitmapsetN>::join)(level, false, *left_rel, *right_rel);
                     }
                 }
 
