@@ -24,41 +24,50 @@
 #include "gpuqo_filter.cuh"
 #include "gpuqo_cpu_sequential.cuh"
 
-template<typename BitmapsetN>
-class SequentialJoinFunction : public CPUJoinFunction<BitmapsetN> {
+template<typename BitmapsetN, typename memo_t>
+class SequentialJoinFunction : public CPUJoinFunction<BitmapsetN, memo_t> {
 public:
     SequentialJoinFunction(GpuqoPlannerInfo<BitmapsetN>* _info, 
-        memo_t<BitmapsetN>* _memo, CPUAlgorithm<BitmapsetN>* _alg) 
-        : CPUJoinFunction<BitmapsetN>(_info, _memo, _alg) {}
+        memo_t* _memo, CPUAlgorithm<BitmapsetN, memo_t>* _alg) 
+        : CPUJoinFunction<BitmapsetN,memo_t>(_info, _memo, _alg) {}
 
-    virtual void operator()(int level, bool try_swap,
+    virtual JoinRelationCPU<BitmapsetN> *operator()(int level, bool try_swap,
                 JoinRelationCPU<BitmapsetN> &left_rel, 
                 JoinRelationCPU<BitmapsetN> &right_rel)
     {
-        if (CPUJoinFunction<BitmapsetN>::alg->check_join(level, left_rel, right_rel)){
+        if (CPUJoinFunction<BitmapsetN,memo_t>::alg->check_join(level, left_rel, right_rel)){
             JoinRelationCPU<BitmapsetN> *join_rel1, *join_rel2;
             bool new_joinrel;
             new_joinrel = do_join(level, join_rel1, 
-                                left_rel, right_rel, CPUJoinFunction<BitmapsetN>::info, *CPUJoinFunction<BitmapsetN>::memo);
-            CPUJoinFunction<BitmapsetN>::alg->post_join(level, new_joinrel, *join_rel1, left_rel,  right_rel);
+                                left_rel, right_rel, CPUJoinFunction<BitmapsetN,memo_t>::info, *CPUJoinFunction<BitmapsetN,memo_t>::memo);
+            CPUJoinFunction<BitmapsetN,memo_t>::alg->post_join(level, new_joinrel, *join_rel1, left_rel,  right_rel);
             if (try_swap){
                 new_joinrel = do_join(level, join_rel2, right_rel, 
-                                    left_rel, CPUJoinFunction<BitmapsetN>::info, *CPUJoinFunction<BitmapsetN>::memo);
-                CPUJoinFunction<BitmapsetN>::alg->post_join(level, new_joinrel, *join_rel2, left_rel, right_rel);
+                                    left_rel, CPUJoinFunction<BitmapsetN,memo_t>::info, *CPUJoinFunction<BitmapsetN,memo_t>::memo);
+                CPUJoinFunction<BitmapsetN,memo_t>::alg->post_join(level, new_joinrel, *join_rel2, left_rel, right_rel);
+
+                if (join_rel1->cost < join_rel2->cost)
+                    return join_rel1;
+                else
+                    return join_rel2;
+            } else {
+                return join_rel1;
             }
+        } else {
+            return NULL;
         }
     }
 };
 
-template<typename BitmapsetN>
+template<typename BitmapsetN, typename memo_t>
 QueryTree<BitmapsetN>* gpuqo_cpu_sequential(GpuqoPlannerInfo<BitmapsetN>* info, 
-                                CPUAlgorithm<BitmapsetN> *algorithm)
+                                CPUAlgorithm<BitmapsetN, memo_t> *algorithm)
 {
     
     DECLARE_TIMING(gpuqo_cpu_sequential);
     START_TIMING(gpuqo_cpu_sequential);
 
-    memo_t<BitmapsetN> memo;
+    memo_t memo;
     QueryTree<BitmapsetN>* out = NULL;
 
     for(int i=0; i<info->n_rels; i++){
@@ -74,11 +83,13 @@ QueryTree<BitmapsetN>* gpuqo_cpu_sequential(GpuqoPlannerInfo<BitmapsetN>* info,
         memo.insert(std::make_pair(info->base_rels[i].id, jr));
     }
 
-    SequentialJoinFunction<BitmapsetN> join_func(info, &memo, algorithm);
+    SequentialJoinFunction<BitmapsetN, memo_t> join_func(info, &memo, algorithm);
 
     algorithm->init(info, &memo, &join_func);
     
     algorithm->enumerate();
+
+    LOG_DEBUG("The algorithm did %d joins\n", algorithm->get_n_joins());
 
     BitmapsetN final_joinrel_id = BitmapsetN(0);
     for (int i = 0; i < info->n_rels; i++)
@@ -101,6 +112,6 @@ QueryTree<BitmapsetN>* gpuqo_cpu_sequential(GpuqoPlannerInfo<BitmapsetN>* info,
 }
 
 template QueryTree<Bitmapset32>* gpuqo_cpu_sequential<Bitmapset32>
-        (GpuqoPlannerInfo<Bitmapset32>*, CPUAlgorithm<Bitmapset32>*);
+        (GpuqoPlannerInfo<Bitmapset32>*, CPUAlgorithm<Bitmapset32, hashtable_memo_t<Bitmapset32> >*);
 template QueryTree<Bitmapset64>* gpuqo_cpu_sequential<Bitmapset64>
-        (GpuqoPlannerInfo<Bitmapset64>*, CPUAlgorithm<Bitmapset64>*);
+        (GpuqoPlannerInfo<Bitmapset64>*, CPUAlgorithm<Bitmapset64, hashtable_memo_t<Bitmapset64>>*);

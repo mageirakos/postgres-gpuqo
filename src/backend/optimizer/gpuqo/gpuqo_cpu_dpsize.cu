@@ -24,8 +24,8 @@
 #include "gpuqo_cpu_sequential.cuh"
 #include "gpuqo_cpu_dpe.cuh"
 
-template<typename BitmapsetN>
-class DPsizeCPUAlgorithm : public CPUAlgorithm<BitmapsetN> {
+template<typename BitmapsetN, typename memo_t>
+class DPsizeCPUAlgorithm : public CPUAlgorithm<BitmapsetN, memo_t> {
 private:
 
     vector_list_t<BitmapsetN> rels_per_level;
@@ -33,14 +33,14 @@ private:
 public:
 
     virtual void init(GpuqoPlannerInfo<BitmapsetN>* _info, 
-        memo_t<BitmapsetN>* _memo,
-        CPUJoinFunction<BitmapsetN> *_join)
+        memo_t* _memo,
+        CPUJoinFunction<BitmapsetN, memo_t> *_join)
     {
-        CPUAlgorithm<BitmapsetN>::init(_info, _memo, _join);
+        CPUAlgorithm<BitmapsetN, memo_t>::init(_info, _memo, _join);
 
-        rels_per_level = vector_list_t<BitmapsetN>(CPUAlgorithm<BitmapsetN>::info->n_rels+1);
+        rels_per_level = vector_list_t<BitmapsetN>(CPUAlgorithm<BitmapsetN, memo_t>::info->n_rels+1);
 
-        auto &memo = *CPUAlgorithm<BitmapsetN>::memo;
+        auto &memo = *CPUAlgorithm<BitmapsetN, memo_t>::memo;
 
         for(auto iter = memo.begin(); iter != memo.end(); ++iter){
             rels_per_level[1].push_back(iter->second);
@@ -50,7 +50,7 @@ public:
     virtual void enumerate(){
         DECLARE_TIMING(iteration);
 
-        GpuqoPlannerInfo<BitmapsetN>* info = CPUAlgorithm<BitmapsetN>::info;
+        GpuqoPlannerInfo<BitmapsetN>* info = CPUAlgorithm<BitmapsetN, memo_t>::info;
 
         for (int join_s=2; join_s<=info->n_rels; join_s++){
             LOG_PROFILE("\nStarting iteration %d\n", join_s);
@@ -61,7 +61,7 @@ public:
                         big_i != rels_per_level[big_s].end(); ++big_i){
                     for (auto small_i = rels_per_level[small_s].begin(); 
                              small_i != rels_per_level[small_s].end(); ++small_i){
-                        (*CPUAlgorithm<BitmapsetN>::join)(join_s, true, **big_i, **small_i);
+                        (*CPUAlgorithm<BitmapsetN, memo_t>::join)(join_s, true, **big_i, **small_i);
                     }
                 } 
             }
@@ -76,7 +76,7 @@ public:
                     JoinRelationCPU<BitmapsetN> &right_rel)
     {
         return (is_disjoint_rel(left_rel, right_rel) 
-            && are_connected_rel(left_rel, right_rel, CPUAlgorithm<BitmapsetN>::info));
+            && are_connected_rel(left_rel, right_rel, CPUAlgorithm<BitmapsetN, memo_t>::info));
     }
 
     virtual void post_join(int level, bool newrel, 
@@ -84,6 +84,8 @@ public:
                 JoinRelationCPU<BitmapsetN> &left_rel, 
                 JoinRelationCPU<BitmapsetN> &right_rel)
     {
+        CPUAlgorithm<BitmapsetN, memo_t>::post_join(level, newrel, 
+                                            join_rel, left_rel, right_rel);
         if (newrel)
             rels_per_level[level].push_back(&join_rel);
     }
@@ -98,7 +100,7 @@ template<typename BitmapsetN>
 QueryTree<BitmapsetN>*
 gpuqo_cpu_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    DPsizeCPUAlgorithm<BitmapsetN> alg;
+    DPsizeCPUAlgorithm<BitmapsetN, hashtable_memo_t<BitmapsetN> > alg;
     return gpuqo_cpu_sequential(info, &alg);
 }
 
@@ -114,7 +116,7 @@ template<typename BitmapsetN>
 QueryTree<BitmapsetN>*
 gpuqo_dpe_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    DPsizeCPUAlgorithm<BitmapsetN> alg;
+    DPsizeCPUAlgorithm<BitmapsetN, hashtable_memo_t<BitmapsetN> > alg;
     return gpuqo_cpu_dpe(info, &alg);
 }
 

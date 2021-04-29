@@ -21,7 +21,7 @@
 #include "gpuqo_debug.cuh"
 #include "gpuqo_cost.cuh"
 #include "gpuqo_filter.cuh"
-#include "gpuqo_cpu_sequential.cuh"
+#include "gpuqo_cpu_dpsub.cuh"
 #include "gpuqo_dpsub.cuh"
 #include "gpuqo_binomial.cuh"
 
@@ -39,8 +39,8 @@ struct edge_stack_el_t{
     unsigned int v;
 };
 
-template<typename BitmapsetN>
-class DPsubBiCCCPUAlgorithm : public CPUAlgorithm<BitmapsetN> {
+template<typename BitmapsetN, typename memo_t, bool manage_best>
+class DPsubBiCCCPUAlgorithm : public DPsubGenericCPUAlgorithm<BitmapsetN, memo_t, manage_best> {
 private:
 
     BitmapsetN output_block(unsigned int u, unsigned int v, 
@@ -70,7 +70,7 @@ private:
         vector<unsigned int> parent(BitmapsetN::SIZE, 0);
         vector<int> low(BitmapsetN::SIZE, numeric_limits<int>::max());
 
-        auto info = CPUAlgorithm<BitmapsetN>::info;
+        auto info = CPUAlgorithm<BitmapsetN, memo_t>::info;
 
         LOG_DEBUG("find_blocks(%u)\n", set.toUint());
 
@@ -169,11 +169,13 @@ private:
     }
 
 public:
-    void enumerate_subsets(BitmapsetN set){
+    virtual JoinRelationCPU<BitmapsetN> *enumerate_subsets(BitmapsetN set){
         list<BitmapsetN> blocks;
-        auto info = CPUAlgorithm<BitmapsetN>::info;
+        auto info = CPUAlgorithm<BitmapsetN, memo_t>::info;
 
         find_blocks(set, blocks);
+
+        JoinRelationCPU<BitmapsetN> *join_rel = NULL;
 
         for (BitmapsetN block : blocks){
             BitmapsetN lb_id = block.lowest();
@@ -194,7 +196,7 @@ public:
                             left_id.toUint(), right_id.toUint());
 
                 if ((left_id|right_id) == set){
-                    auto &memo = *CPUAlgorithm<BitmapsetN>::memo;
+                    auto &memo = *CPUAlgorithm<BitmapsetN, memo_t>::memo;
                     auto left = memo.find(left_id);
                     auto right = memo.find(right_id);
 
@@ -203,26 +205,31 @@ public:
                     JoinRelationCPU<BitmapsetN> *right_rel = right->second;
                     int level = set.size();
 
-                    (*CPUAlgorithm<BitmapsetN>::join)(level, false, *left_rel, *right_rel);
+                    JoinRelationCPU<BitmapsetN> *new_join_rel = 
+                            (*CPUAlgorithm<BitmapsetN, memo_t>::join)(
+                                    level, false, *left_rel, *right_rel);
+
+                    if (manage_best){
+                        if (join_rel == NULL 
+                                || (new_join_rel != NULL 
+                                    && new_join_rel->cost < join_rel->cost))
+                        {
+                            if (join_rel != NULL)
+                                delete join_rel;
+
+                            join_rel = new_join_rel;
+                        } else {
+                            if (new_join_rel != NULL)
+                                delete new_join_rel;
+                        }
+                    }
                 }
 
                 lb_id = nextSubset(lb_id, block);
             }
         }
-    }
 
-    virtual void enumerate()
-    {
-        auto info = CPUAlgorithm<BitmapsetN>::info;
-        // first bit is zero
-        for (BitmapsetN i=1; i < BitmapsetN::nth(info->n_rels); i++){
-            BitmapsetN join_id = i << 1; // first bit is 0 in Postgres
-
-            if (!is_connected(join_id, info->edge_table))
-                continue;
-
-            enumerate_subsets(join_id);
-        }
+        return join_rel;
     }
 
     virtual bool check_join(int level, JoinRelationCPU<BitmapsetN> &left_rel,
@@ -231,7 +238,7 @@ public:
 
         // Sets are already checked
 
-        auto &info = CPUAlgorithm<BitmapsetN>::info;
+        auto &info = CPUAlgorithm<BitmapsetN,memo_t>::info;
 
         Assert(is_connected(left_rel.id, info->edge_table));
         Assert(is_connected(right_rel.id, info->edge_table));
@@ -241,7 +248,7 @@ public:
         return true;
     }
 };
-
+ 
 
 /* gpuqo_cpu_dpsub_bicc
  *
@@ -252,7 +259,7 @@ template<typename BitmapsetN>
 QueryTree<BitmapsetN>*
 gpuqo_cpu_dpsub_bicc(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    DPsubBiCCCPUAlgorithm<BitmapsetN> alg;
+    DPsubBiCCCPUAlgorithm<BitmapsetN, hashtable_memo_t<BitmapsetN>, false> alg;
     return gpuqo_cpu_sequential(info, &alg);
 }
 

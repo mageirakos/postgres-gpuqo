@@ -48,7 +48,7 @@ template<typename BitmapsetN>
 struct ThreadArgs{
     int id;
     GpuqoPlannerInfo<BitmapsetN>* info;
-    memo_t<BitmapsetN> *memo;
+    hashtable_memo_t<BitmapsetN> *memo;
     DependencyBuffers<BitmapsetN>* depbufs;
 };
 
@@ -93,7 +93,7 @@ static void process_depbuf(DependencyBuffer<BitmapsetN>* depbuf,
 }
 
 template<typename BitmapsetN>
-void* thread_function(void* _args){
+static void* thread_function(void* _args){
     ThreadArgs<BitmapsetN> *args = (ThreadArgs<BitmapsetN>*) _args;
 
     DECLARE_TIMING(wait);
@@ -132,7 +132,7 @@ void* thread_function(void* _args){
 
 
 template<typename BitmapsetN>
-class DPEJoinFunction : public CPUJoinFunction<BitmapsetN>{
+class DPEJoinFunction : public CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >{
 public:
     int job_count;
     pthread_t* threads;
@@ -143,8 +143,9 @@ public:
 #endif
 
     DPEJoinFunction(GpuqoPlannerInfo<BitmapsetN>* _info, 
-            memo_t<BitmapsetN>* _memo, CPUAlgorithm<BitmapsetN>* _alg) 
-        : CPUJoinFunction<BitmapsetN>(_info, _memo, _alg) {}
+                hashtable_memo_t<BitmapsetN>* _memo, 
+                CPUAlgorithm<BitmapsetN, hashtable_memo_t<BitmapsetN> >* _alg) 
+        : CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >(_info, _memo, _alg) {}
 
     bool submit_join(int level, JoinRelationDPE<BitmapsetN>* &join_rel, 
                 JoinRelationDPE<BitmapsetN> &left_rel, 
@@ -153,7 +154,7 @@ public:
         bool out;
         BitmapsetN relid = left_rel.id | right_rel.id;
 
-        memo_t<BitmapsetN>& memo = *CPUJoinFunction<BitmapsetN>::memo;
+        auto &memo = *CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::memo;
 
         auto find_iter = memo.find(relid);
         if (find_iter != memo.end()){
@@ -192,7 +193,7 @@ public:
     void wait_and_swap_depbuf()
     {
         // lend an hand to worker threads
-        process_depbuf(depbufs.depbuf_curr, CPUJoinFunction<BitmapsetN>::info);
+        process_depbuf(depbufs.depbuf_curr, CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::info);
 
         // swap depbufs
         pthread_mutex_lock(&depbufs.depbuf_mutex);
@@ -222,39 +223,47 @@ public:
     }
 
     // instead of join it is more of a distribution of jobs
-    virtual void operator()(int level, bool try_swap,
+    virtual JoinRelationCPU<BitmapsetN> *operator()(int level, bool try_swap,
                             JoinRelationCPU<BitmapsetN> &left_rel, 
                             JoinRelationCPU<BitmapsetN> &right_rel)
     {
-        if (CPUJoinFunction<BitmapsetN>::alg->check_join(level, left_rel, right_rel)){
+        if (CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->check_join(level, left_rel, right_rel)){
             JoinRelationDPE<BitmapsetN> *join_rel1, *join_rel2;
             bool new_joinrel;
             new_joinrel = submit_join(level, join_rel1, 
                     (JoinRelationDPE<BitmapsetN>&) left_rel, (JoinRelationDPE<BitmapsetN>&) right_rel
             );
-            CPUJoinFunction<BitmapsetN>::alg->post_join(level, new_joinrel, 
+            CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->post_join(level, new_joinrel, 
                                 *((JoinRelationCPU<BitmapsetN>*)join_rel1), 
                                 left_rel,  right_rel);
             if (try_swap){
                 new_joinrel = submit_join(level, join_rel2, 
                     (JoinRelationDPE<BitmapsetN>&) left_rel, (JoinRelationDPE<BitmapsetN>&) right_rel
                 );
-                CPUJoinFunction<BitmapsetN>::alg->post_join(level, new_joinrel, 
+                CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->post_join(level, new_joinrel, 
                                     *((JoinRelationCPU<BitmapsetN>*)join_rel2), 
                                     left_rel, right_rel);
+                if (join_rel1->cost < join_rel2->cost)
+                    return join_rel1;
+                else
+                    return join_rel2;
+            } else {
+                return join_rel1;
             }
+        } else {
+            return NULL;
         }
     }
 };
 
 template<typename BitmapsetN>
 QueryTree<BitmapsetN>* 
-gpuqo_cpu_dpe(GpuqoPlannerInfo<BitmapsetN>* info, CPUAlgorithm<BitmapsetN> *algorithm)
+gpuqo_cpu_dpe(GpuqoPlannerInfo<BitmapsetN>* info, CPUAlgorithm<BitmapsetN, hashtable_memo_t<BitmapsetN> > *algorithm)
 {
     DECLARE_TIMING(gpuqo_cpu_dpe);
     START_TIMING(gpuqo_cpu_dpe);
 
-    memo_t<BitmapsetN> memo;
+    hashtable_memo_t<BitmapsetN> memo;
     QueryTree<BitmapsetN>* out = NULL;
 
     DPEJoinFunction<BitmapsetN> join_func(info, &memo, algorithm);
@@ -356,6 +365,6 @@ gpuqo_cpu_dpe(GpuqoPlannerInfo<BitmapsetN>* info, CPUAlgorithm<BitmapsetN> *algo
 }
 
 template QueryTree<Bitmapset32>* gpuqo_cpu_dpe<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>* info, 
-    CPUAlgorithm<Bitmapset32> *algorithm);
+    CPUAlgorithm<Bitmapset32, hashtable_memo_t<Bitmapset32>> *algorithm);
 template QueryTree<Bitmapset64>* gpuqo_cpu_dpe<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>* info, 
-    CPUAlgorithm<Bitmapset64> *algorithm);
+    CPUAlgorithm<Bitmapset64, hashtable_memo_t<Bitmapset64>> *algorithm);

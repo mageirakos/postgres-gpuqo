@@ -24,13 +24,13 @@
 #include "gpuqo_cpu_sequential.cuh"
 #include "gpuqo_cpu_dpe.cuh"
 
-template<typename BitmapsetN>
-class DPccpCPUAlgorithm : public CPUAlgorithm<BitmapsetN>{
+template<typename BitmapsetN, typename memo_t>
+class DPccpCPUAlgorithm : public CPUAlgorithm<BitmapsetN, memo_t>{
 private:
 
     void enumerate_csg_rec(BitmapsetN S, BitmapsetN X, BitmapsetN cmp){
         LOG_DEBUG("enumerate_csg_rec(%u, %u, %u)\n", S.toUint(), X.toUint(), cmp.toUint());
-        auto info = CPUAlgorithm<BitmapsetN>::info;
+        auto info = CPUAlgorithm<BitmapsetN, memo_t>::info;
         BitmapsetN N = get_neighbours(S, info->edge_table) - X;
         if (N.empty())
             return;
@@ -49,7 +49,7 @@ private:
     }
 
     void enumerate_csg(){
-        auto info = CPUAlgorithm<BitmapsetN>::info;
+        auto info = CPUAlgorithm<BitmapsetN, memo_t>::info;
         for (int i=info->n_rels; i>=1; i--){
             BitmapsetN subset = BitmapsetN::nth(i);
 
@@ -60,7 +60,7 @@ private:
 
     void enumerate_cmp(BitmapsetN S){
         LOG_DEBUG("enumerate_cmp(%u)\n", S.toUint());
-        auto info = CPUAlgorithm<BitmapsetN>::info;
+        auto info = CPUAlgorithm<BitmapsetN, memo_t>::info;
 
         BitmapsetN X = S.allLowerInc();
         BitmapsetN N = get_neighbours(S, info->edge_table) - X;
@@ -80,7 +80,7 @@ private:
 
     void emit(BitmapsetN left_id, BitmapsetN right_id){
         LOG_DEBUG("gpuqo_cpu_dpccp_emit(%u, %u)\n", left_id.toUint(), right_id.toUint());
-        auto &memo = *CPUAlgorithm<BitmapsetN>::memo;
+        auto &memo = *CPUAlgorithm<BitmapsetN, memo_t>::memo;
 
         if (!left_id.empty() && !right_id.empty()){
             auto left = memo.find(left_id);
@@ -93,7 +93,7 @@ private:
             BitmapsetN joinset = left_id | right_id;
             int level = joinset.size();
 
-            (*CPUAlgorithm<BitmapsetN>::join)(level, true, *right_rel, *left_rel);
+            (*CPUAlgorithm<BitmapsetN, memo_t>::join)(level, true, *right_rel, *left_rel);
 
         } else if (!left_id.empty()) {
             enumerate_cmp(left_id);
@@ -116,7 +116,7 @@ public:
         // No check is necessary since dpccp guarantees all joinpairs are valid
         Assert(is_disjoint_rel(left_rel, right_rel) 
             && are_connected_rel(left_rel, right_rel, 
-                CPUAlgorithm<BitmapsetN>::info));
+                CPUAlgorithm<BitmapsetN, memo_t>::info));
         return true;
     }
 };
@@ -130,7 +130,7 @@ template<typename BitmapsetN>
 QueryTree<BitmapsetN>*
 gpuqo_cpu_dpccp(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    DPccpCPUAlgorithm<BitmapsetN> alg;
+    DPccpCPUAlgorithm<BitmapsetN, hashtable_memo_t<BitmapsetN> > alg;
     return gpuqo_cpu_sequential(info, &alg);
 }
 
@@ -146,7 +146,7 @@ template<typename BitmapsetN>
 QueryTree<BitmapsetN>*
 gpuqo_dpe_dpccp(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    DPccpCPUAlgorithm<BitmapsetN> alg;
+    DPccpCPUAlgorithm<BitmapsetN, hashtable_memo_t<BitmapsetN> > alg;
     return gpuqo_cpu_dpe(info, &alg);
 }
 
