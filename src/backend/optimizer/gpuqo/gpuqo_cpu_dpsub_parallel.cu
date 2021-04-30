@@ -52,37 +52,24 @@ static void* thread_function(void* _args){
 
     while(level < args->info->n_rels){
         list<pair<BitmapsetN, JoinRelationCPU<BitmapsetN>* > > unranked_rels;
+
         pthread_mutex_lock(args->mutex);
-        while (*args->level <= level){
+        while (*args->level <= level)
             pthread_cond_wait(args->start_thread_cond, args->mutex);
-        }
+
         level = *args->level;
         pthread_mutex_unlock(args->mutex);
+
         LOG_DEBUG("[%d] Starting iteration %d\n", args->id, level);
 
+        uint_t<BitmapsetN> sid;
         uint_t<BitmapsetN> n_sets = BINOM(args->binoms, 
             args->info->n_rels, args->info->n_rels, level);
 
-        while (true){
-            if (args->next_sid->load() >= n_sets){
-                pthread_mutex_lock(args->mutex);
-
-                for (auto &rel_pair : unranked_rels){
-                    args->memo->insert(rel_pair);
-                }
-
-                LOG_DEBUG("[%d] No more sets, waiting\n", args->id);
-                (*args->n_waiting)++;
-                if (*args->n_waiting == gpuqo_dpe_n_threads){
-                    pthread_cond_signal(args->thread_waiting_cond);
-                }
-    
-                pthread_mutex_unlock(args->mutex);
-
-                break;
-            }
-
-            uint_t<BitmapsetN> sid = args->next_sid->fetch_add(*args->skip);
+        // this should not overflow since the maximum value for n_sets is 
+        // 32C16 (on 32 bits, ~600M), skip is small and the number of threads 
+        // is small (worst case skip ~1000, n_threads ~100)
+        while ((sid = args->next_sid->fetch_add(*args->skip)) < n_sets){
             BitmapsetN s = dpsub_unrank_sid<BitmapsetN>(
                             sid, level, args->info->n_rels, args->binoms);
 
@@ -100,6 +87,20 @@ static void* thread_function(void* _args){
                 s = s.nextPermutation();
             }
         }
+
+        pthread_mutex_lock(args->mutex);
+
+        for (auto &rel_pair : unranked_rels){
+            args->memo->insert(rel_pair);
+        }
+
+        LOG_DEBUG("[%d] No more sets, waiting\n", args->id);
+        (*args->n_waiting)++;
+        if (*args->n_waiting == gpuqo_dpe_n_threads){
+            pthread_cond_signal(args->thread_waiting_cond);
+        }
+
+        pthread_mutex_unlock(args->mutex);
     }
 
     return NULL;
