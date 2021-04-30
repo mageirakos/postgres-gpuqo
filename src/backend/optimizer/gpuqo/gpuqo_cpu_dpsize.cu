@@ -55,13 +55,11 @@ public:
         for (int join_s=2; join_s<=info->n_rels; join_s++){
             LOG_PROFILE("\nStarting iteration %d\n", join_s);
             START_TIMING(iteration);
-            for (int big_s = join_s-1; big_s >= (join_s+1)/2; big_s--){
-                int small_s = join_s-big_s;
-                for (auto big_i = rels_per_level[big_s].begin(); 
-                        big_i != rels_per_level[big_s].end(); ++big_i){
-                    for (auto small_i = rels_per_level[small_s].begin(); 
-                             small_i != rels_per_level[small_s].end(); ++small_i){
-                        (*CPUAlgorithm<BitmapsetN, memo_t>::join)(join_s, true, **big_i, **small_i);
+            for (int left_s = join_s-1; left_s >= 1; left_s--){
+                int right_s = join_s-left_s;
+                for (auto &left_i : rels_per_level[left_s]){
+                    for (auto &right_i : rels_per_level[right_s]){
+                        (*CPUAlgorithm<BitmapsetN, memo_t>::join)(join_s, false, *left_i, *right_i);
                     }
                 } 
             }
