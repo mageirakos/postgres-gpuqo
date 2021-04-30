@@ -39,7 +39,7 @@ struct ThreadArgs{
     pthread_mutex_t* mutex;
     int* n_waiting;
     int* level;
-    int *skip;    
+    uint_t<BitmapsetN>* skip;    
     atomic<uint_t<BitmapsetN>>* next_sid;
     uint_t<BitmapsetN> *binoms;
     GpuqoPlannerInfo<BitmapsetN> *info;
@@ -155,7 +155,7 @@ void parallel_enumerate(GpuqoPlannerInfo<BitmapsetN>* info,
     pthread_mutex_t mutex;
     int level = 0;
     int n_waiting = 0;
-    int skip;
+    uint_t<BitmapsetN> skip;
     atomic<uint_t<BitmapsetN>> next_sid;
     int binoms_size = (info->n_rels+1)*(info->n_rels+1);
     thrust::host_vector<uint_t<BitmapsetN> > binoms(binoms_size);

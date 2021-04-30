@@ -66,7 +66,7 @@ protected:
 	GpuqoPlannerInfo<BitmapsetN>* info;
 	memo_t* memo;
 	CPUJoinFunction<BitmapsetN, memo_t> *join;
-	std::atomic<int> n_joins;
+	std::atomic<uint_t<BitmapsetN> > n_joins;
 public:
 	virtual void init(GpuqoPlannerInfo<BitmapsetN>* _info, 
 					memo_t* _memo,
@@ -93,7 +93,7 @@ public:
 
 	virtual void enumerate() {}
 
-	int get_n_joins(){
+	uint_t<BitmapsetN> get_n_joins(){
 		return n_joins.load();
 	}
 };
