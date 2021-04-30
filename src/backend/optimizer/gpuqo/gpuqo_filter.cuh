@@ -113,6 +113,8 @@ BitmapsetN grow(BitmapsetN from, BitmapsetN subset, BitmapsetN* edge_table)
         N -= V;
     };
 
+    LOG_DEBUG("grow(%u, %u): %u\n", from.toUint(), subset.toUint(), V.toUint());
+
     return V;
 }
 
