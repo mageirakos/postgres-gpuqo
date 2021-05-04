@@ -18,6 +18,11 @@
 #include "gpuqo_dpsub.cuh"
 
 template<typename BitmapsetN>
+uint32_t dpsub_tree_evaluation(int iter, uint64_t n_remaining_sets, 
+                           uint64_t offset, uint32_t n_pending_sets, 
+                           dpsub_iter_param_t<BitmapsetN> &params);
+
+template<typename BitmapsetN>
 struct dpsubEnumerateTreeSimple{
     __device__
     JoinRelation<BitmapsetN> operator()(BitmapsetN relid, 

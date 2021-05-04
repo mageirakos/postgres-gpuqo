@@ -18,6 +18,12 @@
 #include "gpuqo_dpsub.cuh"
 
 template<typename BitmapsetN>
+uint32_t dpsub_csg_evaluation(int iter, 
+                            uint64_t n_remaining_sets,
+                            uint64_t offset, uint32_t n_pending_sets, 
+                            dpsub_iter_param_t<BitmapsetN> &params);
+
+template<typename BitmapsetN>
 struct ext_loop_stack_elem_t{
     BitmapsetN S;
     BitmapsetN X;
