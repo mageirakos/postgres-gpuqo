@@ -237,9 +237,9 @@ public:
     {
 
         // Sets are already checked
-
+#ifdef USE_ASSERT_CHECKING
         auto &info = CPUAlgorithm<BitmapsetN,memo_t>::info;
-
+#endif
         Assert(is_connected(left_rel.id, info->edge_table));
         Assert(is_connected(right_rel.id, info->edge_table));
         Assert(are_connected_rel(left_rel, right_rel, info));

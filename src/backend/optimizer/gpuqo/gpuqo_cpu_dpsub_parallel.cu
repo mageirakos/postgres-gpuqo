@@ -199,7 +199,8 @@ void parallel_enumerate(GpuqoPlannerInfo<BitmapsetN>* info,
         skip = min(ceil_div(n_sets, gpuqo_dpe_n_threads),   
                     (uint_t<BitmapsetN>) gpuqo_cpu_dpsub_parallel_chunk_size);
 
-        LOG_PROFILE("Starting iteration %d (skip=%d)\n", level, skip);
+        LOG_PROFILE("Starting iteration %d (skip=%u)\n", 
+                    level, (unsigned int)skip);
         pthread_cond_broadcast(&start_thread_cond);
 
         while(n_waiting < gpuqo_dpe_n_threads)
