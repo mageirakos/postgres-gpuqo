@@ -50,7 +50,7 @@ static void* thread_function(void* _args){
     ThreadArgs<BitmapsetN> *args = (ThreadArgs<BitmapsetN>*) _args;
     int level = 0;
 
-    while(level < args->info->n_rels){
+    while(level < args->info->n_iters){
         list<pair<BitmapsetN, JoinRelationCPU<BitmapsetN>* > > unranked_rels;
 
         pthread_mutex_lock(args->mutex);
