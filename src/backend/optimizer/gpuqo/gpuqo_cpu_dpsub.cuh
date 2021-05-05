@@ -26,14 +26,41 @@ public:
     virtual void enumerate()
     {
         auto info = CPUAlgorithm<BitmapsetN, memo_t>::info;
-        // first bit is zero
-        for (BitmapsetN i=1; i < BitmapsetN::nth(info->n_rels); i++){
-            BitmapsetN join_id = i << 1; // first bit is 0 in Postgres
+        if (info->n_iters == info->n_rels){ // not IDP, use simple enumeration
+            // first bit is zero
+            for (BitmapsetN i=1; i < BitmapsetN::nth(info->n_rels); i++){
+                BitmapsetN join_id = i << 1; // first bit is 0 in Postgres
 
-            if (!is_connected(join_id, info->edge_table))
-                continue;
+                if (!is_connected(join_id, info->edge_table))
+                    continue;
 
-            enumerate_subsets(join_id);
+                enumerate_subsets(join_id);
+            }
+        } else { // IDP, use per-level enumeration
+            for (int i=2; i<=info->n_iters; i++){
+                BitmapsetN from(0), to(0);
+
+                for (int j = 0; j < i; j++){
+                    from.set(j);
+                    to.set(info->n_rels-1 - j);
+                }
+
+                BitmapsetN s = from;
+                do{
+                    BitmapsetN join_id = s << 1; // first bit is 0 in Postgres
+
+                    if (!is_connected(join_id, info->edge_table))
+                        continue;
+
+                    enumerate_subsets(join_id);
+                    
+                    if (s != to){
+                        s = s.nextPermutation();
+                    } else {
+                        break;
+                    }
+                } while(true);
+            }
         }
     }
 };

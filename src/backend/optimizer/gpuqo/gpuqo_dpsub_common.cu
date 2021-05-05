@@ -44,6 +44,37 @@ PROTOTYPE_TIMING(iteration);
 // User-configured option
 int gpuqo_n_parallel;
 
+
+template<typename BitmapsetN>
+struct CompJoinRelOfSize : public thrust::binary_function<
+            HashTableKVDpsub<BitmapsetN>, HashTableKVDpsub<BitmapsetN>, bool>{
+    int size;
+public:
+    CompJoinRelOfSize(int _size) : size(_size) {}
+
+    __host__ __device__
+    bool operator()(const HashTableKVDpsub<BitmapsetN> &a, 
+                   const HashTableKVDpsub<BitmapsetN> &b) const
+    {
+        const BitmapsetN &a_id = thrust::get<0>(a);
+        const BitmapsetN &b_id = thrust::get<0>(b);
+
+        const JoinRelation<BitmapsetN> &a_jr = thrust::get<1>(a);
+        const JoinRelation<BitmapsetN> &b_jr = thrust::get<1>(b);
+
+        float a_cost = a_jr.cost;
+        float b_cost = b_jr.cost;
+
+        if (a_id.size() != size)
+            a_cost = INFF;
+
+        if (b_id.size() != size)
+            b_cost = INFF;
+        
+        return a_cost < b_cost;        
+    }
+};
+
 template<typename BitmapsetN>
 void dpsub_prune_scatter(int threads_per_set, int n_threads, dpsub_iter_param_t<BitmapsetN> &params){
     // give possibility to user to interrupt
@@ -245,7 +276,7 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
         DECLARE_NV_TIMING(build_qt);
 
         // iterate over the size of the resulting joinrel
-        for(int i=2; i<=info->n_rels; i++){
+        for(int i=2; i<=info->n_iters; i++){
             // give possibility to user to interrupt
             CHECK_FOR_INTERRUPTS();
             
@@ -284,6 +315,19 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
 
         START_TIMING(build_qt);
             
+        BitmapsetN final_relid;
+    
+        if (info->n_rels == info->n_iters){ // normal DP
+            final_relid = params.out_relid;
+        } else { // IDP
+            auto best = thrust::min_element(
+                params.memo->begin(), 
+                params.memo->end(),
+                CompJoinRelOfSize<BitmapsetN>(info->n_iters)
+            );
+            final_relid = *thrust::get<0>(best.get_iterator_tuple());
+        }         
+
         dpsub_buildQueryTree<BitmapsetN,HashTableDpsub<BitmapsetN> >(params.out_relid, *params.memo, &out);
     
         STOP_TIMING(build_qt);

@@ -41,6 +41,14 @@ public:
         return buckets[v.first.size()].insert(v);
     }
 
+    iterator_t<BitmapsetN> begin(int i){
+        return buckets[i].begin();
+    }
+
+    iterator_t<BitmapsetN> end(int i){
+        return buckets[i].end();
+    }
+
     iterator_t<BitmapsetN> end(){
         return buckets[BitmapsetN::SIZE].end();
     }

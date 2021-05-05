@@ -102,6 +102,7 @@ template<typename BitmapsetN>
 struct GpuqoPlannerInfo{
 	unsigned int size;
 	int n_rels;
+	int n_iters;
 	BaseRelation<BitmapsetN> base_rels[BitmapsetN::SIZE];
 	BitmapsetN edge_table[BitmapsetN::SIZE];
 	BitmapsetN indexed_edge_table[BitmapsetN::SIZE];

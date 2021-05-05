@@ -19,6 +19,12 @@
 #include "gpuqo_debug.cuh"
 
 template <typename K, typename V>
+using HashTableKV = thrust::tuple<K,V>;
+
+template <typename K, typename V>
+using HashTableIterator = thrust::zip_iterator<thrust::tuple<thrust::device_ptr<K>, thrust::device_ptr<V> > >;
+
+template <typename K, typename V>
 class HashTable{
 private:
     K* keys;
@@ -73,6 +79,26 @@ public:
 
     __host__
     void free();
+
+    __host__
+    HashTableIterator<K,V> begin(){
+        return thrust::make_zip_iterator(
+            thrust::make_tuple(
+                thrust::device_pointer_cast(keys),
+                thrust::device_pointer_cast(values)
+            )
+        );
+    }
+
+    __host__
+    HashTableIterator<K,V> end(){
+        return thrust::make_zip_iterator(
+            thrust::make_tuple(
+                thrust::device_pointer_cast(keys+capacity),
+                thrust::device_pointer_cast(values+capacity)
+            )
+        );
+    }
 };
 
 template<typename K, typename V> 
@@ -81,6 +107,12 @@ HashTable<K,V>* createHashTable(size_t capacity);
 
 template<typename BitmapsetN>
 using HashTableDpsub = HashTable<BitmapsetN,JoinRelation<BitmapsetN> >;
+
+template<typename BitmapsetN>
+using HashTableKVDpsub = HashTableKV<BitmapsetN,JoinRelation<BitmapsetN> >;
+
+template<typename BitmapsetN>
+using HashTableIteratorDpsub = HashTableIterator<BitmapsetN,JoinRelation<BitmapsetN> >;
 
 // DEVICE FUNCTIONS IMPLEMENTATION
 

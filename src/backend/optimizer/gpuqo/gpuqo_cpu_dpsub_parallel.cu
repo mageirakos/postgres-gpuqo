@@ -192,7 +192,7 @@ void parallel_enumerate(GpuqoPlannerInfo<BitmapsetN>* info,
     }
 
     pthread_mutex_lock(&mutex);
-    for (level=2; level<=info->n_rels; level++){
+    for (level=2; level<=info->n_iters; level++){
         next_sid = 0;
         uint_t<BitmapsetN> n_sets = BINOM(binoms, 
                                     info->n_rels, info->n_rels, level);
@@ -254,9 +254,19 @@ QueryTree<BitmapsetN>* gpuqo_cpu_dpsub_generic_parallel(GpuqoPlannerInfo<Bitmaps
     LOG_DEBUG("The algorithm did %d joins\n", algorithm->get_n_joins());
 
     BitmapsetN final_joinrel_id = BitmapsetN(0);
-    for (int i = 0; i < info->n_rels; i++)
-        final_joinrel_id |= info->base_rels[i].id;
-
+    
+    if (info->n_rels == info->n_iters){ // normal DP
+        for (int i = 0; i < info->n_rels; i++)
+            final_joinrel_id |= info->base_rels[i].id;
+    } else { // IDP
+        float min_cost = INFF;
+        for (auto iter=memo.begin(info->n_iters); iter != memo.end(info->n_iters); ++iter){
+            if (iter->second->cost < min_cost){
+                min_cost = iter->second->cost;
+                final_joinrel_id = iter->first;
+            }
+        }
+    }
     
     auto final_joinrel_pair = memo.find(final_joinrel_id);
     if (final_joinrel_pair != memo.end())

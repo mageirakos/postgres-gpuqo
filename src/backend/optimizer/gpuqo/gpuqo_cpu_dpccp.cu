@@ -106,7 +106,12 @@ public:
 
     virtual void enumerate()
     {
-        enumerate_csg();
+        auto info = CPUAlgorithm<BitmapsetN, memo_t>::info;
+        
+        if (info->n_iters == info->n_rels)
+            enumerate_csg();
+        else
+            printf("ERROR! IDP does not work with DPccp\n");
     }
 
     virtual bool check_join(int level, 

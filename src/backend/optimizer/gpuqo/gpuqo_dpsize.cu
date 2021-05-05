@@ -290,7 +290,7 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
         DECLARE_NV_TIMING(build_qt);
 
         // iterate over the size of the resulting joinrel
-        for(int i=2; i<=info->n_rels; i++){
+        for(int i=2; i<=info->n_iters; i++){
             START_TIMING(iteration);
             START_TIMING(iter_init);
             
@@ -533,8 +533,19 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
         } // dpsize loop: for i = 2..n_rels
 
         START_TIMING(build_qt);
-            
-        dpsize_buildQueryTree<BitmapsetN,uninit_device_vector<JoinRelationDpsize<BitmapsetN> > >(partition_offsets[info->n_rels-1], gpu_memo_vals, &out);
+
+        size_t final_idx;
+
+        if (info->n_rels == info->n_iters){ // normal DP
+            final_idx = partition_offsets[info->n_rels-1];
+        } else { // IDP
+            auto from_iter = gpu_memo_vals.begin() + partition_offsets[info->n_iters-1];
+            auto to_iter = from_iter + partition_sizes[info->n_iters-1];
+            auto best = thrust::min_element(from_iter, to_iter);
+            final_idx = thrust::distance(gpu_memo_vals.begin(), best);
+        }         
+        
+        dpsize_buildQueryTree<BitmapsetN,uninit_device_vector<JoinRelationDpsize<BitmapsetN> > >(final_idx, gpu_memo_vals, &out);
     
         STOP_TIMING(build_qt);
     

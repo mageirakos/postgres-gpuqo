@@ -92,9 +92,21 @@ QueryTree<BitmapsetN>* gpuqo_cpu_sequential(GpuqoPlannerInfo<BitmapsetN>* info,
     LOG_DEBUG("The algorithm did %d joins\n", algorithm->get_n_joins());
 
     BitmapsetN final_joinrel_id = BitmapsetN(0);
-    for (int i = 0; i < info->n_rels; i++)
-        final_joinrel_id |= info->base_rels[i].id;
 
+    if (info->n_rels == info->n_iters){ // normal DP
+        for (int i = 0; i < info->n_rels; i++)
+            final_joinrel_id |= info->base_rels[i].id;
+    } else { // IDP
+        float min_cost = INFF;
+        for (auto iter=memo.begin(); iter != memo.end(); ++iter){
+            if (iter->first.size() == info->n_iters 
+                && iter->second->cost < min_cost
+            ){
+                min_cost = iter->second->cost;
+                final_joinrel_id = iter->first;
+            }
+        }
+    }
     
     auto final_joinrel_pair = memo.find(final_joinrel_id);
     if (final_joinrel_pair != memo.end())

@@ -52,7 +52,7 @@ public:
 
         GpuqoPlannerInfo<BitmapsetN>* info = CPUAlgorithm<BitmapsetN, memo_t>::info;
 
-        for (int join_s=2; join_s<=info->n_rels; join_s++){
+        for (int join_s=2; join_s<=info->n_iters; join_s++){
             LOG_PROFILE("\nStarting iteration %d\n", join_s);
             START_TIMING(iteration);
             for (int left_s = join_s-1; left_s >= 1; left_s--){

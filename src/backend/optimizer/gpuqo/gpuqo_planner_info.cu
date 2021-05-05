@@ -87,6 +87,7 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo 
 
 	info->size = size;
 	info->n_rels = info_c->n_rels;
+	info->n_iters = info_c->n_rels; // will be overwritten by IDP
 
 	for (int i=0; i < info->n_rels; i++){
 		info->edge_table[i] = convertBitmapset<BitmapsetN>(info_c->edge_table[i]);
