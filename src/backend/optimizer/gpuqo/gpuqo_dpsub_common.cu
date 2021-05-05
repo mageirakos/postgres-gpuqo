@@ -328,7 +328,7 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
             final_relid = *thrust::get<0>(best.get_iterator_tuple());
         }         
 
-        dpsub_buildQueryTree<BitmapsetN,HashTableDpsub<BitmapsetN> >(params.out_relid, *params.memo, &out);
+        dpsub_buildQueryTree<BitmapsetN,HashTableDpsub<BitmapsetN> >(final_relid, *params.memo, &out);
     
         STOP_TIMING(build_qt);
     
