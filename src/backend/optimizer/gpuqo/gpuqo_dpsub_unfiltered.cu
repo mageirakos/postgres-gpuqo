@@ -53,8 +53,8 @@ public:
     __device__
     JoinRelation<BitmapsetN> operator()(BitmapsetN relid, uint32_t cid)
     {
-        return dpsubEnumerateAllSubs<BitmapsetN,false>{}(relid, cid, n_splits,
-            memo, info);
+        return dpsubEnumerateAllSubs<BitmapsetN,CCC_DISABLED>{}(
+                                            relid, cid, n_splits, memo, info);
     }
 };
 /* unrankEvaluateDPSub

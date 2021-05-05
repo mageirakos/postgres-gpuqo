@@ -16,6 +16,12 @@
 #include "gpuqo_binomial.cuh"
 #include "gpuqo_hashtable.cuh"
 
+#ifdef DISABLE_CCC
+#define CCC_DISABLED true
+#else
+#define CCC_DISABLED false
+#endif
+
 #define PENDING_KEYS_SIZE(params) ((params).scratchpad_size*gpuqo_dpsub_filter_keys_overprovisioning)
 
 #define BLOCK_DIM 256

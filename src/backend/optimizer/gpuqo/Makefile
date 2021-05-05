@@ -53,6 +53,10 @@ ifeq ($(enable_gpuqo_debug),yes)
 NVCCFLAGS += -DGPUQO_DEBUG
 endif
 
+ifeq ($(disable_ccc),yes)
+NVCCFLAGS += -DDISABLE_CCC
+endif
+
 GENCODE_FLAGS = $(foreach sm, $(with_cudasm), -gencode arch=compute_$(sm),code=sm_$(sm))
 BUILDDIR = $(top_builddir)/$(subdir)
 

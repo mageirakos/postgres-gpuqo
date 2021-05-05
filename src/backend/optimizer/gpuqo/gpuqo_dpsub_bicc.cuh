@@ -286,8 +286,8 @@ struct dpsubEnumerateBiCC {
                 valid = (l|r) == relid;
             }
             
-            try_join<BitmapsetN,false,false,false>(relid, jr_out, l, r, valid, 
-                                                    stack, memo, info);
+            try_join<BitmapsetN,false,false,CCC_DISABLED>(relid, jr_out, l, r,
+                                                     valid, stack, memo, info);
         }
 
         if (LANE_ID < stack.stackTop){
