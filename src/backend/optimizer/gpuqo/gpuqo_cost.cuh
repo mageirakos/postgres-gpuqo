@@ -84,9 +84,7 @@ calc_join_cost(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
 template<typename BitmapsetN>
 __host__ __device__
 static float 
-estimate_join_selectivity(
-    BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
-    BitmapsetN right_rel_id, JoinRelation<BitmapsetN> &right_rel,
+estimate_join_selectivity(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
     GpuqoPlannerInfo<BitmapsetN>* info)
 {
     float sel = 1.0;
@@ -140,8 +138,7 @@ estimate_join_rows(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
                 BitmapsetN right_rel_id, JoinRelation<BitmapsetN> &right_rel,
                 GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    float sel = estimate_join_selectivity(left_rel_id, left_rel, 
-                                            right_rel_id, right_rel, info);
+    float sel = estimate_join_selectivity(left_rel_id, right_rel_id, info);
     float rows = sel * left_rel.rows * right_rel.rows;
 
     // clamp the number of rows

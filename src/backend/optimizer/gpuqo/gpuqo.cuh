@@ -15,6 +15,7 @@
 #include "gpuqo_uninitalloc.cuh"
 #include "gpuqo_planner_info.cuh"
 #include "gpuqo_debug.cuh"
+#include "gpuqo_remapper.cuh"
 
 #include "signal.h"
 extern "C" void ProcessInterrupts(void);
@@ -82,13 +83,7 @@ extern QueryTree<BitmapsetN>* gpuqo_dpe_dpccp(GpuqoPlannerInfo<BitmapsetN>* info
 
 
 template<typename BitmapsetN>
-extern void makeBFSIndexRemapTables(int *remap_table_fw, int *remap_table_bw, GpuqoPlannerInfo<BitmapsetN>* info);
-
-template<typename BitmapsetN>
-extern void remapPlannerInfo(GpuqoPlannerInfo<BitmapsetN>* info, int* remap_table);
-
-template<typename BitmapsetN>
-extern void remapQueryTree(QueryTree<BitmapsetN>* qt, int* remap_table);
+extern Remapper<BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN>* info);
 
 template<typename BitmapsetN>
 extern void minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info);

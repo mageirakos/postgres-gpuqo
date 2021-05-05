@@ -66,19 +66,15 @@ static gpuqo_c::QueryTree *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlanne
 		buildSubTrees(info->subtrees, info);
 	}
 
-	int* remap_table_fw = new int[info->n_rels];
-	int* remap_table_bw = new int[info->n_rels];
+	Remapper<BitmapsetN> remapper = makeBFSIndexRemapper(info);
+	GpuqoPlannerInfo<BitmapsetN> *remap_info = remapper.remapPlannerInfo(info);
 
-	makeBFSIndexRemapTables(remap_table_fw, remap_table_bw, info);
-	remapPlannerInfo(info, remap_table_fw);
+	QueryTree<BitmapsetN> *query_tree = gpuqo_run_switch(gpuqo_algorithm, 
+														remap_info);
 
-	QueryTree<BitmapsetN> *query_tree = gpuqo_run_switch(gpuqo_algorithm, info);
+	remapper.remapQueryTree(query_tree);
 
-	remapQueryTree(query_tree, remap_table_bw);
-
-	delete remap_table_fw;
-	delete remap_table_bw;
-
+	delete remap_info;
 	delete info;
 
 	return convertQueryTree(query_tree);
@@ -86,11 +82,11 @@ static gpuqo_c::QueryTree *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlanne
 
 extern "C" gpuqo_c::QueryTree *gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfo* info_c){
 	if (info_c->n_rels < 32){
-	return __gpuqo_run<Bitmapset32>(gpuqo_algorithm, info_c);
-} else if (info_c->n_rels < 64){
-	return __gpuqo_run<Bitmapset64>(gpuqo_algorithm, info_c);
-} else {
-	printf("ERROR: too many relations\n");
-	return NULL;	
-}
+		return __gpuqo_run<Bitmapset32>(gpuqo_algorithm, info_c);
+	} else if (info_c->n_rels < 64){
+		return __gpuqo_run<Bitmapset64>(gpuqo_algorithm, info_c);
+	} else {
+		printf("ERROR: too many relations\n");
+		return NULL;	
+	}
 }
