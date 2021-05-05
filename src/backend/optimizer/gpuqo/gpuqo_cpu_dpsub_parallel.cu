@@ -239,7 +239,7 @@ QueryTree<BitmapsetN>* gpuqo_cpu_dpsub_generic_parallel(GpuqoPlannerInfo<Bitmaps
         jr->left_rel_ptr = NULL; 
         jr->right_rel_id = 0; 
         jr->right_rel_ptr = NULL; 
-        jr->cost = baserel_cost(info->base_rels[i]); 
+        jr->cost = info->base_rels[i].cost; 
         jr->rows = info->base_rels[i].rows; 
         jr->edges = info->edge_table[i];
         memo.insert(std::make_pair(info->base_rels[i].id, jr));

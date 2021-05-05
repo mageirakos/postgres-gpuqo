@@ -255,7 +255,7 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
         t.left_rel_id = BitmapsetN(0);
         t.right_rel_idx = 0; 
         t.right_rel_id = BitmapsetN(0);
-        t.cost = baserel_cost(info->base_rels[i]); 
+        t.cost = info->base_rels[i].cost; 
         t.rows = info->base_rels[i].rows; 
         t.edges = info->edge_table[i];
         gpu_memo_vals[i] = t;

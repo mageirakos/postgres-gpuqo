@@ -93,7 +93,7 @@ template<typename BitmapsetN>
 struct BaseRelation{
 	BitmapsetN id;
 	float rows;
-	float tuples;
+	float cost;
 	int off_fk_selecs;
 	int n_fk_selecs;
 };

@@ -10,8 +10,9 @@
 
 #include <iostream>
 
-#include "gpuqo_planner_info.cuh"
 #include <optimizer/gpuqo_common.h>
+#include "gpuqo_planner_info.cuh"
+#include "gpuqo_cost.cuh"
 
 extern "C" void *palloc0(size_t size);
 extern "C" void *palloc(size_t size);
@@ -103,7 +104,7 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo 
 	for (int i=0; i < info->n_rels; i++){
 		info->base_rels[i].id = convertBitmapset<BitmapsetN>(info_c->base_rels[i].id);
 		info->base_rels[i].rows = info_c->base_rels[i].rows;
-		info->base_rels[i].tuples = info_c->base_rels[i].tuples;
+		info->base_rels[i].cost = BASEREL_COEFF * info_c->base_rels[i].tuples;
 
 		gpuqo_c::FKSelecInfo* fk_selec = info_c->base_rels[i].fk_selecs;
 		int j = 0;

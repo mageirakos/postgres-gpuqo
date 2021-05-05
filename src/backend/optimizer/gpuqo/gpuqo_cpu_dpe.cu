@@ -305,7 +305,7 @@ gpuqo_cpu_dpe(GpuqoPlannerInfo<BitmapsetN>* info, CPUAlgorithm<BitmapsetN, hasht
         jr->left_rel_ptr = NULL; 
         jr->right_rel_id = 0; 
         jr->right_rel_ptr = NULL; 
-        jr->cost = baserel_cost(info->base_rels[i]); 
+        jr->cost = info->base_rels[i].cost; 
         jr->rows = info->base_rels[i].rows; 
         jr->edges = info->edge_table[i];
         jr->num_entry.store(0, std::memory_order_consume);

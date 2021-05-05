@@ -177,7 +177,7 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
         JoinRelation<BitmapsetN> t;
         t.left_rel_id = BitmapsetN(0); 
         t.left_rel_id = BitmapsetN(0); 
-        t.cost = baserel_cost(info->base_rels[i]); 
+        t.cost = info->base_rels[i].cost; 
         t.rows = info->base_rels[i].rows; 
         ini_memo_keys[i] = info->base_rels[i].id;
         ini_memo_vals[i] = t;
