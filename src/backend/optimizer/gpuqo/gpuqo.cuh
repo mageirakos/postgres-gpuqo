@@ -44,6 +44,10 @@ template<typename T>
 using uninit_device_vector = thrust::device_vector<T, uninitialized_allocator<T> >;
 
 template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_run_switch(int gpuqo_algorithm, 
+											GpuqoPlannerInfo<BitmapsetN>* info);
+
+template<typename BitmapsetN>
 extern QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info);
 
 template<typename BitmapsetN>
