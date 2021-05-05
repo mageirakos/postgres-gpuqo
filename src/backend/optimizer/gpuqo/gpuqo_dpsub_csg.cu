@@ -83,19 +83,35 @@ uint32_t dpsub_csg_evaluation(int iter,
                 params.gpu_info
             );
         } else {
-            launchEvaluateFilteredDPSubKernel<BitmapsetN,dpsubEnumerateAllSubs<BitmapsetN> >(
-                thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
-                thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
-                thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
-                params.info->n_rels,
-                iter,
-                n_pending_sets,
-                threads_per_set,
-                n_eval_sets,
-                *params.memo,
-                params.info,
-                params.gpu_info
-            );
+            if (gpuqo_dpsub_ccc_enable){
+                launchEvaluateFilteredDPSubKernel<BitmapsetN,dpsubEnumerateAllSubs<BitmapsetN,false> >(
+                    thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
+                    thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
+                    thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
+                    params.info->n_rels,
+                    iter,
+                    n_pending_sets,
+                    threads_per_set,
+                    n_eval_sets,
+                    *params.memo,
+                    params.info,
+                    params.gpu_info
+                );
+            } else {
+                launchEvaluateFilteredDPSubKernel<BitmapsetN,dpsubEnumerateAllSubs<BitmapsetN,true> >(
+                    thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
+                    thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
+                    thrust::raw_pointer_cast(params.gpu_scratchpad_vals.data()),
+                    params.info->n_rels,
+                    iter,
+                    n_pending_sets,
+                    threads_per_set,
+                    n_eval_sets,
+                    *params.memo,
+                    params.info,
+                    params.gpu_info
+                );
+            }
         }           
         STOP_TIMING(compute);
 

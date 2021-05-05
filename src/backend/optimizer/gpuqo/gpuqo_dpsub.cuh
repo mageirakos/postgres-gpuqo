@@ -183,7 +183,7 @@ void do_join(JoinRelation<BitmapsetN> &jr_out,
     }
 }
 
-template<typename BitmapsetN, bool CHECK_LEFT, bool CHECK_RIGHT>
+template<typename BitmapsetN, bool CHECK_LEFT, bool CHECK_RIGHT, bool NO_CCC>
 __device__
 void try_join(BitmapsetN jr, JoinRelation<BitmapsetN> &jr_out, 
                 BitmapsetN l, BitmapsetN r, 
@@ -200,6 +200,17 @@ void try_join(BitmapsetN jr, JoinRelation<BitmapsetN> &jr_out,
             check_join<BitmapsetN, CHECK_LEFT, CHECK_RIGHT>(l, r, info);
 
     Assert(__activemask() == WARP_MASK);
+
+    if (NO_CCC){
+        if (p){
+            Assert(!l.empty() && !r.empty());
+
+            JoinRelation<BitmapsetN> left_rel = *memo.lookup(l);
+            JoinRelation<BitmapsetN> right_rel = *memo.lookup(r);
+            do_join(jr_out, l, left_rel, r, right_rel, info);
+        }
+        return;
+    }
 
     unsigned pthBlt = __ballot_sync(WARP_MASK, !p);
     int reducedNTaken = __popc(pthBlt);

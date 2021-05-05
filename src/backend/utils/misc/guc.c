@@ -1105,6 +1105,16 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"gpuqo_dpsub_ccc", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Enables CCC warp divergence prevention mechanism."),
+			gettext_noop("A CCC stack prevents warp divergence, delaying joins until strictly necessary."),
+			GUC_EXPLAIN
+		},
+		&gpuqo_dpsub_ccc_enable,
+		true,
+		NULL, NULL, NULL
+	},
+	{
 		{"gpuqo_dpsub_csg", PGC_USERSET, QUERY_TUNING_GPUQO,
 			gettext_noop("Enables CSG enumeration of the join pairs in DPsub."),
 			gettext_noop("Only connected subgraphs can enumerated as left join relation."),

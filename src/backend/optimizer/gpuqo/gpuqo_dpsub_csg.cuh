@@ -128,7 +128,7 @@ static void enumerate_sub_csg_emit(BitmapsetN T, BitmapsetN emit_S,
     Assert(I.isSubset(T));
     Assert(emit_S.empty() || is_connected(emit_S, info->edge_table));
 
-    try_join<BitmapsetN,false,true>(T, jr_out, emit_S, T-emit_S, 
+    try_join<BitmapsetN,false,true,false>(T, jr_out, emit_S, T-emit_S, 
             !emit_S.empty() && I.isSubset(emit_S), 
             join_stack, memo, info);
 

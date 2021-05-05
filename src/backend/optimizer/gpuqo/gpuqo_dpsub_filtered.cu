@@ -46,6 +46,9 @@ int gpuqo_dpsub_filter_threshold;
 int gpuqo_dpsub_filter_cpu_enum_threshold;
 int gpuqo_dpsub_filter_keys_overprovisioning;
 
+// user-configured variables (ccc)
+bool gpuqo_dpsub_ccc_enable;
+
 // user-configured variables (csg)
 bool gpuqo_dpsub_csg_enable;
 int gpuqo_dpsub_csg_threshold;

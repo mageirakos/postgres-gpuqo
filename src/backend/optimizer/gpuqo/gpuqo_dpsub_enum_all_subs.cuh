@@ -17,7 +17,7 @@
 #include "gpuqo_filter.cuh"
 #include "gpuqo_dpsub.cuh"
 
-template<typename BitmapsetN>
+template<typename BitmapsetN, bool NO_CCC>
 struct dpsubEnumerateAllSubs{
     __device__
     JoinRelation<BitmapsetN> operator()(BitmapsetN relid, 
@@ -45,7 +45,8 @@ struct dpsubEnumerateAllSubs{
         for (int i = 0; i < n_pairs; i++){
             r = relid - l;
             
-            try_join<BitmapsetN,true,true>(relid, jr_out, l, r, valid, stack, memo, info);
+            try_join<BitmapsetN,true,true,NO_CCC>(relid, jr_out, l, r, valid, 
+                                                    stack, memo, info);
 
             l = nextSubset(l, relid);
 
