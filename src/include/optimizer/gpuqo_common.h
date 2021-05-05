@@ -42,6 +42,7 @@ extern int gpuqo_dpe_pairs_per_depbuf;
 extern bool gpuqo_dpsub_tree_enable;
 extern bool gpuqo_dpsub_bicc_enable;
 extern bool gpuqo_spanning_tree_enable;
+extern int gpuqo_idp_n_iters;
 
 #ifdef __CUDA_ARCH__
 __host__ __device__

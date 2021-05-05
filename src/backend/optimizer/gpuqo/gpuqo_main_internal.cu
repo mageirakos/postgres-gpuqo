@@ -12,7 +12,7 @@
 
 template<typename BitmapsetN>
 QueryTree<BitmapsetN> *gpuqo_run_switch(int gpuqo_algorithm, 
-									GpuqoPlannerInfo<BitmapsetN>* info)
+										GpuqoPlannerInfo<BitmapsetN>* info)
 {
 	switch (gpuqo_algorithm)
 	{
@@ -69,8 +69,11 @@ static gpuqo_c::QueryTree *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlanne
 	Remapper<BitmapsetN> remapper = makeBFSIndexRemapper(info);
 	GpuqoPlannerInfo<BitmapsetN> *remap_info = remapper.remapPlannerInfo(info);
 
-	QueryTree<BitmapsetN> *query_tree = gpuqo_run_switch(gpuqo_algorithm, 
-														remap_info);
+	QueryTree<BitmapsetN> *query_tree;
+	if (gpuqo_idp_n_iters <= 1 || gpuqo_idp_n_iters >= info->n_rels)
+		query_tree = gpuqo_run_switch(gpuqo_algorithm, remap_info);
+	else
+		query_tree = gpuqo_run_idp(gpuqo_algorithm, remap_info);
 
 	remapper.remapQueryTree(query_tree);
 

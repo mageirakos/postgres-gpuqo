@@ -2241,6 +2241,16 @@ static struct config_int ConfigureNamesInt[] =
 		128, 2, INT_MAX,
 		NULL, NULL, NULL
 	},
+	{
+		{"gpuqo_idp_n_iters", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of IDP iterations (0 to disable)."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_idp_n_iters,
+		0, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
 #endif
 	{
 		{"geqo_effort", PGC_USERSET, QUERY_TUNING_GEQO,

@@ -415,6 +415,7 @@
 #gpuqo_dpe_pairs_per_depbuf = 128
 #gpuqo_dpsub_tree = off
 #gpuqo_spanning_tree = off
+#gpuqo_idp_n_iters = 0
 
 # - Other Planner Options -
 
