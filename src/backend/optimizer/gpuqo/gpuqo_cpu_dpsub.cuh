@@ -49,10 +49,8 @@ public:
                 do{
                     BitmapsetN join_id = s << 1; // first bit is 0 in Postgres
 
-                    if (!is_connected(join_id, info->edge_table))
-                        continue;
-
-                    enumerate_subsets(join_id);
+                    if (is_connected(join_id, info->edge_table))
+                        enumerate_subsets(join_id);
                     
                     if (s != to){
                         s = s.nextPermutation();
