@@ -42,7 +42,7 @@ BitmapsetN Remapper<BitmapsetN>::remapRelid(BitmapsetN id)
 {
     BitmapsetN out = BitmapsetN(0);
     for (remapper_transf_el_t<BitmapsetN> &e : transf){
-        if (e.from_relid.isSubset(id)){
+        if (e.from_relid.intersects(id)){
             out.set(e.to_idx+1);
         }
     }
@@ -145,6 +145,7 @@ template<typename BitmapsetN>
 GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
                                         GpuqoPlannerInfo<BitmapsetN>* old_info)
 {
+    int n_rels = transf.size();
     int n_fk_selecs = 0; // TODO: not supported atm
     int n_eq_classes, n_eq_class_sels; 
     countEqClasses(old_info, &n_eq_classes, &n_eq_class_sels); 
@@ -162,7 +163,7 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
 	p += sizeof(GpuqoPlannerInfo<BitmapsetN>);
 
 	info->size = size;
-	info->n_rels = old_info->n_rels;
+	info->n_rels = n_rels;
 	info->n_iters = old_info->n_iters;
 
     remapEdgeTable(old_info->edge_table, info->edge_table);
@@ -190,10 +191,10 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
 	p += sizeof(float) * info->n_eq_class_sels;
 
     int offset = 0, old_offset = 0, j = 0;
-	for (int i = 0; i < info->n_eq_classes; i++){
+	for (int i = 0; i < old_info->n_eq_classes; i++){
         bool found = false;
         for (remapper_transf_el_t<BitmapsetN> &e : transf){
-            if (info->eq_classes[i].isSubset(e.from_relid)){
+            if (old_info->eq_classes[i].isSubset(e.from_relid)){
                 found = true;
                 break;
             }
