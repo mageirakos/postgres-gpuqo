@@ -55,10 +55,12 @@ static inline int eqClassNSels(int size){
 __host__ __device__
 #endif
 static inline int eqClassIndex(int idx_l, int idx_r, int size){
-	if (idx_l < idx_r)
-		return idx_l*size - idx_l*(idx_l+1)/2 + (idx_r-idx_l-1);
-	else
-		return eqClassIndex(idx_r, idx_l, size);
+	if (idx_l > idx_r){
+		int tmp = idx_l;
+		idx_l = idx_r;
+		idx_r = tmp;
+	}
+	return idx_l*size - idx_l*(idx_l+1)/2 + (idx_r-idx_l-1);
 }
 
 // constants for table sizes
