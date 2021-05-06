@@ -92,9 +92,13 @@ void Remapper<BitmapsetN>::remapBaseRels(
             base_rels_to[e.to_idx].id = remapRelid(e.from_relid);
             base_rels_to[e.to_idx].rows = e.qt->rows;
             base_rels_to[e.to_idx].cost = e.qt->cost;
+            base_rels_to[e.to_idx].n_fk_selecs = 0;
+            base_rels_to[e.to_idx].off_fk_selecs = 0;
         } else {
             base_rels_to[e.to_idx] = base_rels_from[e.from_relid.lowestPos()-1];
             base_rels_to[e.to_idx].id = remapRelid(e.from_relid);
+            base_rels_to[e.to_idx].n_fk_selecs = 0;
+            base_rels_to[e.to_idx].off_fk_selecs = 0;
         }
     }
 }
