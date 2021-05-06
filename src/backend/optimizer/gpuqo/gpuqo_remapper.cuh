@@ -37,8 +37,7 @@ private:
     void remapBaseRels(BaseRelation<BitmapsetN>* base_rels_from,
                         BaseRelation<BitmapsetN>* base_rels_to);
     void remapEqClass(BitmapsetN* eq_class_from, float* sels_from,
-                        BitmapsetN* eq_class_to, float* sels_to, 
-                        GpuqoPlannerInfo<BitmapsetN>* from_info);
+                        BitmapsetN* eq_class_to, float* sels_to);
 
 public:
     Remapper<BitmapsetN>(list<remapper_transf_el_t<BitmapsetN>> _transf);

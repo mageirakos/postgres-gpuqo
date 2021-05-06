@@ -103,15 +103,12 @@ template<typename BitmapsetN>
 void Remapper<BitmapsetN>::remapEqClass(BitmapsetN* eq_class_from,
                                         float* sels_from,
                                         BitmapsetN* eq_class_to,
-                                        float* sels_to,
-                                        GpuqoPlannerInfo<BitmapsetN>* from_info)
+                                        float* sels_to)
 {
     *eq_class_to = remapRelid(*eq_class_from);
 
     int s_from = eq_class_from->size();
-    int n_from = eqClassNSels(s_from);
     int s_to = eq_class_to->size();
-    int n_to = eqClassNSels(s_to);
 
     for (int idx_l_to = 0; idx_l_to < s_to; idx_l_to++){
         for (int idx_r_to = idx_l_to+1; idx_r_to < s_to; idx_r_to++){
@@ -125,18 +122,12 @@ void Remapper<BitmapsetN>::remapEqClass(BitmapsetN* eq_class_from,
 
             int sels_to_idx = eqClassIndex(idx_l_to, idx_r_to, s_to);
 
-            if (id_l_from.size() > 1 || id_r_from.size()){
-                sels_to[sels_to_idx] = estimate_join_selectivity(id_l_from, 
-                                                        id_r_from, from_info);
-            } else {
-                int idx_l_from = (id_l_from.allLower() & *eq_class_from).size();
-                int idx_r_from = (id_r_from.allLower() & *eq_class_from).size();
+            int idx_l_from = (id_l_from.allLower() & *eq_class_from).size();
+            int idx_r_from = (id_r_from.allLower() & *eq_class_from).size();
 
-                int sels_from_idx = eqClassIndex(idx_l_from, idx_r_from, 
-                                                    s_from);
-    
-                sels_to[sels_to_idx] = sels_from[sels_from_idx];
-            }
+            int sels_from_idx = eqClassIndex(idx_l_from, idx_r_from, s_from);
+
+            sels_to[sels_to_idx] = sels_from[sels_from_idx];
         }
     }
 }
@@ -202,8 +193,7 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
         if (!found){
             remapEqClass(
                 &old_info->eq_classes[i], &old_info->eq_class_sels[old_offset], 
-                &info->eq_classes[j], &info->eq_class_sels[offset], 
-                old_info
+                &info->eq_classes[j], &info->eq_class_sels[offset]
             );
             offset += eqClassNSels(info->eq_classes[j].size());
             j++;
