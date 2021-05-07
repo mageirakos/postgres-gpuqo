@@ -83,7 +83,7 @@ static void process_depbuf(DependencyBuffer<BitmapsetN>* depbuf,
             
             if (join_rel->cost < memo_join_rel->cost){
                 // copy only the JoinRelationCPU part, not num_entry
-                *((JoinRelationCPU<BitmapsetN>*)memo_join_rel) = *((JoinRelationCPU<BitmapsetN>*)join_rel);
+                ((JoinRelationCPU<BitmapsetN>)*memo_join_rel) = (JoinRelationCPU<BitmapsetN>) *join_rel;
             }
 
             delete join_rel;
