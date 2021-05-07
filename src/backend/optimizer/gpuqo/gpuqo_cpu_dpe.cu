@@ -83,7 +83,7 @@ static void process_depbuf(DependencyBuffer<BitmapsetN>* depbuf,
             
             if (join_rel->cost < memo_join_rel->cost){
                 // copy only the JoinRelationCPU part, not num_entry
-                ((JoinRelationCPU<BitmapsetN>)*memo_join_rel) = (JoinRelationCPU<BitmapsetN>) *join_rel;
+                memo_join_rel->JoinRelationCPU<BitmapsetN>::operator=(*join_rel);
             }
 
             delete join_rel;
@@ -285,15 +285,13 @@ public:
             new_joinrel = submit_join(level, join_rel1, 
                     (JoinRelationDPE<BitmapsetN>&) left_rel, (JoinRelationDPE<BitmapsetN>&) right_rel
             );
-            CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->post_join(level, new_joinrel, 
-                                *((JoinRelationCPU<BitmapsetN>*)join_rel1), 
+            CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->post_join(level, new_joinrel, *join_rel1, 
                                 left_rel,  right_rel);
             if (try_swap){
                 new_joinrel = submit_join(level, join_rel2, 
                     (JoinRelationDPE<BitmapsetN>&) left_rel, (JoinRelationDPE<BitmapsetN>&) right_rel
                 );
-                CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->post_join(level, new_joinrel, 
-                                    *((JoinRelationCPU<BitmapsetN>*)join_rel2), 
+                CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->post_join(level, new_joinrel, *join_rel2, 
                                     left_rel, right_rel);
                 if (join_rel1->cost < join_rel2->cost)
                     return join_rel1;
