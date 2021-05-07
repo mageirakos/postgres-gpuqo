@@ -72,9 +72,9 @@ static void process_depbuf(DependencyBuffer<BitmapsetN>* depbuf,
                     left_rel->id.toUint(), left_rel->num_entry.load(), 
                     right_rel->id.toUint(), right_rel->num_entry.load());
 
-            while (left_rel->num_entry.load(std::memory_order_acquire) != 0) 
+            while (left_rel->num_entry.load() != 0) 
                 ; // busy wait for entries to be ready
-            while (right_rel->num_entry.load(std::memory_order_acquire) != 0)
+            while (right_rel->num_entry.load() != 0)
                 ; // busy wait for entries to be ready
 
             JoinRelationDPE<BitmapsetN>* join_rel = make_join_relation(
@@ -89,6 +89,7 @@ static void process_depbuf(DependencyBuffer<BitmapsetN>* depbuf,
             delete join_rel;
         }
         delete job.second;
+        memo_join_rel->num_entry--;
     }
 }
 
@@ -162,7 +163,7 @@ public:
             out = false;
         } else{
             join_rel = build_join_relation<JoinRelationDPE<BitmapsetN>>(left_rel, right_rel);
-            join_rel->num_entry.store(0, std::memory_order_consume);
+            join_rel->num_entry = 0;
             memo.insert(std::make_pair(join_rel->id, join_rel));
             out = true;
         }

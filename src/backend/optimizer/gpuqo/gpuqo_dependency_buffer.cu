@@ -35,9 +35,7 @@ void DependencyBuffer<BitmapsetN>::push(
     auto id_entry_pair = queue_lookup_pairs[index].second.find(join_rel->id);
     depbuf_entry_t<BitmapsetN>* entry;
     if (id_entry_pair == queue_lookup_pairs[index].second.end()){
-        int num = join_rel->num_entry.fetch_add(1, std::memory_order_consume);
-        Assert(num >= 0);
-        
+        join_rel->num_entry++;
         depbuf_entry_t<BitmapsetN> temp = std::make_pair(
             join_rel, 
             new join_list_t<BitmapsetN>
@@ -68,7 +66,6 @@ void DependencyBuffer<BitmapsetN>::push(
 template<typename BitmapsetN>
 depbuf_entry_t<BitmapsetN> DependencyBuffer<BitmapsetN>::pop(){
     depbuf_entry_t<BitmapsetN> out;
-    int num __attribute__((unused));
     out.first = NULL; 
 
     pthread_mutex_lock(&mutex);
@@ -78,9 +75,6 @@ depbuf_entry_t<BitmapsetN> DependencyBuffer<BitmapsetN>::pop(){
 
     out = queue_lookup_pairs[first_non_empty].first.front();
     queue_lookup_pairs[first_non_empty].first.pop_front();
-
-    num = out.first->num_entry.fetch_sub(1, std::memory_order_release);
-    Assert(num > 0);
 
     while (queue_lookup_pairs[first_non_empty].first.empty() 
             && first_non_empty < n_rels*n_rels)
