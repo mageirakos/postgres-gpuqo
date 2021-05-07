@@ -33,34 +33,35 @@ void DependencyBuffer<BitmapsetN>::push(
     int index = big_size * n_rels + small_size;
 
     auto id_entry_pair = queue_lookup_pairs[index].second.find(join_rel->id);
-    depbuf_entry_t<BitmapsetN>* entry;
+    join_list_t<BitmapsetN>* join_list;
     if (id_entry_pair == queue_lookup_pairs[index].second.end()){
         join_rel->num_entry++;
+        
+        join_list = new join_list_t<BitmapsetN>;
+
         depbuf_entry_t<BitmapsetN> temp = std::make_pair(
             join_rel, 
-            new join_list_t<BitmapsetN>
+            join_list
         );
 
         if (left_rel->num_entry.load(std::memory_order_consume) == 0 
                 && right_rel->num_entry.load(std::memory_order_consume) == 0){
             queue_lookup_pairs[index].first.push_front(temp);
-            entry = &(*queue_lookup_pairs[index].first.begin());
         } else {
             queue_lookup_pairs[index].first.push_back(temp);
-            entry = &(*queue_lookup_pairs[index].first.rbegin());
         }
 
         queue_lookup_pairs[index].second.insert(std::make_pair(
-            join_rel->id, entry
+            join_rel->id, join_list
         ));
     
         if (index < first_non_empty)
             first_non_empty = index;
     } else {
-        entry = id_entry_pair->second;
+        join_list = id_entry_pair->second;
     }
 
-    entry->second->push_back(std::make_pair(left_rel, right_rel));
+    join_list->push_back(std::make_pair(left_rel, right_rel));
 }
 
 template<typename BitmapsetN>

@@ -34,7 +34,7 @@ using depbuf_queue_t = std::deque<depbuf_entry_t<BitmapsetN> >;
 
 
 template<typename BitmapsetN>
-using depbuf_lookup_t = std::unordered_map<BitmapsetN, depbuf_entry_t<BitmapsetN>*>;
+using depbuf_lookup_t = std::unordered_map<BitmapsetN, join_list_t<BitmapsetN>*>;
 
 template<typename BitmapsetN>
 class DependencyBuffer{
