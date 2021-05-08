@@ -43,6 +43,7 @@ private:
     std::atomic<DepBufNode<BitmapsetN>*> unified_queue;
     DepBufNode<BitmapsetN>* free_nodes;
     DepBufNode<BitmapsetN>* next_free_node;
+    std::unordered_map<BitmapsetN, DepBufNode<BitmapsetN>*> lookup;
 public:
     DependencyBuffer(int n_rels, int capacity);
     void push(

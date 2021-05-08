@@ -14,6 +14,8 @@ template<typename BitmapsetN>
 DependencyBuffer<BitmapsetN>::DependencyBuffer(int n_rels, int capacity) 
         : n_rels(n_rels), capacity(capacity)
 {
+    lookup.reserve(capacity);
+
     free_nodes = new DepBufNode<BitmapsetN>[capacity];
     next_free_node = free_nodes;
 
@@ -45,20 +47,14 @@ void DependencyBuffer<BitmapsetN>::push(
     new_node->next_join = new_node;
     new_node->prev_join = new_node;
 
-    DepBufNode<BitmapsetN> *node = queues[index];
+    auto search_res = lookup.find(join_rel->id);
 
-    if (node != NULL){
-        do{
-            if (node->join_rel == join_rel)
-                break;
-        } while((node = node->next_rel) != queues[index]);
-    }
-
-    if (node == NULL){
+    if (queues[index] == NULL){
         queues[index] = new_node;
 
+        lookup.emplace(join_rel->id, new_node);
         join_rel->num_entry++;
-    } else if(node->join_rel != join_rel){
+    } else if(search_res == lookup.end()){
         // add back
         new_node->next_rel = queues[index];
         new_node->prev_rel = queues[index]->prev_rel;
@@ -71,8 +67,11 @@ void DependencyBuffer<BitmapsetN>::push(
             queues[index] = new_node;
         }
 
+        lookup.emplace(join_rel->id, new_node);
         join_rel->num_entry++;
     } else {
+        DepBufNode<BitmapsetN> *node = search_res->second;
+
         // add back
         new_node->next_join = node;
         new_node->prev_join = node->prev_join;
@@ -90,6 +89,8 @@ void DependencyBuffer<BitmapsetN>::push(
             }
             if (queues[index] == node)
                 queues[index] = new_node;
+
+            search_res->second = new_node;
         }
     }
 }
@@ -142,6 +143,7 @@ void DependencyBuffer<BitmapsetN>::clear(){
     next_free_node = free_nodes;
     for (int i = 0; i <= n_rels; i++)
         queues[i] = NULL;
+    lookup.clear();
     unified_queue = NULL;
 }
 
