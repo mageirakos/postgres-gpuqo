@@ -17,8 +17,8 @@ DependencyBuffer<BitmapsetN>::DependencyBuffer(int n_rels, int capacity)
     free_nodes = new DepBufNode<BitmapsetN>[capacity];
     next_free_node = free_nodes;
 
-    queues = new DepBufNode<BitmapsetN>*[n_rels*n_rels];
-    for (int i = 0; i < n_rels * n_rels; i++)
+    queues = new DepBufNode<BitmapsetN>*[n_rels+1];
+    for (int i = 0; i <= n_rels; i++)
         queues[i] = NULL;
 
     unified_queue = NULL;
@@ -31,11 +31,9 @@ void DependencyBuffer<BitmapsetN>::push(
             JoinRelationDPE<BitmapsetN> *right_rel)
 {
     // push is not thread-safe
-    int left_size = left_rel->id.size();
-    int right_size = right_rel->id.size();
-    int big_size = std::max(left_size, right_size);
-    int small_size = std::min(left_size, right_size);
-    int index = big_size * n_rels + small_size;
+    int index = join_rel->id.size();
+
+    Assert(next_free_node < free_nodes + capacity);
 
     DepBufNode<BitmapsetN> *new_node = next_free_node++;
 
@@ -101,7 +99,7 @@ void DependencyBuffer<BitmapsetN>::unify_queues()
 {
     DepBufNode<BitmapsetN> *node = NULL;
 
-    for (int index = 0; index < n_rels*n_rels; index++){
+    for (int index = 0; index <= n_rels; index++){
         if (queues[index] != NULL){
             if (node != NULL){
                 node->prev_rel->next_rel = queues[index];
@@ -142,7 +140,7 @@ bool DependencyBuffer<BitmapsetN>::full(){
 template<typename BitmapsetN>
 void DependencyBuffer<BitmapsetN>::clear(){
     next_free_node = free_nodes;
-    for (int i = 0; i < n_rels * n_rels; i++)
+    for (int i = 0; i <= n_rels; i++)
         queues[i] = NULL;
     unified_queue = NULL;
 }

@@ -88,6 +88,7 @@ static void process_depbuf(DependencyBuffer<BitmapsetN>* depbuf,
         } while ((job = job->next_join) != first_job);
 
         memo_join_rel->num_entry--;
+        Assert(memo_join_rel->num_entry.load() >= 0);
     }
 }
 
