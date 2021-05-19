@@ -12,26 +12,23 @@
 
 #include <nodes/bitmapset.h>
 
+typedef struct EquivalenceClass EquivalenceClass;
+
 typedef Bitmapset* EdgeMask;
 typedef Bitmapset* RelationID;
 
 typedef struct EqClassInfo{
+	EquivalenceClass* eclass;
 	RelationID relids;
 	float* sels;
+	RelationID* fk;
 	struct EqClassInfo* next;
 } EqClassInfo;
-
-typedef struct FKSelecInfo{
-	int other_baserel;
-	float sel;
-	struct FKSelecInfo* next;
-} FKSelecInfo;
 
 typedef struct BaseRelation{
 	RelationID id;
 	float rows;
 	float tuples;
-	FKSelecInfo* fk_selecs;
 } BaseRelation;
 
 typedef struct GpuqoPlannerInfo{
@@ -40,9 +37,9 @@ typedef struct GpuqoPlannerInfo{
 	EdgeMask* edge_table;
 	EdgeMask* indexed_edge_table;
 	EqClassInfo* eq_classes;
-    int n_fk_selecs;
     int n_eq_classes;
     int n_eq_class_sels;
+    int n_eq_class_fks;
 } GpuqoPlannerInfo;
 
 typedef struct QueryTree{

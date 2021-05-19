@@ -33,12 +33,15 @@
 
 int gpuqo_algorithm;
 
-BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
-EdgeMask* makeEdgeTable(PlannerInfo* root, int n_rels);
-void printQueryTree(QueryTree* qt, int indent);
-void printEdges(GpuqoPlannerInfo* info);
-RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels);
-void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlannerInfo* info, int n_rels);
+static BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
+static EdgeMask* makeEdgeTable(PlannerInfo* root, int n_rels);
+static void printQueryTree(QueryTree* qt, int indent);
+static void printEdges(GpuqoPlannerInfo* info);
+static RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels);
+static void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlannerInfo* info, int n_rels);
+static void set_eq_class_foreign_keys(PlannerInfo *root, GpuqoPlannerInfo *info,
+                            Relids outer_relids, Relids inner_relids,
+                            SpecialJoinInfo *sjinfo, List **restrictlist);
 
 /*
  * gpuqo_check_can_run
@@ -104,6 +107,86 @@ void printEdges(GpuqoPlannerInfo* info){
     }
 }
 
+void
+set_eq_class_foreign_keys(PlannerInfo *root,
+                            GpuqoPlannerInfo *info,
+                            Relids outer_relids,
+                            Relids inner_relids,
+                            SpecialJoinInfo *sjinfo,
+                            List **restrictlist)
+{
+	JoinType	jointype = sjinfo->jointype;
+	List	   *worklist = *restrictlist;
+	ListCell   *lc;
+
+	/* Consider each FK constraint that is known to match the query */
+	foreach(lc, root->fkey_list)
+	{
+		ForeignKeyOptInfo *fkinfo = (ForeignKeyOptInfo *) lfirst(lc);
+		bool		ref_is_outer;
+		ListCell   *cell;
+		ListCell   *next;
+
+		/*
+		 * This FK is not relevant unless it connects a baserel on one side of
+		 * this join to a baserel on the other side.
+		 */
+		if (bms_is_member(fkinfo->con_relid, outer_relids) &&
+			bms_is_member(fkinfo->ref_relid, inner_relids))
+			ref_is_outer = false;
+		else if (bms_is_member(fkinfo->ref_relid, outer_relids) &&
+				 bms_is_member(fkinfo->con_relid, inner_relids))
+			ref_is_outer = true;
+		else
+			continue;
+
+		if ((jointype == JOIN_SEMI || jointype == JOIN_ANTI) &&
+			(ref_is_outer || bms_membership(inner_relids) != BMS_SINGLETON))
+			continue;
+
+		if (worklist == *restrictlist)
+			worklist = list_copy(worklist);
+
+		for (cell = list_head(worklist); cell; cell = next)
+		{
+			RestrictInfo *rinfo = (RestrictInfo *) lfirst(cell);
+			int			i;
+			bool		matches = false;
+
+			next = lnext(cell);
+
+			for (i = 0; i < fkinfo->nkeys; i++)
+			{
+				if (rinfo->parent_ec)
+				{
+					if (fkinfo->eclass[i] == rinfo->parent_ec)
+					{
+						matches = true;
+						break;
+					}
+				}
+			}
+			if (matches)
+			{
+                EqClassInfo* eq = info->eq_classes;
+
+                while (eq != NULL){
+                    if (eq->eclass == rinfo->parent_ec)
+                    {
+                        Bitmapset **bms = &eq->fk[
+                                bms_member_index(eq->relids, fkinfo->con_relid)
+                        ];
+                        *bms = bms_add_member(*bms, fkinfo->ref_relid);
+                        
+                        break;
+                    }
+                    eq = eq->next;
+                }
+            }
+		}
+    }
+}
+
 RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels){
     RelOptInfo* left_rel = NULL;
     RelOptInfo* right_rel = NULL;
@@ -148,6 +231,8 @@ RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_re
         printf("WARNING: Found NULL RelOptInfo*\n");
     }
 
+    // Assert(this_rel->rows == qt->rows);
+
     // clean-up the query tree
     pfree(qt);
 
@@ -160,7 +245,6 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
     baserel.rows = rel->rows;
     baserel.tuples = rel->tuples;
     baserel.id = bms_copy(rel->relids);
-    baserel.fk_selecs = NULL;
 
     return baserel;
 }
@@ -206,9 +290,6 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                 List *restrictlist = NULL;
                 SpecialJoinInfo sjinfo;
                 RelOptInfo *join_rel;
-                float fk_sel;
-
-                FKSelecInfo* fk = info->base_rels[i].fk_selecs;
                 
                 sjinfo.type = T_SpecialJoinInfo;
                 sjinfo.jointype = JOIN_INNER;
@@ -274,8 +355,13 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                         size = bms_num_members(ec->relids);
                         n_sels = eqClassNSels(size);
                         ec->sels = (float*) palloc(sizeof(float)*n_sels);
+                        ec->eclass = rinfo->parent_ec;
+                        ec->fk = (RelationID*) palloc(sizeof(RelationID)*size);
+                        for (int i_fk = 0; i_fk < size; i_fk++)
+                            ec->fk[i_fk] = NULL;
                         info->n_eq_classes++;
                         info->n_eq_class_sels += n_sels;
+                        info->n_eq_class_fks += size;
                     } else {
                         size = bms_num_members(ec->relids);
                     }
@@ -301,19 +387,11 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                     }
                 }
 
-                fk_sel = get_foreign_key_join_selectivity(root,
-											   rel_outer->relids,
-											   rel_inner->relids,
-											   &sjinfo,
-											   &restrictlist);
-                if (fk_sel < 1){
-                    fk = (FKSelecInfo*) palloc(sizeof(FKSelecInfo));
-                    fk->next = info->base_rels[i].fk_selecs;
-                    info->base_rels[i].fk_selecs = fk;
-                    fk->other_baserel = j;
-                    fk->sel = fk_sel;
-                    info->n_fk_selecs++;
-                }
+                set_eq_class_foreign_keys(root, info,
+                                            rel_outer->relids,
+                                            rel_inner->relids,
+                                            &sjinfo,
+                                            &restrictlist);
             }
             j++;
         }
@@ -346,9 +424,9 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
 
     info->n_rels = n_rels;
     info->eq_classes = NULL;
-    info->n_fk_selecs = 0;
     info->n_eq_classes = 0;
     info->n_eq_class_sels = 0;
+    info->n_eq_class_fks = 0;
 
     i = 0;
     foreach(lc, initial_rels){

@@ -37,8 +37,8 @@ do { \
 #else
 #define INFD std::numeric_limits<double>::infinity()
 #define INFF std::numeric_limits<float>::infinity()
-#define NAND std::numeric_limits<double>::nan()
-#define NANF std::numeric_limits<float>::nan()
+#define NAND std::numeric_limits<double>::quiet_NaN()
+#define NANF std::numeric_limits<float>::quiet_NaN()
 #endif
 
 template<typename T>

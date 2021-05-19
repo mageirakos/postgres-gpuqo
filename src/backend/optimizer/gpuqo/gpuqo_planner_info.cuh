@@ -93,9 +93,9 @@ template<typename BitmapsetN>
 struct BaseRelation{
 	BitmapsetN id;
 	float rows;
+	float tuples;
 	float cost;
-	int off_fk_selecs;
-	int n_fk_selecs;
+	bool composite;
 };
 
 template<typename BitmapsetN>
@@ -107,13 +107,12 @@ struct GpuqoPlannerInfo{
 	BitmapsetN edge_table[BitmapsetN::SIZE];
 	BitmapsetN indexed_edge_table[BitmapsetN::SIZE];
 	BitmapsetN subtrees[BitmapsetN::SIZE];
-	int n_fk_selecs;
-	unsigned int* fk_selec_idxs;
-	float* fk_selec_sels;
 	int n_eq_classes;
 	int n_eq_class_sels;
+	int n_eq_class_fks;
 	BitmapsetN* eq_classes;
 	float* eq_class_sels;
+	BitmapsetN* eq_class_fk;
 };
 
 template<typename BitmapsetN>

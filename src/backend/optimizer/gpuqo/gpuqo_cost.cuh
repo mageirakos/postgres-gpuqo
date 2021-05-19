@@ -32,9 +32,13 @@ static bool has_useful_index(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
                             GpuqoPlannerInfo<BitmapsetN>* info){
     if (right_rel_id.size() != 1)  // inner must be base rel
         return false;
+
     // -1 since it's 1-indexed, 
     // another -1 since relation with id 0b10 is at index 0 and so on
     int baserel_right_idx = right_rel_id.lowestPos() - 1;
+
+    if (info->base_rels[baserel_right_idx].composite)
+        return false;
     
     return left_rel_id.intersects(info->indexed_edge_table[baserel_right_idx]);
 }
@@ -83,49 +87,86 @@ calc_join_cost(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
 
 template<typename BitmapsetN>
 __host__ __device__
+static float fkselc_of_ec(int off_fk, BitmapsetN ec_relids, 
+                    BitmapsetN outer_rels, BitmapsetN inner_rels, 
+                    GpuqoPlannerInfo<BitmapsetN>* info) 
+{
+    while(!outer_rels.empty()){
+        BitmapsetN out_id = outer_rels.lowest();
+        int out_idx = (out_id.allLower() & ec_relids).size();
+        BitmapsetN match = inner_rels & info->eq_class_fk[off_fk+out_idx];
+        if (!match.empty()){
+            int in_idx = match.lowestPos()-1;
+            return 1.0 / max(1.0f, info->base_rels[in_idx].tuples);
+        }
+
+        outer_rels ^= out_id;
+    }
+    return NANF;
+}
+
+template<typename BitmapsetN>
+__host__ __device__
+static float 
+estimate_ec_selectivity(BitmapsetN ec_relids, int off_sels, int off_fks,
+                        BitmapsetN left_rel_id, BitmapsetN right_rel_id,
+                        GpuqoPlannerInfo<BitmapsetN>* info)
+{
+    int size = ec_relids.size();
+    BitmapsetN match_l = ec_relids & left_rel_id;
+    BitmapsetN match_r = ec_relids & right_rel_id;
+
+    if (match_l.empty() || match_r.empty())
+        return 1.0f;
+
+    // first check if any foreign key selectivity applies
+
+    float fk_sel = NANF;
+    fk_sel = fkselc_of_ec(off_fks, ec_relids, match_l, match_r, info);
+    if (!isnan(fk_sel))
+        return fk_sel;
+
+    // try also swapping relations if nothing was found
+    fk_sel = fkselc_of_ec(off_fks, ec_relids, match_r, match_l, info);
+    if (!isnan(fk_sel)) // found fk selectivity -> apply it
+        return fk_sel;
+
+    // not found fk selectivity -> estimate from eq class
+
+    // more than one on the same equivalence class may match
+    // just take the lowest one (already done in allLower)
+
+    int idx_l = (match_l.allLower() & ec_relids).size();
+    int idx_r = (match_r.allLower() & ec_relids).size();
+    int idx = eqClassIndex(idx_l, idx_r, size);
+
+    return info->eq_class_sels[off_sels+idx];
+}
+
+template<typename BitmapsetN>
+__host__ __device__
 static float 
 estimate_join_selectivity(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
     GpuqoPlannerInfo<BitmapsetN>* info)
 {
     float sel = 1.0;
 
-    // check fk with base relations
-    if (left_rel_id.size() == 1 && right_rel_id.size() == 1){
-        int left_rel_idx = left_rel_id.lowestPos()-1;
-        int right_rel_idx = right_rel_id.lowestPos()-1;
-
-        BaseRelation<BitmapsetN> left_br = info->base_rels[left_rel_idx];
-        for (int i=0; i < left_br.n_fk_selecs; i++){
-            if (info->fk_selec_idxs[left_br.off_fk_selecs+i] == right_rel_idx){
-                sel *= info->fk_selec_sels[left_br.off_fk_selecs+i];
-                break;
-            }
-        }
-    }
-    
     // for each ec that involves any baserel on the left and on the right,
     // get its selectivity.
     // NB: one equivalence class may only apply a selectivity once so the lowest
     // matching id on both sides is kept
-    int off = 0;
+    int off_sels = 0;
+    int off_fks = 0;
     for (int i=0; i<info->n_eq_classes; i++){
         BitmapsetN ec_relids = info->eq_classes[i];
-        int size = ec_relids.size();
-        BitmapsetN match_l = ec_relids & left_rel_id;
-        BitmapsetN match_r = ec_relids & right_rel_id;
-
-        if (!match_l.empty() && !match_r.empty()){
-            // more than one on the same equivalence class may match
-            // just take the lowest one (already done in allLower)
-
-            int idx_l = (match_l.allLower() & ec_relids).size();
-            int idx_r = (match_r.allLower() & ec_relids).size();
-            int idx = eqClassIndex(idx_l, idx_r, size);
-            
-            sel *= info->eq_class_sels[off+idx];
-        }
+        
+        sel *= estimate_ec_selectivity(
+            info->eq_classes[i], off_sels, off_fks,
+            left_rel_id, right_rel_id, info
+        );
            
-        off += eqClassNSels(size);
+        off_sels += eqClassNSels(ec_relids.size());
+        off_fks += ec_relids.size();
     }
     
     return sel;
