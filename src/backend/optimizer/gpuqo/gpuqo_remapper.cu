@@ -208,6 +208,7 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
 
 	info->n_eq_classes = n_eq_classes;
 	info->n_eq_class_sels = n_eq_class_sels;
+	info->n_eq_class_fks = n_eq_class_fks;
 
 	info->eq_classes = (BitmapsetN*) p;
 	p += sizeof(BitmapsetN) * info->n_eq_classes;
