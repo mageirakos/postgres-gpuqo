@@ -173,19 +173,17 @@ void evaluateFilteredDPSubKernel(BitmapsetN* pending_keys, BitmapsetN* scratchpa
 	
     if (threadIdx.x == 0){
         char *p = (char*) dynshmem;
-        p += sizeof(GpuqoPlannerInfo<BitmapsetN>);
+        p += plannerInfoBaseSize<BitmapsetN>();
 
         if (full_shmem){
-            
-            
             info_sh->eq_classes = (BitmapsetN*) p;
-            p += sizeof(BitmapsetN) * info->n_eq_classes;
+            p += plannerInfoEqClassesSize<BitmapsetN>(info->n_eq_classes);
             
             info_sh->eq_class_sels = (float*) p;
-            p += sizeof(float) * info->n_eq_class_sels;
+            p += plannerInfoEqClassSelsSize<BitmapsetN>(info->n_eq_class_sels);
             
             info_sh->eq_class_fk = (BitmapsetN*) p;
-            p += sizeof(BitmapsetN) * info->n_eq_class_fks;
+            p += plannerInfoEqClassFksSize<BitmapsetN>(info->n_eq_class_fks);
         } else {
             info_sh->eq_classes = info->eq_classes;
             info_sh->eq_class_sels = info->eq_class_sels;

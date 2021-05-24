@@ -73,16 +73,13 @@ gpuqo_c::Bitmapset* convertBitmapset(Bitmapset set){
 
 template<typename BitmapsetN>
 GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
-	unsigned int size = sizeof(GpuqoPlannerInfo<BitmapsetN>);
-	size += sizeof(BitmapsetN) * info_c->n_eq_classes;
-	size += sizeof(float) * info_c->n_eq_class_sels;
-	size += sizeof(BitmapsetN) * info_c->n_eq_class_fks;
-	size += ceil_div(size, 8)*8; // ceil to 64 bits multiples
+	size_t size = plannerInfoSize<BitmapsetN>(info_c->n_eq_classes, 
+							info_c->n_eq_class_sels, info_c->n_eq_class_fks);
 
 	char* p = new char[size];
 
 	GpuqoPlannerInfo<BitmapsetN> *info = (GpuqoPlannerInfo<BitmapsetN>*) p;
-	p += sizeof(GpuqoPlannerInfo<BitmapsetN>);
+	p += plannerInfoBaseSize<BitmapsetN>();
 
 	info->size = size;
 	info->n_rels = info_c->n_rels;
@@ -106,11 +103,11 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo 
 	info->n_eq_class_fks = info_c->n_eq_class_fks;
 
 	BitmapsetN* eq_classes = (BitmapsetN*) p;
-	p += sizeof(BitmapsetN) * info->n_eq_classes;
+	p += plannerInfoEqClassesSize<BitmapsetN>(info->n_eq_classes);
 	float* eq_class_sels = (float*) p;
-	p += sizeof(float) * info->n_eq_class_sels;
+	p += plannerInfoEqClassSelsSize<BitmapsetN>(info->n_eq_class_sels);
 	BitmapsetN* eq_class_fk = (BitmapsetN*) p;
-	p += sizeof(BitmapsetN) * info->n_eq_class_fks;
+	p += plannerInfoEqClassFksSize<BitmapsetN>(info->n_eq_class_fks);
 
 	gpuqo_c::EqClassInfo *ec = info_c->eq_classes;
 	int i = 0;
@@ -151,20 +148,20 @@ GpuqoPlannerInfo<BitmapsetN>* copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo<Bitm
 	cudaMalloc(&p, info->size);
 	
 	GpuqoPlannerInfo<BitmapsetN> *info_gpu = (GpuqoPlannerInfo<BitmapsetN>*) p;
-	p += sizeof(GpuqoPlannerInfo<BitmapsetN>);
+	p += plannerInfoBaseSize<BitmapsetN>();
 	
 	tmp_info.eq_classes = (BitmapsetN*) p;
-	p += sizeof(BitmapsetN) * info->n_eq_classes;
+	p += plannerInfoEqClassesSize<BitmapsetN>(info->n_eq_classes);
 	cudaMemcpy((void*)tmp_info.eq_classes, info->eq_classes, 
 		sizeof(BitmapsetN) * info->n_eq_classes, cudaMemcpyHostToDevice);
 	
 	tmp_info.eq_class_sels = (float*) p;
-	p += sizeof(float) * info->n_eq_class_sels;
+	p += plannerInfoEqClassSelsSize<BitmapsetN>(info->n_eq_class_sels);
 	cudaMemcpy((void*)tmp_info.eq_class_sels, info->eq_class_sels, 
 		sizeof(float) * info->n_eq_class_sels, cudaMemcpyHostToDevice);
 	
 	tmp_info.eq_class_fk = (BitmapsetN*) p;
-	p += sizeof(BitmapsetN) * info->n_eq_class_fks;
+	p += plannerInfoEqClassFksSize<BitmapsetN>(info->n_eq_class_fks);
 	cudaMemcpy((void*)tmp_info.eq_class_fk, info->eq_class_fk, 
 		sizeof(BitmapsetN) * info->n_eq_class_fks, cudaMemcpyHostToDevice);
 	

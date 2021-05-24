@@ -183,16 +183,13 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
     int n_eq_classes, n_eq_class_sels, n_eq_class_fks; 
     countEqClasses(old_info, &n_eq_classes, &n_eq_class_sels, &n_eq_class_fks); 
 
-    unsigned int size = sizeof(GpuqoPlannerInfo<BitmapsetN>);
-	size += sizeof(BitmapsetN) * n_eq_classes;
-	size += sizeof(float) * n_eq_class_sels;
-	size += sizeof(BitmapsetN) * n_eq_class_fks;
-	size += ceil_div(size, 8)*8; // ceil to 64 bits multiples
+    size_t size = plannerInfoSize<BitmapsetN>(n_eq_classes, n_eq_class_sels, 
+                                            n_eq_class_fks);
 
 	char* p = new char[size];
 
 	GpuqoPlannerInfo<BitmapsetN> *info = (GpuqoPlannerInfo<BitmapsetN>*) p;
-	p += sizeof(GpuqoPlannerInfo<BitmapsetN>);
+	p += plannerInfoBaseSize<BitmapsetN>();
 
 	info->size = size;
 	info->n_rels = n_rels;
@@ -211,11 +208,11 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
 	info->n_eq_class_fks = n_eq_class_fks;
 
 	info->eq_classes = (BitmapsetN*) p;
-	p += sizeof(BitmapsetN) * info->n_eq_classes;
+	p += plannerInfoEqClassesSize<BitmapsetN>(info->n_eq_classes);
 	info->eq_class_sels = (float*) p;
-	p += sizeof(float) * info->n_eq_class_sels;
+	p += plannerInfoEqClassSelsSize<BitmapsetN>(info->n_eq_class_sels);
 	info->eq_class_fk = (BitmapsetN*) p;
-	p += sizeof(BitmapsetN) * info->n_eq_class_fks;
+	p += plannerInfoEqClassFksSize<BitmapsetN>(info->n_eq_class_fks);
 
     int off_sel = 0, off_fk = 0, old_off_sel = 0, old_off_fk = 0, j = 0;
 	for (int i = 0; i < old_info->n_eq_classes; i++){

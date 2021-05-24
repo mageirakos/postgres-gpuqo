@@ -115,6 +115,50 @@ struct GpuqoPlannerInfo{
 	BitmapsetN* eq_class_fk;
 };
 
+__host__ __device__
+inline size_t align64(size_t size) {
+	if (size & 7) {
+		return (size & (~7)) + 8;
+	} else {
+		return size & (~7);
+	}
+}
+
+template<typename BitmapsetN>
+__host__ __device__
+inline size_t plannerInfoBaseSize() {
+	return align64(sizeof(GpuqoPlannerInfo<BitmapsetN>));
+}
+
+template<typename BitmapsetN>
+__host__ __device__
+inline size_t plannerInfoEqClassesSize(int n_eq_classes) {
+	return align64(sizeof(BitmapsetN) * n_eq_classes);
+}
+
+template<typename BitmapsetN>
+__host__ __device__
+inline size_t plannerInfoEqClassSelsSize(int n_eq_class_sels) {
+	return align64(sizeof(float) * n_eq_class_sels);
+}
+
+template<typename BitmapsetN>
+__host__ __device__
+inline size_t plannerInfoEqClassFksSize(int n_eq_class_fks) {
+	return align64(sizeof(BitmapsetN) * n_eq_class_fks);
+}
+
+template<typename BitmapsetN>
+__host__ __device__
+inline size_t plannerInfoSize(size_t n_eq_classes, size_t n_eq_class_sels, 
+						size_t n_eq_class_fks) 
+{
+	return plannerInfoBaseSize<BitmapsetN>() 
+		+ plannerInfoEqClassesSize<BitmapsetN>(n_eq_classes)
+		+ plannerInfoEqClassSelsSize<BitmapsetN>(n_eq_class_sels)
+		+ plannerInfoEqClassFksSize<BitmapsetN>(n_eq_class_fks);
+}
+
 template<typename BitmapsetN>
 GpuqoPlannerInfo<BitmapsetN>* 
 convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c);
