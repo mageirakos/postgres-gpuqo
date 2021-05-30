@@ -24,35 +24,37 @@ struct JoinRelationDPE : public JoinRelationCPU<BitmapsetN> {
 };
 
 template<typename BitmapsetN>
-using join_list_t = std::deque< std::pair<JoinRelationDPE<BitmapsetN>*, JoinRelationDPE<BitmapsetN>*> >;
+struct DepBufNode{
+    JoinRelationDPE<BitmapsetN> *join_rel;
+    JoinRelationDPE<BitmapsetN> *left_rel;
+    JoinRelationDPE<BitmapsetN> *right_rel;
+    DepBufNode<BitmapsetN>* next_join;
+    DepBufNode<BitmapsetN>* prev_join;
+    DepBufNode<BitmapsetN>* next_rel;
+    DepBufNode<BitmapsetN>* prev_rel;
+};
 
 template<typename BitmapsetN>
-using depbuf_entry_t = std::pair<JoinRelationDPE<BitmapsetN>*, join_list_t<BitmapsetN>*>;
-
-template<typename BitmapsetN>
-using depbuf_queue_t = std::deque<depbuf_entry_t<BitmapsetN> >;
-
-
-template<typename BitmapsetN>
-using depbuf_lookup_t = std::unordered_map<BitmapsetN, depbuf_entry_t<BitmapsetN>*>;
-
-template<typename BitmapsetN>
-class DependencyBuffer{
+class DependencyBuffer{   
 private:
     int n_rels;
-    std::pair<depbuf_queue_t<BitmapsetN>, depbuf_lookup_t<BitmapsetN> > *queue_lookup_pairs;
-    pthread_mutex_t mutex;
-    int first_non_empty;
+    int capacity;
+    DepBufNode<BitmapsetN>** queues;
+    std::atomic<DepBufNode<BitmapsetN>*> unified_queue;
+    DepBufNode<BitmapsetN>* free_nodes;
+    DepBufNode<BitmapsetN>* next_free_node;
+    std::unordered_map<BitmapsetN, DepBufNode<BitmapsetN>*> lookup;
 public:
-    DependencyBuffer(int n_rels);
+    DependencyBuffer(int n_rels, int capacity);
     void push(
         JoinRelationDPE<BitmapsetN> *join_rel, 
         JoinRelationDPE<BitmapsetN> *left_rel, 
         JoinRelationDPE<BitmapsetN> *right_rel);
-    depbuf_entry_t<BitmapsetN> pop();
+    DepBufNode<BitmapsetN> *pop();
     bool empty();
+    bool full();
     void clear();
-    size_t size();
+    void unify_queues();
     ~DependencyBuffer();
 };
 	

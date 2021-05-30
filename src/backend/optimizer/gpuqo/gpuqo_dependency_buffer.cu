@@ -11,12 +11,19 @@
 #include "gpuqo_dependency_buffer.cuh"
 
 template<typename BitmapsetN>
-DependencyBuffer<BitmapsetN>::DependencyBuffer(int n_rels) 
-        : n_rels(n_rels) 
+DependencyBuffer<BitmapsetN>::DependencyBuffer(int n_rels, int capacity) 
+        : n_rels(n_rels), capacity(capacity)
 {
-    pthread_mutex_init(&mutex, NULL);
-    queue_lookup_pairs = new std::pair<depbuf_queue_t<BitmapsetN>, depbuf_lookup_t<BitmapsetN> >[n_rels*n_rels];
-    first_non_empty = n_rels*n_rels;
+    lookup.reserve(capacity);
+
+    free_nodes = new DepBufNode<BitmapsetN>[capacity];
+    next_free_node = free_nodes;
+
+    queues = new DepBufNode<BitmapsetN>*[n_rels+1];
+    for (int i = 0; i <= n_rels; i++)
+        queues[i] = NULL;
+
+    unified_queue = NULL;
 }
 
 template<typename BitmapsetN>
@@ -26,99 +33,124 @@ void DependencyBuffer<BitmapsetN>::push(
             JoinRelationDPE<BitmapsetN> *right_rel)
 {
     // push is not thread-safe
-    int left_size = left_rel->id.size();
-    int right_size = right_rel->id.size();
-    int big_size = std::max(left_size, right_size);
-    int small_size = std::min(left_size, right_size);
-    int index = big_size * n_rels + small_size;
+    int index = join_rel->id.size();
 
-    auto id_entry_pair = queue_lookup_pairs[index].second.find(join_rel->id);
-    depbuf_entry_t<BitmapsetN>* entry;
-    if (id_entry_pair == queue_lookup_pairs[index].second.end()){
-        int num = join_rel->num_entry.fetch_add(1, std::memory_order_consume);
-        Assert(num >= 0);
-        
-        depbuf_entry_t<BitmapsetN> temp = std::make_pair(
-            join_rel, 
-            new join_list_t<BitmapsetN>
-        );
+    Assert(next_free_node < free_nodes + capacity);
 
-        if (left_rel->num_entry.load(std::memory_order_consume) == 0 
-                && right_rel->num_entry.load(std::memory_order_consume) == 0){
-            queue_lookup_pairs[index].first.push_front(temp);
-            entry = &(*queue_lookup_pairs[index].first.begin());
-        } else {
-            queue_lookup_pairs[index].first.push_back(temp);
-            entry = &(*queue_lookup_pairs[index].first.rbegin());
+    DepBufNode<BitmapsetN> *new_node = next_free_node++;
+
+    new_node->join_rel = join_rel;
+    new_node->left_rel = left_rel;
+    new_node->right_rel = right_rel;
+    new_node->next_rel = new_node;
+    new_node->prev_rel = new_node;
+    new_node->next_join = new_node;
+    new_node->prev_join = new_node;
+
+    auto search_res = lookup.find(join_rel->id);
+
+    if (queues[index] == NULL){
+        queues[index] = new_node;
+
+        lookup.emplace(join_rel->id, new_node);
+        join_rel->num_entry++;
+    } else if(search_res == lookup.end()){
+        // add back
+        new_node->next_rel = queues[index];
+        new_node->prev_rel = queues[index]->prev_rel;
+        queues[index]->prev_rel->next_rel = new_node;
+        queues[index]->prev_rel = new_node;
+
+        if (left_rel->num_entry.load() == 0 
+                && right_rel->num_entry.load() == 0){
+            // move to front
+            queues[index] = new_node;
         }
 
-        queue_lookup_pairs[index].second.insert(std::make_pair(
-            join_rel->id, entry
-        ));
-    
-        if (index < first_non_empty)
-            first_non_empty = index;
+        lookup.emplace(join_rel->id, new_node);
+        join_rel->num_entry++;
     } else {
-        entry = id_entry_pair->second;
-    }
+        DepBufNode<BitmapsetN> *node = search_res->second;
 
-    entry->second->push_back(std::make_pair(left_rel, right_rel));
+        // add back
+        new_node->next_join = node;
+        new_node->prev_join = node->prev_join;
+        node->prev_join->next_join = new_node;
+        node->prev_join = new_node;
+
+        if (left_rel->num_entry.load() == 0 
+                && right_rel->num_entry.load() == 0){
+            // move to front
+            if (node != node->next_rel){
+                node->prev_rel->next_rel = new_node;
+                node->next_rel->prev_rel = new_node;
+                new_node->prev_rel = node->prev_rel;
+                new_node->next_rel = node->next_rel;
+            }
+            if (queues[index] == node)
+                queues[index] = new_node;
+
+            search_res->second = new_node;
+        }
+    }
 }
 
 template<typename BitmapsetN>
-depbuf_entry_t<BitmapsetN> DependencyBuffer<BitmapsetN>::pop(){
-    depbuf_entry_t<BitmapsetN> out;
-    int num __attribute__((unused));
-    out.first = NULL; 
+void DependencyBuffer<BitmapsetN>::unify_queues()
+{
+    DepBufNode<BitmapsetN> *node = NULL;
 
-    pthread_mutex_lock(&mutex);
-    
-    if (empty())
-        goto exit;
+    for (int index = 0; index <= n_rels; index++){
+        if (queues[index] != NULL){
+            if (node != NULL){
+                node->prev_rel->next_rel = queues[index];
+                node = queues[index];
+            } else {
+                node = queues[index];
+                unified_queue = node;
+            }
+        }
+    }
 
-    out = queue_lookup_pairs[first_non_empty].first.front();
-    queue_lookup_pairs[first_non_empty].first.pop_front();
+    if (node != NULL)
+        node->prev_rel->next_rel = NULL;
+}
 
-    num = out.first->num_entry.fetch_sub(1, std::memory_order_release);
-    Assert(num > 0);
+template<typename BitmapsetN>
+DepBufNode<BitmapsetN> *DependencyBuffer<BitmapsetN>::pop(){
+    DepBufNode<BitmapsetN> *node;
+    do{
+        node = unified_queue.load();
+    } while(node != NULL 
+        && !unified_queue.compare_exchange_strong(node, node->next_rel)
+    );
 
-    while (queue_lookup_pairs[first_non_empty].first.empty() 
-            && first_non_empty < n_rels*n_rels)
-        first_non_empty++;
-    // stop if found non-empty queue or first_non_empty = n_rels*n_rels
-
-exit:
-    pthread_mutex_unlock(&mutex);
-    return out;
+    return node;
 }
 
 template<typename BitmapsetN>
 bool DependencyBuffer<BitmapsetN>::empty(){
-    return first_non_empty >= n_rels*n_rels;
+    return unified_queue.load() == NULL;
+}
+
+template<typename BitmapsetN>
+bool DependencyBuffer<BitmapsetN>::full(){
+    return next_free_node >= free_nodes + capacity;
 }
 
 template<typename BitmapsetN>
 void DependencyBuffer<BitmapsetN>::clear(){
-    for (int i = 0; i < n_rels*n_rels; i++){
-        queue_lookup_pairs[i].first.clear();
-        queue_lookup_pairs[i].second.clear();
-    }
-    first_non_empty = n_rels*n_rels;
-}
-
-template<typename BitmapsetN>
-size_t DependencyBuffer<BitmapsetN>::size(){
-    size_t s = 0;
-    for (int i = 0; i < n_rels*n_rels; i++){
-        s += queue_lookup_pairs[i].first.size();
-    }
-    return s;
+    next_free_node = free_nodes;
+    for (int i = 0; i <= n_rels; i++)
+        queues[i] = NULL;
+    lookup.clear();
+    unified_queue = NULL;
 }
 
 template<typename BitmapsetN>
 DependencyBuffer<BitmapsetN>::~DependencyBuffer(){
-    delete queue_lookup_pairs;
-    pthread_mutex_destroy(&mutex);
+    delete free_nodes;
+    delete queues;
 }
 
 template class DependencyBuffer<Bitmapset32>;

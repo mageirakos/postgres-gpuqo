@@ -56,39 +56,39 @@ template<typename BitmapsetN>
 static void process_depbuf(DependencyBuffer<BitmapsetN>* depbuf, 
     GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    depbuf_entry_t<BitmapsetN> job;
-    while ((job = depbuf->pop()).first != NULL){
-        JoinRelationDPE<BitmapsetN> *memo_join_rel = job.first;
+    DepBufNode<BitmapsetN> *job;
 
-        LOG_DEBUG("Processing %u (%d);: %d pairs\n", 
-                memo_join_rel->id.toUint(), memo_join_rel->num_entry.load(), 
-                job.second->size());
+    while ((job = depbuf->pop()) != NULL){
+        JoinRelationDPE<BitmapsetN> *memo_join_rel = job->join_rel;
 
-        for (auto iter = job.second->begin(); iter != job.second->end(); ++iter){
-            JoinRelationDPE<BitmapsetN> *left_rel = iter->first;
-            JoinRelationDPE<BitmapsetN> *right_rel = iter->second;
+        LOG_DEBUG("Processing %u (%d)\n", 
+                memo_join_rel->id.toUint(), memo_join_rel->num_entry.load());
 
+        DepBufNode<BitmapsetN> *first_job = job;
+        do {
             LOG_DEBUG("  %u -> %u (%d) %u (%d);\n", memo_join_rel->id.toUint(),
-                    left_rel->id.toUint(), left_rel->num_entry.load(), 
-                    right_rel->id.toUint(), right_rel->num_entry.load());
+                job->left_rel->id.toUint(), job->left_rel->num_entry.load(), 
+                job->right_rel->id.toUint(), job->right_rel->num_entry.load());
 
-            while (left_rel->num_entry.load(std::memory_order_acquire) != 0) 
+            while (job->left_rel->num_entry.load() != 0) 
                 ; // busy wait for entries to be ready
-            while (right_rel->num_entry.load(std::memory_order_acquire) != 0)
+            while (job->right_rel->num_entry.load() != 0)
                 ; // busy wait for entries to be ready
 
             JoinRelationDPE<BitmapsetN>* join_rel = make_join_relation(
-                *left_rel, *right_rel, info
+                *job->left_rel, *job->right_rel, info
             );
             
             if (join_rel->cost < memo_join_rel->cost){
                 // copy only the JoinRelationCPU part, not num_entry
-                *((JoinRelationCPU<BitmapsetN>*)memo_join_rel) = *((JoinRelationCPU<BitmapsetN>*)join_rel);
+                memo_join_rel->JoinRelationCPU<BitmapsetN>::operator=(*join_rel);
             }
 
             delete join_rel;
-        }
-        delete job.second;
+        } while ((job = job->next_join) != first_job);
+
+        memo_join_rel->num_entry--;
+        Assert(memo_join_rel->num_entry.load() >= 0);
     }
 }
 
@@ -101,17 +101,23 @@ static void* thread_function(void* _args){
 
     while(true){
         START_TIMING(wait);
+        LOG_DEBUG("[%d] acquiring lock\n", args->id);
         pthread_mutex_lock(&args->depbufs->depbuf_mutex);
-        while(args->depbufs->depbuf_curr->empty() 
-                && !args->depbufs->finish){
+
+        while(args->depbufs->depbuf_curr->empty() && !args->depbufs->finish){
             args->depbufs->n_waiting++;
-            if (args->depbufs->n_waiting == gpuqo_dpe_n_threads-1){
+            LOG_DEBUG("[%d] increased n_waiting: %d\n", 
+                        args->id, args->depbufs->n_waiting);
+
+            if (args->depbufs->n_waiting == gpuqo_dpe_n_threads-1)
                 pthread_cond_signal(&args->depbufs->all_threads_waiting);
-            }
+
             pthread_cond_wait(&args->depbufs->avail_jobs, 
-                            &args->depbufs->depbuf_mutex);
+                                &args->depbufs->depbuf_mutex);
         }
+
         pthread_mutex_unlock(&args->depbufs->depbuf_mutex);
+        LOG_DEBUG("[%d] released lock\n", args->id);
         STOP_TIMING(wait);
 
         if (args->depbufs->finish)
@@ -122,10 +128,13 @@ static void* thread_function(void* _args){
         STOP_TIMING(execute);
     }
 
+    LOG_DEBUG("[%d] acquiring lock\n", args->id);
+    pthread_mutex_lock(&args->depbufs->depbuf_mutex);
     LOG_PROFILE("[%d] ", args->id);
     PRINT_TOTAL_TIMING(wait);
     LOG_PROFILE("[%d] ", args->id);
     PRINT_TOTAL_TIMING(execute);
+    pthread_mutex_unlock(&args->depbufs->depbuf_mutex);
 
     return NULL;
 }
@@ -134,18 +143,23 @@ static void* thread_function(void* _args){
 template<typename BitmapsetN>
 class DPEJoinFunction : public CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >{
 public:
-    int job_count;
     pthread_t* threads;
     DependencyBuffers<BitmapsetN> depbufs;    
     ThreadArgs<BitmapsetN>* thread_args;
 #ifdef GPUQO_PROFILE
     uint64_t total_job_count;
 #endif
+    PROTOTYPE_TIMING(wait);
+    PROTOTYPE_TIMING(execute);
 
     DPEJoinFunction(GpuqoPlannerInfo<BitmapsetN>* _info, 
                 hashtable_memo_t<BitmapsetN>* _memo, 
                 CPUAlgorithm<BitmapsetN, hashtable_memo_t<BitmapsetN> >* _alg) 
-        : CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >(_info, _memo, _alg) {}
+        : CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >(_info, _memo, _alg) 
+    {
+        INIT_TIMING(wait);
+        INIT_TIMING(execute);
+    }
 
     bool submit_join(int level, JoinRelationDPE<BitmapsetN>* &join_rel, 
                 JoinRelationDPE<BitmapsetN> &left_rel, 
@@ -162,7 +176,7 @@ public:
             out = false;
         } else{
             join_rel = build_join_relation<JoinRelationDPE<BitmapsetN>>(left_rel, right_rel);
-            join_rel->num_entry.store(0, std::memory_order_consume);
+            join_rel->num_entry = 0;
             memo.insert(std::make_pair(join_rel->id, join_rel));
             out = true;
         }
@@ -178,25 +192,35 @@ public:
     #endif 
 
         depbufs.depbuf_next->push(join_rel, &left_rel, &right_rel);
-        job_count++;
 
         LOG_DEBUG("Inserted %u (%d)\n", relid.toUint(), join_rel->num_entry.load());
-        if (job_count >= gpuqo_dpe_pairs_per_depbuf
-                && depbufs.n_waiting >= gpuqo_dpe_n_threads-1){
+        if (depbufs.depbuf_next->full()){
             wait_and_swap_depbuf();
-            job_count = 0;
         }
     
         return out;
     }
 
+    void help_workers()
+    {
+        START_TIMING(execute);
+        process_depbuf(depbufs.depbuf_curr, CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::info);
+        STOP_TIMING(execute);
+    }
+
     void wait_and_swap_depbuf()
     {
-        // lend an hand to worker threads
-        process_depbuf(depbufs.depbuf_curr, CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::info);
+        depbufs.depbuf_next->unify_queues();
 
+        // lend an hand to worker threads
+        help_workers();
+
+        START_TIMING(wait);
         // swap depbufs
+        LOG_DEBUG("[L] acquiring lock\n");
         pthread_mutex_lock(&depbufs.depbuf_mutex);
+
+        LOG_DEBUG("[L] waiting %d threads\n", gpuqo_dpe_n_threads-1 - depbufs.n_waiting);
 
         // wait all threads to be done with their current work
         while (depbufs.n_waiting < gpuqo_dpe_n_threads-1){
@@ -204,20 +228,43 @@ public:
                             &depbufs.depbuf_mutex);
         }
 
+        LOG_DEBUG("[L] swapping depbufs\n");
+
         // swap depbufs
         DependencyBuffer<BitmapsetN>* depbuf_temp = depbufs.depbuf_curr;
         depbufs.depbuf_curr = depbufs.depbuf_next;
         depbufs.depbuf_next = depbuf_temp;
+        
+        depbufs.n_waiting = 0;
+        LOG_DEBUG("[L] zeroed n_waiting: %d\n", depbufs.n_waiting);
 
         // signal threads that they can start executing
         pthread_cond_broadcast(&depbufs.avail_jobs);
-        depbufs.n_waiting = 0;
+
+        pthread_mutex_unlock(&depbufs.depbuf_mutex);
+        STOP_TIMING(wait);
 
         // clear next depbuf
-        Assert(depbufs.depbuf_next->size() == 0);
+        Assert(depbufs.depbuf_next->empty());
         depbufs.depbuf_next->clear();
 
-        LOG_DEBUG("There are %d jobs in the queue\n", job_count);
+        LOG_DEBUG("[L] wait 'n' swap done\n");
+    }
+
+    void stop_workers()
+    {
+        START_TIMING(wait);
+        pthread_mutex_lock(&depbufs.depbuf_mutex);
+        depbufs.finish = true;
+
+        // awake threads to let them realize it's over
+        pthread_cond_broadcast(&depbufs.avail_jobs);
+
+        STOP_TIMING(wait);
+        LOG_PROFILE("[L] ");
+        PRINT_TOTAL_TIMING(wait);
+        LOG_PROFILE("[L] ");
+        PRINT_TOTAL_TIMING(execute);
 
         pthread_mutex_unlock(&depbufs.depbuf_mutex);
     }
@@ -233,15 +280,13 @@ public:
             new_joinrel = submit_join(level, join_rel1, 
                     (JoinRelationDPE<BitmapsetN>&) left_rel, (JoinRelationDPE<BitmapsetN>&) right_rel
             );
-            CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->post_join(level, new_joinrel, 
-                                *((JoinRelationCPU<BitmapsetN>*)join_rel1), 
+            CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->post_join(level, new_joinrel, *join_rel1, 
                                 left_rel,  right_rel);
             if (try_swap){
                 new_joinrel = submit_join(level, join_rel2, 
                     (JoinRelationDPE<BitmapsetN>&) left_rel, (JoinRelationDPE<BitmapsetN>&) right_rel
                 );
-                CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->post_join(level, new_joinrel, 
-                                    *((JoinRelationCPU<BitmapsetN>*)join_rel2), 
+                CPUJoinFunction<BitmapsetN, hashtable_memo_t<BitmapsetN> >::alg->post_join(level, new_joinrel, *join_rel2, 
                                     left_rel, right_rel);
                 if (join_rel1->cost < join_rel2->cost)
                     return join_rel1;
@@ -270,14 +315,14 @@ gpuqo_cpu_dpe(GpuqoPlannerInfo<BitmapsetN>* info, CPUAlgorithm<BitmapsetN, hasht
 
     join_func.threads = new pthread_t[gpuqo_dpe_n_threads-1];
     join_func.thread_args = new ThreadArgs<BitmapsetN>[gpuqo_dpe_n_threads-1];
-    join_func.job_count = 0;
 #ifdef GPUQO_PROFILE
     join_func.total_job_count = 0;
 #endif
     
     join_func.depbufs.finish = false;
-    join_func.depbufs.depbuf_curr = new DependencyBuffer<BitmapsetN>(info->n_rels);
-    join_func.depbufs.depbuf_next = new DependencyBuffer<BitmapsetN>(info->n_rels);
+    join_func.depbufs.depbuf_curr = new DependencyBuffer<BitmapsetN>(info->n_rels, gpuqo_dpe_pairs_per_depbuf);
+    join_func.depbufs.depbuf_next = new DependencyBuffer<BitmapsetN>(info->n_rels, gpuqo_dpe_pairs_per_depbuf);
+    join_func.depbufs.n_waiting = 0;
     pthread_cond_init(&join_func.depbufs.avail_jobs, NULL);
     pthread_cond_init(&join_func.depbufs.all_threads_waiting, NULL);
     pthread_mutex_init(&join_func.depbufs.depbuf_mutex, NULL);
@@ -308,7 +353,7 @@ gpuqo_cpu_dpe(GpuqoPlannerInfo<BitmapsetN>* info, CPUAlgorithm<BitmapsetN, hasht
         jr->cost = info->base_rels[i].cost; 
         jr->rows = info->base_rels[i].rows; 
         jr->edges = info->edge_table[i];
-        jr->num_entry.store(0, std::memory_order_consume);
+        jr->num_entry = 0;
         memo.insert(std::make_pair(info->base_rels[i].id, (JoinRelationCPU<BitmapsetN>*) jr));
     }
 
@@ -319,16 +364,10 @@ gpuqo_cpu_dpe(GpuqoPlannerInfo<BitmapsetN>* info, CPUAlgorithm<BitmapsetN, hasht
     // finish depbuf_curr and set depbuf_next
     join_func.wait_and_swap_depbuf();
     // help finishing depbuf_next (which is now in depbuf_curr)
-    process_depbuf(join_func.depbufs.depbuf_curr, info);
+    join_func.help_workers();
 
     // stop worker threads
-    pthread_mutex_lock(&join_func.depbufs.depbuf_mutex);
-    join_func.depbufs.finish = true;
-
-    // awake threads to let them realize it's over
-    pthread_cond_broadcast(&join_func.depbufs.avail_jobs);
-
-    pthread_mutex_unlock(&join_func.depbufs.depbuf_mutex);
+    join_func.stop_workers();
 
     // wait threads to exit
     for (int i = 0; i < gpuqo_dpe_n_threads-1; i++){
