@@ -26,6 +26,8 @@
 #define INDEXSCAN_COEFF 2
 #define SORT_COEFF      2
 
+#define COST_FUNCTION_OVERHEAD 3000L
+
 template<typename BitmapsetN>
 __host__ __device__
 static bool has_useful_index(BitmapsetN left_rel_id, BitmapsetN right_rel_id, 
@@ -81,6 +83,14 @@ calc_join_cost(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
         + SORT_COEFF * left_rel.rows * logf(left_rel.rows)
         + SORT_COEFF * right_rel.rows * logf(right_rel.rows);
     min_cost = min(min_cost, sm_cost);
+
+#if defined(SIMULATE_COMPLEX_COST_FUNCTION) && COST_FUNCTION_OVERHEAD>0
+    //Additional overhead to simulate complex cost functions
+        volatile long counter = COST_FUNCTION_OVERHEAD;
+        while (counter > 0){
+            --counter;
+        }
+#endif
 
     return min_cost;
 }
