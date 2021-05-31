@@ -107,12 +107,14 @@ struct GpuqoPlannerInfo{
 	BitmapsetN edge_table[BitmapsetN::SIZE];
 	BitmapsetN indexed_edge_table[BitmapsetN::SIZE];
 	BitmapsetN subtrees[BitmapsetN::SIZE];
-	int n_eq_classes;
-	int n_eq_class_sels;
-	int n_eq_class_fks;
-	BitmapsetN* eq_classes;
-	float* eq_class_sels;
-	BitmapsetN* eq_class_fk;
+	struct {
+		int n;
+		BitmapsetN* relids;
+		int n_sels;
+		float* sels;
+		int n_fks;
+		BitmapsetN* fks; 
+	} eq_classes;
 };
 
 __host__ __device__

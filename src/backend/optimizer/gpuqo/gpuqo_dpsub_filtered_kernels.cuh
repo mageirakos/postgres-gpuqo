@@ -176,18 +176,18 @@ void evaluateFilteredDPSubKernel(BitmapsetN* pending_keys, BitmapsetN* scratchpa
         p += plannerInfoBaseSize<BitmapsetN>();
 
         if (full_shmem){
-            info_sh->eq_classes = (BitmapsetN*) p;
-            p += plannerInfoEqClassesSize<BitmapsetN>(info->n_eq_classes);
+            info_sh->eq_classes.relids = (BitmapsetN*) p;
+            p += plannerInfoEqClassesSize<BitmapsetN>(info->eq_classes.n);
             
-            info_sh->eq_class_sels = (float*) p;
-            p += plannerInfoEqClassSelsSize<BitmapsetN>(info->n_eq_class_sels);
+            info_sh->eq_classes.sels = (float*) p;
+            p += plannerInfoEqClassSelsSize<BitmapsetN>(info->eq_classes.n_sels);
             
-            info_sh->eq_class_fk = (BitmapsetN*) p;
-            p += plannerInfoEqClassFksSize<BitmapsetN>(info->n_eq_class_fks);
+            info_sh->eq_classes.fks = (BitmapsetN*) p;
+            p += plannerInfoEqClassFksSize<BitmapsetN>(info->eq_classes.n_fks);
         } else {
-            info_sh->eq_classes = info->eq_classes;
-            info_sh->eq_class_sels = info->eq_class_sels;
-            info_sh->eq_class_fk = info->eq_class_fk;
+            info_sh->eq_classes.relids = info->eq_classes.relids;
+            info_sh->eq_classes.sels = info->eq_classes.sels;
+            info_sh->eq_classes.fks = info->eq_classes.fks;
         }
     }
     __syncthreads();

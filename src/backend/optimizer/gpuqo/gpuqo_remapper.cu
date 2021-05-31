@@ -23,18 +23,18 @@ void Remapper<BitmapsetN>::countEqClasses(GpuqoPlannerInfo<BitmapsetN>* info,
     *n_sels = 0;
     *n_fk = 0;
 
-    for (int i = 0; i < info->n_eq_classes; i++){
+    for (int i = 0; i < info->eq_classes.n; i++){
         bool found = false;
         for (remapper_transf_el_t<BitmapsetN> &e : transf){
-            if (info->eq_classes[i].isSubset(e.from_relid)){
+            if (info->eq_classes.relids[i].isSubset(e.from_relid)){
                 found = true;
                 break;
             }
         }
         if (!found){
             (*n)++;
-            (*n_fk) += info->eq_classes[i].size();
-            (*n_sels) += eqClassNSels(info->eq_classes[i].size());
+            (*n_fk) += info->eq_classes.relids[i].size();
+            (*n_sels) += eqClassNSels(info->eq_classes.relids[i].size());
         }
     }
 }
@@ -203,43 +203,43 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
 
 	remapBaseRels(old_info->base_rels, info->base_rels);
 
-	info->n_eq_classes = n_eq_classes;
-	info->n_eq_class_sels = n_eq_class_sels;
-	info->n_eq_class_fks = n_eq_class_fks;
+	info->eq_classes.n = n_eq_classes;
+	info->eq_classes.n_sels = n_eq_class_sels;
+	info->eq_classes.n_fks = n_eq_class_fks;
 
-	info->eq_classes = (BitmapsetN*) p;
-	p += plannerInfoEqClassesSize<BitmapsetN>(info->n_eq_classes);
-	info->eq_class_sels = (float*) p;
-	p += plannerInfoEqClassSelsSize<BitmapsetN>(info->n_eq_class_sels);
-	info->eq_class_fk = (BitmapsetN*) p;
-	p += plannerInfoEqClassFksSize<BitmapsetN>(info->n_eq_class_fks);
+	info->eq_classes.relids = (BitmapsetN*) p;
+	p += plannerInfoEqClassesSize<BitmapsetN>(info->eq_classes.n);
+	info->eq_classes.sels = (float*) p;
+	p += plannerInfoEqClassSelsSize<BitmapsetN>(info->eq_classes.n_sels);
+	info->eq_classes.fks = (BitmapsetN*) p;
+	p += plannerInfoEqClassFksSize<BitmapsetN>(info->eq_classes.n_fks);
 
     int off_sel = 0, off_fk = 0, old_off_sel = 0, old_off_fk = 0, j = 0;
-	for (int i = 0; i < old_info->n_eq_classes; i++){
+	for (int i = 0; i < old_info->eq_classes.n; i++){
         bool found = false;
         for (remapper_transf_el_t<BitmapsetN> &e : transf){
-            if (old_info->eq_classes[i].isSubset(e.from_relid)){
+            if (old_info->eq_classes.relids[i].isSubset(e.from_relid)){
                 found = true;
                 break;
             }
         }
         if (!found){
             remapEqClass(
-                &old_info->eq_classes[i], 
-                &old_info->eq_class_sels[old_off_sel], 
-                &old_info->eq_class_fk[old_off_fk], 
+                &old_info->eq_classes.relids[i], 
+                &old_info->eq_classes.sels[old_off_sel], 
+                &old_info->eq_classes.fks[old_off_fk], 
                 old_info, old_off_sel, old_off_fk,
-                &info->eq_classes[j], 
-                &info->eq_class_sels[off_sel],
-                &info->eq_class_fk[off_fk]
+                &info->eq_classes.relids[j], 
+                &info->eq_classes.sels[off_sel],
+                &info->eq_classes.fks[off_fk]
             );
-            off_fk += info->eq_classes[j].size();
-            off_sel += eqClassNSels(info->eq_classes[j].size());
+            off_fk += info->eq_classes.relids[j].size();
+            off_sel += eqClassNSels(info->eq_classes.relids[j].size());
             j++;
         }
 
-        old_off_fk += old_info->eq_classes[i].size();
-        old_off_sel += eqClassNSels(old_info->eq_classes[i].size());
+        old_off_fk += old_info->eq_classes.relids[i].size();
+        old_off_sel += eqClassNSels(old_info->eq_classes.relids[i].size());
     }
 
 	return info;

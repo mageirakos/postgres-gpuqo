@@ -29,7 +29,7 @@ static float fkselc_of_ec(int off_fk, BitmapsetN ec_relids,
     while(!outer_rels.empty()){
         BitmapsetN out_id = outer_rels.lowest();
         int out_idx = (out_id.allLower() & ec_relids).size();
-        BitmapsetN match = inner_rels & info->eq_class_fk[off_fk+out_idx];
+        BitmapsetN match = inner_rels & info->eq_classes.fks[off_fk+out_idx];
         if (!match.empty()){
             int in_idx = match.lowestPos()-1;
             return 1.0 / max(1.0f, info->base_rels[in_idx].tuples);
@@ -75,7 +75,7 @@ estimate_ec_selectivity(BitmapsetN ec_relids, int off_sels, int off_fks,
     int idx_r = (match_r.allLower() & ec_relids).size();
     int idx = eqClassIndex(idx_l, idx_r, size);
 
-    return info->eq_class_sels[off_sels+idx];
+    return info->eq_classes.sels[off_sels+idx];
 }
 
 template<typename BitmapsetN>
@@ -92,11 +92,11 @@ estimate_join_selectivity(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
     // matching id on both sides is kept
     int off_sels = 0;
     int off_fks = 0;
-    for (int i=0; i<info->n_eq_classes; i++){
-        BitmapsetN ec_relids = info->eq_classes[i];
+    for (int i=0; i<info->eq_classes.n; i++){
+        BitmapsetN ec_relids = info->eq_classes.relids[i];
         
         sel *= estimate_ec_selectivity(
-            info->eq_classes[i], off_sels, off_fks,
+            info->eq_classes.relids[i], off_sels, off_fks,
             left_rel_id, right_rel_id, info
         );
            
