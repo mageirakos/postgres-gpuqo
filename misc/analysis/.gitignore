@@ -3,7 +3,21 @@ __pycache__
 
 # random plots
 figures
+figs
+presentations
+analyze
 
 # raw benchmark data
 join-order-benchmark
 synthetic-nfl
+musicbrainz
+chain
+star
+clique
+snowflake
+total_costs
+
+# other 
+csv
+nvvp
+out_dir

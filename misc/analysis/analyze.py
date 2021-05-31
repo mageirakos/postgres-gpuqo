@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import csv
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Chebyshev as T
@@ -70,7 +71,7 @@ def load_results(folder):
                         exec_time = 0
                         gpuqo_time = 0
                         gpuqo_warmup_time = 0
-                    query = line[:-5]
+                    query = line[:-5].split('/')[-1]
                 elif 'Planning' in line:
                     plan_time = float(line.split(':')[1][:-3])
                 elif 'Execution' in line:
@@ -209,6 +210,7 @@ def generic_plot(series, line=False, scatter=True, metric="plan", ratio_baseline
         plt.axhline(1, label=ratio_baseline)
     else:
         plt.ylabel("Time (ms)")
+        plt.yscale("log")
 
     plt.legend()
     plt.grid(which="major")
@@ -227,6 +229,7 @@ def scatter_line_plot(*args, **kwargs):
 
 def bar_plot(series, metric="plan", ratio_baseline=None, minor_ticks=[]):
     keys = sorted(list(next(iter(series.values())).keys()))
+    print(keys)
 
     n_series = len(series)
     n_bars = len(keys)
@@ -260,13 +263,60 @@ def bar_plot(series, metric="plan", ratio_baseline=None, minor_ticks=[]):
     ax.set_xticks(base_x)
     ax.set_xticklabels([f"{k.split('/')[-1]} ({next(iter(series.values()))[k]['tables']})" for k in keys])
 
+def export_csv(csv_file, series, metric, ratio=False, ratio_baseline=None):
+    key = f"{metric}_time_{'ratio' if ratio else 'avg'}"
+    aggr_fun = gmean if ratio else np.average
+    aggr_label = "gmean" if ratio else "avg"
+
+    header = (
+        "series", 
+        "query", 
+        "type", 
+        "n_rels", 
+        f"{metric}_time{f'_ratio({ratio_baseline})' if ratio else ''}"
+    )
+    output = []
+
+    for s, queries in series.items():
+        for query in queries:
+            output.append((
+                s,
+                query,
+                'raw',
+                queries[query]['tables'],
+                queries[query][key]
+            ))
+
+        keys = sorted(list(queries.keys()))
+        x = np.array([queries[k]['tables'] for k in keys])
+        y = np.array([queries[k][key] for k in keys])
+
+        for n in np.sort(np.unique(x)):
+            mask = (x == n) & (y > 0)
+            if np.any(mask):
+                output.append((
+                    s,
+                    f"{aggr_label}({np.sum(mask)})",
+                    aggr_label,
+                    n,
+                    aggr_fun(y[mask])
+                ))
+    
+    with open(csv_file, 'w', newline='') as myfile:
+        wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+        wr.writerow(header)
+        wr.writerows(output)
+    
+    return output
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plot some stats")
     parser.add_argument("result_folders", nargs='+', type=str, help="Folders where results are stored. Each folder should contain one or more result file. Each different folder will be treated as a different experiment.")
     parser.add_argument("-d", "--sql_folder", default=None, help="Path to the sql queries.")
     parser.add_argument("-s", "--save", default=None, help="Path to save plot to.")
     parser.add_argument("-m", "--metric", default="plan", choices=["plan", "exec", "total", "gpuqo"], help="Show whether to choose plan or execution time or their sum.")
-    parser.add_argument("-t", "--type", default="scatter", choices=["scatter", "bar","line", "scatter_line"], help="Choose plot type: scatter or bar.")
+    parser.add_argument("-t", "--type", default="scatter", choices=["scatter", "bar","line", "scatter_line", "none"], help="Choose plot type: scatter or bar.")
     parser.add_argument("-r", "--ratio", default=False, action="store_true", help="Plot ratio related to the baseline (default: first) series.")
     parser.add_argument("-b", "--baseline", type=int, default=0, help="Set the baseline series for ratio plot.")
     parser.add_argument("--min_tables", type=int, default=0, help="Limit the number of tables to only the ones that have more than this number of tables.")
@@ -275,6 +325,7 @@ if __name__ == "__main__":
     parser.add_argument("--shift", type=float, default=0.25, help="Set spread of points in scatter and line plots (default 0.25).")
     parser.add_argument("-v", "--verbose", default=False, action="store_true", help="Print debug messages.")
     parser.add_argument("--ticks", default=[1.5,2,3,4,5,8,15,25,50,75,150,200,250,300], type=float, nargs="+", help="Minor ticks for ratio plot.")
+    parser.add_argument("--csv", type=str, default=None, help="Dump series data in given csv file.")
 
     args = parser.parse_args()
 
@@ -348,6 +399,9 @@ if __name__ == "__main__":
             max_shift=args.shift,
             minor_ticks=args.ticks
         )
+    
+    if args.csv:
+        export_csv(args.csv, series, args.metric, args.ratio, ratio_baseline)
 
     if args.save:
         plt.savefig(args.save)
