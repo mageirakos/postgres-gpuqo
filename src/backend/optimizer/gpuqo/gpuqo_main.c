@@ -503,6 +503,28 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
     }
 }
 
+static void
+EqClassInfo_list__free(EqClassInfo* node) 
+{
+    EqClassInfo* prev;
+
+    while (node) {
+        prev = node;
+        node = node->next;
+        pfree(prev);
+    }
+}
+
+static void
+GpuqoPlannerInfoC__free(GpuqoPlannerInfoC* info) 
+{
+    EqClassInfo_list__free(info->eq_classes);
+    pfree(info->indexed_edge_table);
+    pfree(info->base_rels);
+    pfree(info->edge_table);
+    pfree(info);
+}
+
 /*
  * gpuqo
  *	  solution of the query optimization problem
@@ -547,10 +569,7 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
 
     query_tree = gpuqo_run(gpuqo_algorithm, info);
     
-    pfree(info->base_rels);
-    pfree(info->edge_table);
-    pfree(info);
-    // TODO free lists
+    GpuqoPlannerInfoC__free(info);
     
 #ifdef GPUQO_INFO
     printQueryTree(query_tree, 2);
