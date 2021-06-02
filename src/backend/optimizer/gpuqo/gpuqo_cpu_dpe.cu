@@ -149,8 +149,8 @@ public:
 #ifdef GPUQO_PROFILE
     uint64_t total_job_count;
 #endif
-    PROTOTYPE_TIMING(wait);
-    PROTOTYPE_TIMING(execute);
+    PROTOTYPE_TIMING_CLASS(wait);
+    PROTOTYPE_TIMING_CLASS(execute);
 
     DPEJoinFunction(GpuqoPlannerInfo<BitmapsetN>* _info, 
                 hashtable_memo_t<BitmapsetN>* _memo, 
