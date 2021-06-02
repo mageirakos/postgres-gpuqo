@@ -77,7 +77,8 @@ struct dpsubEnumerateCsg{
         BitmapsetN cmp_cid = split_mask - cid;
 
         JoinRelation<BitmapsetN> jr_out;
-        jr_out.cost = INFD;
+        jr_out.cost.total = INFF;
+        jr_out.cost.startup = INFF;
 
         volatile __shared__ BitmapsetN ctxStack[BLOCK_DIM];
         ccc_stack_t<BitmapsetN> join_stack;

@@ -25,7 +25,8 @@ struct dpsubEnumerateAllSubs{
                                     HashTableDpsub<BitmapsetN> &memo, GpuqoPlannerInfo<BitmapsetN>* info)
     {
         JoinRelation<BitmapsetN> jr_out;
-        jr_out.cost = INFD;
+        jr_out.cost.total = INFF;
+        jr_out.cost.startup = INFF;
         int qss = relid.size();
         uint_t<BitmapsetN> n_possible_joins = ((uint_t<BitmapsetN>)1)<<qss;
         uint_t<BitmapsetN> n_pairs = ceil_div(n_possible_joins, n_splits);

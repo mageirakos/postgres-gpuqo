@@ -46,7 +46,7 @@ public:
                                     left_rel, CPUJoinFunction<BitmapsetN,memo_t>::info, *CPUJoinFunction<BitmapsetN,memo_t>::memo);
                 CPUJoinFunction<BitmapsetN,memo_t>::alg->post_join(level, new_joinrel, *join_rel2, left_rel, right_rel);
 
-                if (join_rel1->cost < join_rel2->cost)
+                if (join_rel1->cost.total < join_rel2->cost.total)
                     return join_rel1;
                 else
                     return join_rel2;
@@ -77,7 +77,8 @@ QueryTree<BitmapsetN>* gpuqo_cpu_sequential(GpuqoPlannerInfo<BitmapsetN>* info,
         jr->left_rel_ptr = NULL; 
         jr->right_rel_id = 0; 
         jr->right_rel_ptr = NULL; 
-        jr->cost = info->base_rels[i].cost; 
+        jr->cost = cost_baserel(info->base_rels[i]); 
+        jr->width = info->base_rels[i].width; 
         jr->rows = info->base_rels[i].rows; 
         jr->edges = info->edge_table[i];
         memo.insert(std::make_pair(info->base_rels[i].id, jr));
@@ -100,9 +101,9 @@ QueryTree<BitmapsetN>* gpuqo_cpu_sequential(GpuqoPlannerInfo<BitmapsetN>* info,
         float min_cost = INFF;
         for (auto iter=memo.begin(); iter != memo.end(); ++iter){
             if (iter->first.size() == info->n_iters 
-                && iter->second->cost < min_cost
+                && iter->second->cost.total < min_cost
             ){
-                min_cost = iter->second->cost;
+                min_cost = iter->second->cost.total;
                 final_joinrel_id = iter->first;
             }
         }

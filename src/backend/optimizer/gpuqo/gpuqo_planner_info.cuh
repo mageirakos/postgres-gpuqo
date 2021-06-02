@@ -27,6 +27,11 @@ namespace gpuqo_c{
 typedef Bitmapset32 EdgeMask;
 typedef Bitmapset32 RelationID;
 
+struct Cost {
+	float startup;
+	float total;
+};
+
 // structure representing join of two relations used by CUDA and CPU code 
 // of GPUQO
 template<typename BitmapsetN>
@@ -34,37 +39,17 @@ struct JoinRelation{
 	BitmapsetN left_rel_id;
 	BitmapsetN right_rel_id;
 	float rows;
-	float cost;
+	struct Cost cost;
+	int width;
 
 public:
 	__host__ __device__
 	bool operator<(const JoinRelation<BitmapsetN> &o) const
 	{
-		return cost < o.cost;
-	}
-
-	__host__ __device__
-	bool operator>(const JoinRelation<BitmapsetN> &o) const
-	{
-		return cost > o.cost;
-	}
-
-	__host__ __device__
-	bool operator==(const JoinRelation<BitmapsetN> &o) const
-	{
-		return cost == o.cost;
-	}
-
-	__host__ __device__
-	bool operator<=(const JoinRelation<BitmapsetN> &o) const
-	{
-		return cost <= o.cost;
-	}
-
-	__host__ __device__
-	bool operator>=(const JoinRelation<BitmapsetN> &o) const
-	{
-		return cost >= o.cost;
+		if (cost.total == o.cost.total)
+			return cost.startup < o.cost.startup;
+		else
+			return cost.total < o.cost.total;
 	}
 };
 
@@ -80,11 +65,18 @@ struct JoinRelationDpsize : public JoinRelationDetailed<BitmapsetN> {
 	uint_t<BitmapsetN> right_rel_idx;
 };
 
+struct VarStat {
+	float stadistinct;
+	float stanullfrac;
+	float mcvfreq;
+};
+
 template<typename BitmapsetN>
 struct QueryTree{
 	BitmapsetN id;
 	float rows;
-	float cost;
+	Cost cost;
+	int width;
 	struct QueryTree* left;
 	struct QueryTree* right;
 };
@@ -94,19 +86,42 @@ struct BaseRelation{
 	BitmapsetN id;
 	float rows;
 	float tuples;
-	float cost;
+	int width;
+	float pages;
+	struct Cost cost;
 	bool composite;
 };
 
 template<typename BitmapsetN>
 struct GpuqoPlannerInfo{
 	unsigned int size;
+
 	int n_rels;
 	int n_iters;
+
+	struct {
+		float effective_cache_size;
+		float random_page_cost;
+		float cpu_tuple_cost;
+		float cpu_index_tuple_cost;
+		float cpu_operator_cost;
+		float disable_cost;
+		bool enable_seqscan;
+		bool enable_indexscan;
+		bool enable_tidscan;
+		bool enable_sort;
+		bool enable_hashagg;
+		bool enable_nestloop;
+		bool enable_mergejoin;
+		bool enable_hashjoin;
+		int work_mem;
+	} params;
+
 	BaseRelation<BitmapsetN> base_rels[BitmapsetN::SIZE];
 	BitmapsetN edge_table[BitmapsetN::SIZE];
 	BitmapsetN indexed_edge_table[BitmapsetN::SIZE];
 	BitmapsetN subtrees[BitmapsetN::SIZE];
+
 	struct {
 		int n;
 		BitmapsetN* relids;
@@ -114,6 +129,8 @@ struct GpuqoPlannerInfo{
 		float* sels;
 		int n_fks;
 		BitmapsetN* fks; 
+		int n_stats;
+		VarStat* stats;
 	} eq_classes;
 };
 
@@ -152,13 +169,20 @@ inline size_t plannerInfoEqClassFksSize(int n_eq_class_fks) {
 
 template<typename BitmapsetN>
 __host__ __device__
+inline size_t plannerInfoEqClassStatsSize(int n_eq_class_stats) {
+	return align64(sizeof(struct VarStat) * n_eq_class_stats);
+}
+
+template<typename BitmapsetN>
+__host__ __device__
 inline size_t plannerInfoSize(size_t n_eq_classes, size_t n_eq_class_sels, 
-						size_t n_eq_class_fks) 
+						size_t n_eq_class_fks, size_t n_eq_class_stats) 
 {
 	return plannerInfoBaseSize<BitmapsetN>() 
 		+ plannerInfoEqClassesSize<BitmapsetN>(n_eq_classes)
 		+ plannerInfoEqClassSelsSize<BitmapsetN>(n_eq_class_sels)
-		+ plannerInfoEqClassFksSize<BitmapsetN>(n_eq_class_fks);
+		+ plannerInfoEqClassFksSize<BitmapsetN>(n_eq_class_fks)
+		+ plannerInfoEqClassStatsSize<BitmapsetN>(n_eq_class_stats);
 }
 
 template<typename BitmapsetN>

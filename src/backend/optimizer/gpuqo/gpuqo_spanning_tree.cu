@@ -30,7 +30,8 @@ void minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info){
         t.id = info->base_rels[i].id;
         t.left_rel_id = 0; 
         t.right_rel_id = 0; 
-        t.cost = info->base_rels[i].cost; 
+        t.cost = cost_baserel(info->base_rels[i]); 
+        t.width = info->base_rels[i].width; 
         t.rows = info->base_rels[i].rows; 
         base_joinrels[i] = t;
     }

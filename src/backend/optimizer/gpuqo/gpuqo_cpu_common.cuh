@@ -113,6 +113,7 @@ void build_query_tree(JoinRelationCPU<BitmapsetN> *jr,
     (*qt)->right = NULL;
     (*qt)->rows = jr->rows;
     (*qt)->cost = jr->cost;
+    (*qt)->width = jr->width;
 
     build_query_tree<BitmapsetN>(jr->left_rel_ptr, memo, &((*qt)->left));
     build_query_tree<BitmapsetN>(jr->right_rel_ptr, memo, &((*qt)->right));
@@ -137,7 +138,8 @@ JR* build_join_relation(JR &left_rel, JR &right_rel){
 	join_rel->right_rel_id = right_rel.id;
 	join_rel->right_rel_ptr = &right_rel;
 	join_rel->edges = left_rel.edges | right_rel.edges;
-	join_rel->cost = INFF;
+	join_rel->cost.total = INFF;
+	join_rel->cost.startup = INFF;
 	join_rel->rows = INFF;
 
 #ifdef USE_ASSERT_CHECKING
@@ -165,6 +167,7 @@ JR* make_join_relation(JR &left_rel,
 	JR* join_rel = build_join_relation<JR>(left_rel, right_rel);
 	join_rel->rows = estimate_join_rows(left_rel.id, left_rel, right_rel.id, right_rel, info);
 	join_rel->cost = calc_join_cost(left_rel.id, left_rel, right_rel.id, right_rel, join_rel->rows, info);
+	join_rel->width = get_join_width(left_rel.id, left_rel, right_rel.id, right_rel, info);
 
 	return join_rel;
 }
@@ -183,7 +186,7 @@ bool do_join(int level, JR* &join_rel, JR &left_rel,
 #ifdef USE_ASSERT_CHECKING
         Assert(!old_jr->referenced);
 #endif
-        if (join_rel->cost < old_jr->cost){
+        if (join_rel->cost.total < old_jr->cost.total){
             *old_jr = *join_rel;
         }
         delete join_rel;

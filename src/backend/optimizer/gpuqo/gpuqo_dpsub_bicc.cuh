@@ -225,7 +225,8 @@ struct dpsubEnumerateBiCC {
                         GpuqoPlannerInfo<BitmapsetN>* info)
     { 
         JoinRelation<BitmapsetN> jr_out;
-        jr_out.cost = INFD;
+        jr_out.cost.total = INFF;
+        jr_out.cost.startup = INFF;
 
         Assert(n_splits == WARP_SIZE);
 

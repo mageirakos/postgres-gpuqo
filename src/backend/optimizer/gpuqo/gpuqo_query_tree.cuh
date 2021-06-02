@@ -26,6 +26,7 @@ void dpsize_buildQueryTree(uint_t<BitmapsetN> idx, Container &gpu_memo_vals, Que
     (*qt)->right = NULL;
     (*qt)->rows = jr.rows;
     (*qt)->cost = jr.cost;
+    (*qt)->width = jr.width;
 
     if (jr.left_rel_id.empty() && jr.left_rel_id.empty()){ // leaf
         return;
@@ -53,6 +54,7 @@ void dpsub_buildQueryTree(BitmapsetN id, Container &gpu_memo_vals, QueryTree<Bit
     (*qt)->right = NULL;
     (*qt)->rows = jr.rows;
     (*qt)->cost = jr.cost;
+    (*qt)->width = jr.width;
 
     if (jr.left_rel_id.empty() && jr.left_rel_id.empty()){ // leaf
         return;

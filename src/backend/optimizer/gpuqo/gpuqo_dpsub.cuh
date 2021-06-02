@@ -179,11 +179,13 @@ void do_join(JoinRelation<BitmapsetN> &jr_out,
     Assert(!right_rel_id.empty());
 
     float jr_rows = estimate_join_rows(left_rel_id, left_rel, right_rel_id, right_rel, info);
-    float jr_cost = calc_join_cost(left_rel_id, left_rel, right_rel_id, right_rel, jr_rows, info);
+    struct Cost jr_cost = calc_join_cost(left_rel_id, left_rel, right_rel_id, right_rel, jr_rows, info);
+    int jr_width = get_join_width(left_rel_id, left_rel, right_rel_id, right_rel, info);
 
-    if (jr_cost < jr_out.cost){
+    if (jr_cost.total < jr_out.cost.total){
         jr_out.cost = jr_cost;
         jr_out.rows = jr_rows;
+        jr_out.width = jr_width;
         jr_out.left_rel_id = left_rel_id;
         jr_out.right_rel_id = right_rel_id;
     }

@@ -17,11 +17,12 @@ Remapper<BitmapsetN>::Remapper(list<remapper_transf_el_t<BitmapsetN> > _transf)
 
 template<typename BitmapsetN>
 void Remapper<BitmapsetN>::countEqClasses(GpuqoPlannerInfo<BitmapsetN>* info, 
-                                        int* n, int* n_sels, int *n_fk)
+                                        int* n, int* n_sels, int *n_fk, int *n_stats)
 {
     *n = 0;
     *n_sels = 0;
     *n_fk = 0;
+    *n_stats = 0;
 
     for (int i = 0; i < info->eq_classes.n; i++){
         bool found = false;
@@ -34,6 +35,7 @@ void Remapper<BitmapsetN>::countEqClasses(GpuqoPlannerInfo<BitmapsetN>* info,
         if (!found){
             (*n)++;
             (*n_fk) += info->eq_classes.relids[i].size();
+            (*n_stats) += info->eq_classes.relids[i].size();
             (*n_sels) += eqClassNSels(info->eq_classes.relids[i].size());
         }
     }
@@ -113,6 +115,8 @@ void Remapper<BitmapsetN>::remapBaseRels(
             base_rels_to[e.to_idx].id = remapRelid(e.from_relid);
             base_rels_to[e.to_idx].rows = e.qt->rows;
             base_rels_to[e.to_idx].cost = e.qt->cost;
+            base_rels_to[e.to_idx].width = e.qt->width;
+            base_rels_to[e.to_idx].pages = page_size(e.qt->rows, e.qt->width);
             base_rels_to[e.to_idx].tuples = e.qt->rows;
         } else {
             base_rels_to[e.to_idx] = base_rels_from[e.from_relid.lowestPos()-1];
@@ -133,11 +137,13 @@ template<typename BitmapsetN>
 void Remapper<BitmapsetN>::remapEqClass(BitmapsetN* eq_class_from,
                                         float* sels_from,
                                         BitmapsetN* fks_from,
+                                        VarStat* stats_from,
                                         GpuqoPlannerInfo<BitmapsetN>* info_from,
                                         int off_sels_from, int off_fks_from,
                                         BitmapsetN* eq_class_to,
                                         float* sels_to,
-                                        BitmapsetN* fks_to)
+                                        BitmapsetN* fks_to,
+                                        VarStat* stats_to)
 {
     *eq_class_to = remapRelid(*eq_class_from);
 
@@ -172,6 +178,8 @@ void Remapper<BitmapsetN>::remapEqClass(BitmapsetN* eq_class_from,
             }
         }
         fks_to[idx_l_to] = remapRelidNoComposite(fks_from[idx_l_from]);
+        // TODO choose one at random... maybe this can be improved
+        stats_to[idx_l_to] = stats_from[idx_l_from]; 
     }
 }
 
@@ -180,11 +188,11 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
                                         GpuqoPlannerInfo<BitmapsetN>* old_info)
 {
     int n_rels = transf.size();
-    int n_eq_classes, n_eq_class_sels, n_eq_class_fks; 
-    countEqClasses(old_info, &n_eq_classes, &n_eq_class_sels, &n_eq_class_fks); 
+    int n_eq_classes, n_eq_class_sels, n_eq_class_fks, n_eq_class_stats; 
+    countEqClasses(old_info, &n_eq_classes, &n_eq_class_sels, &n_eq_class_fks, &n_eq_class_stats); 
 
     size_t size = plannerInfoSize<BitmapsetN>(n_eq_classes, n_eq_class_sels, 
-                                            n_eq_class_fks);
+                                            n_eq_class_fks, n_eq_class_stats);
 
 	char* p = new char[size];
 
@@ -194,6 +202,7 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
 	info->size = size;
 	info->n_rels = n_rels;
 	info->n_iters = old_info->n_iters;
+    info->params = old_info->params;
 
     remapEdgeTable(old_info->edge_table, info->edge_table);
     remapEdgeTable(old_info->indexed_edge_table, info->indexed_edge_table);
@@ -206,6 +215,7 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
 	info->eq_classes.n = n_eq_classes;
 	info->eq_classes.n_sels = n_eq_class_sels;
 	info->eq_classes.n_fks = n_eq_class_fks;
+	info->eq_classes.n_stats = n_eq_class_stats;
 
 	info->eq_classes.relids = (BitmapsetN*) p;
 	p += plannerInfoEqClassesSize<BitmapsetN>(info->eq_classes.n);
@@ -213,6 +223,8 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
 	p += plannerInfoEqClassSelsSize<BitmapsetN>(info->eq_classes.n_sels);
 	info->eq_classes.fks = (BitmapsetN*) p;
 	p += plannerInfoEqClassFksSize<BitmapsetN>(info->eq_classes.n_fks);
+	info->eq_classes.stats = (VarStat*) p;
+	p += plannerInfoEqClassStatsSize<BitmapsetN>(info->eq_classes.n_stats);
 
     int off_sel = 0, off_fk = 0, old_off_sel = 0, old_off_fk = 0, j = 0;
 	for (int i = 0; i < old_info->eq_classes.n; i++){
@@ -228,10 +240,12 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
                 &old_info->eq_classes.relids[i], 
                 &old_info->eq_classes.sels[old_off_sel], 
                 &old_info->eq_classes.fks[old_off_fk], 
+                &old_info->eq_classes.stats[old_off_fk], 
                 old_info, old_off_sel, old_off_fk,
                 &info->eq_classes.relids[j], 
                 &info->eq_classes.sels[off_sel],
-                &info->eq_classes.fks[off_fk]
+                &info->eq_classes.fks[off_fk],
+                &info->eq_classes.stats[off_fk]
             );
             off_fk += info->eq_classes.relids[j].size();
             off_sel += eqClassNSels(info->eq_classes.relids[j].size());

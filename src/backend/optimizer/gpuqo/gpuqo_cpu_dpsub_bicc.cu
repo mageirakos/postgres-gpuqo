@@ -212,7 +212,7 @@ public:
                     if (manage_best){
                         if (join_rel == NULL 
                                 || (new_join_rel != NULL 
-                                    && new_join_rel->cost < join_rel->cost))
+                                    && new_join_rel->cost.total < join_rel->cost.total))
                         {
                             if (join_rel != NULL)
                                 delete join_rel;

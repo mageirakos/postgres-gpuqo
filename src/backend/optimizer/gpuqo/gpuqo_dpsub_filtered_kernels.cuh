@@ -210,7 +210,7 @@ void evaluateFilteredDPSubKernel(BitmapsetN* pending_keys, BitmapsetN* scratchpa
         JoinRelation<BitmapsetN> jr_out = Function{}(relid, cid, n_splits, 
                                         memo, info_sh);
         shared_idxs[threadIdx.x] = threadIdx.x;
-        shared_costs[threadIdx.x] = jr_out.cost;
+        shared_costs[threadIdx.x] = jr_out.cost.total;
 
         if (n_splits > WARP_SIZE)
             __syncthreads();

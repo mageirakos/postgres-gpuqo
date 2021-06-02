@@ -62,8 +62,8 @@ public:
         const JoinRelation<BitmapsetN> &a_jr = thrust::get<1>(a);
         const JoinRelation<BitmapsetN> &b_jr = thrust::get<1>(b);
 
-        float a_cost = a_jr.cost;
-        float b_cost = b_jr.cost;
+        float a_cost = a_jr.cost.total;
+        float b_cost = b_jr.cost.total;
 
         if (a_id.size() != size)
             a_cost = INFF;
@@ -208,7 +208,8 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
         JoinRelation<BitmapsetN> t;
         t.left_rel_id = BitmapsetN(0); 
         t.left_rel_id = BitmapsetN(0); 
-        t.cost = info->base_rels[i].cost; 
+        t.cost = cost_baserel(info->base_rels[i]); 
+        t.width = info->base_rels[i].width; 
         t.rows = info->base_rels[i].rows; 
         ini_memo_keys[i] = info->base_rels[i].id;
         ini_memo_vals[i] = t;
@@ -221,7 +222,8 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
 	dummy_jr.left_rel_id = BitmapsetN(0);
 	dummy_jr.right_rel_id = BitmapsetN(0);
     dummy_jr.rows = 0.0;
-	dummy_jr.cost = 0.0;
+	dummy_jr.cost.total = 0.0;
+	dummy_jr.cost.startup = 0.0;
     
     ini_memo_keys[info->n_rels] = 0;
     ini_memo_vals[info->n_rels] = dummy_jr;

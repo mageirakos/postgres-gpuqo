@@ -31,7 +31,8 @@ struct dpsubEnumerateTreeSimple{
                             GpuqoPlannerInfo<BitmapsetN>* info)
     {
         JoinRelation<BitmapsetN> jr_out;
-        jr_out.cost = INFD;
+        jr_out.cost.total = INFF;
+        jr_out.cost.startup = INFF;
 
         uint32_t n_possible_joins = relid.size();
 
@@ -85,7 +86,8 @@ struct dpsubEnumerateTreeWithSubtrees{
                             GpuqoPlannerInfo<BitmapsetN>* info)
     { 
         JoinRelation<BitmapsetN> jr_out;
-        jr_out.cost = INFD;
+        jr_out.cost.total = INFF;
+        jr_out.cost.startup = INFF;
 
         uint32_t n_possible_joins = relid.size();
 

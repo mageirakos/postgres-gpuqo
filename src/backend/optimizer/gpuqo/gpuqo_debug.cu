@@ -48,7 +48,7 @@ std::ostream & operator<<(std::ostream &os, const JoinRelation<BitmapsetN>& jr)
 {
 	BitmapsetN jr_id = jr.left_rel_id | jr.right_rel_id;
 	os<<jr_id<<" ("<<jr.left_rel_id<<","<<jr.right_rel_id<<"):";
-	os<<"rows="<<jr.rows<<", cost="<<jr.cost;
+	os<<"rows="<<jr.rows<<", cost="<<jr.cost.total;
 	return os;
 }
 

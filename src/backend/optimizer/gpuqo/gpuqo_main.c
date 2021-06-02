@@ -16,6 +16,15 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "utils/selfuncs.h"
+#include "utils/lsyscache.h"
+
+#include "access/htup_details.h"
+
+#include "nodes/nodeFuncs.h"
+
+#include "catalog/pg_statistic.h"
+
 #include "optimizer/optimizer.h"
 #include "optimizer/cost.h"
 #include "optimizer/gpuqo.h"
@@ -70,7 +79,7 @@ void printQueryTree(QueryTree* qt, int indent){
 
     for (i = 0; i<indent; i++)
         printf(" ");
-    printf("%lu (rows=%.0f, cost=%.2f)\n", qt->id->words[0], qt->rows, qt->cost);
+    printf("%lu (rows=%.0f, cost=%.2f..%.2f, width=%d)\n", qt->id->words[0], qt->rows, qt->cost.startup, qt->cost.total, qt->width);
 
     printQueryTree(qt->left, indent + 2);
     printQueryTree(qt->right, indent + 2);
@@ -244,6 +253,10 @@ BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
     
     baserel.rows = rel->rows;
     baserel.tuples = rel->tuples;
+    baserel.width = rel->reltarget->width;
+    baserel.pages = rel->pages;
+    baserel.cost.total = rel->cheapest_total_path->total_cost;
+    baserel.cost.startup = rel->cheapest_total_path->startup_cost;
     baserel.id = bms_copy(rel->relids);
 
     return baserel;
@@ -270,23 +283,83 @@ EdgeMask* makeEdgeTable(PlannerInfo* root, int n_rels){
     return edge_table;
 }
 
+static VarStat extractStats(PlannerInfo *root, Node *hashkey)
+{
+    VarStat     out;
+	VariableStatData vardata;
+	bool		isdefault;
+	AttStatsSlot sslot;
+
+    out.mcvfreq = 0;
+    out.stadistinct = 0;
+    out.stanullfrac = 0;
+
+	examine_variable(root, hashkey, 0, &vardata);
+
+	/* Look up the frequency of the most common value, if available */
+	out.mcvfreq = 0.0;
+
+	if (HeapTupleIsValid(vardata.statsTuple))
+	{
+		if (get_attstatsslot(&sslot, vardata.statsTuple,
+							 STATISTIC_KIND_MCV, InvalidOid,
+							 ATTSTATSSLOT_NUMBERS))
+		{
+			/*
+			 * The first MCV stat is for the most common value.
+			 */
+			if (sslot.nnumbers > 0)
+				out.mcvfreq = (float) sslot.numbers[0];
+			free_attstatsslot(&sslot);
+		}
+	}
+
+	/* Get number of distinct values */
+	out.stadistinct = get_variable_numdistinct(&vardata, &isdefault);
+
+	/*
+	 * If ndistinct isn't real, punt.  We normally return 0.1, but if the
+	 * mcv_freq is known to be even higher than that, use it instead.
+	 */
+	if (isdefault)
+	{
+		ReleaseVariableStats(vardata);
+		return out;
+	}
+
+	/* Get fraction that are null */
+	if (HeapTupleIsValid(vardata.statsTuple))
+	{
+		Form_pg_statistic stats;
+
+		stats = (Form_pg_statistic) GETSTRUCT(vardata.statsTuple);
+		out.stanullfrac = stats->stanullfrac;
+	}
+	else
+		out.stanullfrac = 0.0;
+
+	ReleaseVariableStats(vardata);
+
+    return out;
+}
+
 void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlannerInfo* info, int n_rels){
     ListCell* lc_inner;
     ListCell* lc_outer;
     ListCell* lc_inner_path;
     ListCell* lc_restrictinfo;
-    int i, j;
+    int i_out, i_in;
 
     info->indexed_edge_table = (EdgeMask*) palloc0(n_rels * sizeof(EdgeMask));
 
-    i = 0;
+    i_out = 0;
     foreach(lc_outer, initial_rels){
         RelOptInfo* rel_outer = (RelOptInfo*) lfirst(lc_outer);
-        j = 0;
+        i_in = 0;
         foreach(lc_inner, initial_rels){
             RelOptInfo* rel_inner = (RelOptInfo*) lfirst(lc_inner);
             
-            if (bms_overlap(info->edge_table[i], rel_inner->relids)){
+            if (bms_overlap(info->edge_table[i_out], rel_inner->relids)){
                 List *restrictlist = NULL;
                 SpecialJoinInfo sjinfo;
                 RelOptInfo *join_rel;
@@ -357,21 +430,52 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                         ec->sels = (float*) palloc(sizeof(float)*n_sels);
                         ec->eclass = rinfo->parent_ec;
                         ec->fk = (RelationID*) palloc(sizeof(RelationID)*size);
-                        for (int i_fk = 0; i_fk < size; i_fk++)
+                        ec->stats = (VarStat*) palloc(sizeof(VarStat)*size);
+                        for (int i_fk = 0; i_fk < size; i_fk++){
                             ec->fk[i_fk] = NULL;
+                            ec->stats[i_fk].mcvfreq = 0;
+                            ec->stats[i_fk].stadistinct = 0;
+                            ec->stats[i_fk].stanullfrac = 0;
+                        }
                         info->n_eq_classes++;
                         info->n_eq_class_sels += n_sels;
                         info->n_eq_class_fks += size;
+                        info->n_eq_class_stats += size;
                     } else {
                         size = bms_num_members(ec->relids);
                     }
 
-                    idx_l = bms_member_index(ec->relids, i+1);
-                    idx_r = bms_member_index(ec->relids, j+1);
+                    idx_l = bms_member_index(ec->relids, i_out+1);
+                    idx_r = bms_member_index(ec->relids, i_in+1);
                     if (idx_l < idx_r){ // prevent duplicates
                         idx = eqClassIndex(idx_l, idx_r, size);
                         ec->sels[idx] = rinfo->norm_selec;
+
+                        if (bms_is_subset(rinfo->right_relids,
+							  rel_inner->relids)) {
+
+                            ec->stats[idx_r] = extractStats(root,
+                                                get_rightop(rinfo->clause));
+
+                        } else {
+                            ec->stats[idx_r] = extractStats(root,
+                                                get_leftop(rinfo->clause));
+                        }
+                        
+                        if (bms_is_subset(rinfo->right_relids,
+							  rel_outer->relids)) {
+
+                            ec->stats[idx_l] = extractStats(root,
+                                                get_rightop(rinfo->clause));
+
+                        } else {
+                            ec->stats[idx_l] = extractStats(root,
+                                                get_leftop(rinfo->clause));
+                        }
+
                     }
+                    
+                        
                 }
 
                 foreach(lc_inner_path, rel_inner->pathlist){
@@ -381,7 +485,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                                 && bms_overlap(PATH_REQ_OUTER(path),
                                     rel_outer->relids
                                 )){
-                            info->indexed_edge_table[j] = bms_add_member(info->indexed_edge_table[j], i+1);
+                            info->indexed_edge_table[i_in] = bms_add_member(info->indexed_edge_table[i_in], i_out+1);
                             break;
                         }
                     }
@@ -393,9 +497,9 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                                             &sjinfo,
                                             &restrictlist);
             }
-            j++;
+            i_in++;
         }
-        i++;
+        i_out++;
     }
 }
 
@@ -449,7 +553,7 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     
 #ifdef GPUQO_INFO
     printQueryTree(query_tree, 2);
-    printf("gpuqo cost is %f\n", query_tree->cost);
+    printf("gpuqo cost is %f\n", query_tree->cost.total);
 #endif
 
 	return queryTree2Plan(query_tree, n_rels, root, n_rels, initial_rels);
