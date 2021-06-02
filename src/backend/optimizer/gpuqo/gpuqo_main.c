@@ -531,6 +531,7 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     info->n_eq_classes = 0;
     info->n_eq_class_sels = 0;
     info->n_eq_class_fks = 0;
+    info->n_eq_class_stats = 0;
 
     i = 0;
     foreach(lc, initial_rels){
