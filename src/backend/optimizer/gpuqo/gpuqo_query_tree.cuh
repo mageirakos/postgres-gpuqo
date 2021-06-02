@@ -70,4 +70,14 @@ void dpsub_buildQueryTree(BitmapsetN id, Container &gpu_memo_vals, QueryTree<Bit
     dpsub_buildQueryTree<BitmapsetN, Container>(jr.right_rel_id, gpu_memo_vals, &((*qt)->right));
 }
 
+template<typename BitmapsetN>
+void freeQueryTree(QueryTree<BitmapsetN> *qt) {
+    if (qt == NULL)
+        return;
+        
+    freeQueryTree(qt->left);
+    freeQueryTree(qt->right);
+    delete qt;
+}
+
 #endif							/* GPUQO_QUERY_TREE_CUH */

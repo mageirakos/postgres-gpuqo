@@ -92,14 +92,7 @@ struct BaseRelation{
 	bool composite;
 };
 
-template<typename BitmapsetN>
-struct GpuqoPlannerInfo{
-	unsigned int size;
-
-	int n_rels;
-	int n_iters;
-
-	struct {
+struct GpuqoPlannerInfoParams {
 		float effective_cache_size;
 		float random_page_cost;
 		float cpu_tuple_cost;
@@ -115,8 +108,18 @@ struct GpuqoPlannerInfo{
 		bool enable_mergejoin;
 		bool enable_hashjoin;
 		int work_mem;
-	} params;
+};
 
+
+template<typename BitmapsetN>
+struct GpuqoPlannerInfo{
+	unsigned int size;
+
+	int n_rels;
+	int n_iters;
+
+	GpuqoPlannerInfoParams params;
+	
 	BaseRelation<BitmapsetN> base_rels[BitmapsetN::SIZE];
 	BitmapsetN edge_table[BitmapsetN::SIZE];
 	BitmapsetN indexed_edge_table[BitmapsetN::SIZE];

@@ -66,7 +66,7 @@ static gpuqo_c::QueryTreeC *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlann
 		buildSubTrees(info->subtrees, info);
 	}
 
-	Remapper<BitmapsetN> remapper = makeBFSIndexRemapper(info);
+	Remapper<BitmapsetN,BitmapsetN> remapper = makeBFSIndexRemapper(info);
 	GpuqoPlannerInfo<BitmapsetN> *remap_info = remapper.remapPlannerInfo(info);
 
 	QueryTree<BitmapsetN> *query_tree;

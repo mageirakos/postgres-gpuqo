@@ -87,7 +87,7 @@ extern QueryTree<BitmapsetN>* gpuqo_dpe_dpccp(GpuqoPlannerInfo<BitmapsetN>* info
 
 
 template<typename BitmapsetN>
-extern Remapper<BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN>* info);
+extern Remapper<BitmapsetN,BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN>* info);
 
 template<typename BitmapsetN>
 extern void minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info);

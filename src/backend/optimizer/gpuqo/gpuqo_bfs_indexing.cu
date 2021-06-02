@@ -11,7 +11,8 @@
 #include "gpuqo.cuh"
 
 template<typename BitmapsetN>
-Remapper<BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN>* info){
+Remapper<BitmapsetN,BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN>* info)
+{
     int bfs_queue[BitmapsetN::SIZE];
     int bfs_queue_front_idx = 0;
     int bfs_queue_back_idx = 0;
@@ -47,8 +48,8 @@ Remapper<BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN>* info){
         seen |= info->edge_table[base_rel_idx];
     }
 
-    return Remapper<BitmapsetN>(remap_list);
+    return Remapper<BitmapsetN,BitmapsetN>(remap_list);
 }
 
-template Remapper<Bitmapset32> makeBFSIndexRemapper<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
-template Remapper<Bitmapset64> makeBFSIndexRemapper<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);
+template Remapper<Bitmapset32,Bitmapset32> makeBFSIndexRemapper<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
+template Remapper<Bitmapset64,Bitmapset64> makeBFSIndexRemapper<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);

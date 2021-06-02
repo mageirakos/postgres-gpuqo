@@ -9,14 +9,36 @@
  */
 
 #include "gpuqo.cuh"
+#include "gpuqo_query_tree.cuh"
 
 int gpuqo_idp_n_iters;
+
+template<typename BitmapsetOuter, typename BitmapsetInner>
+QueryTree<BitmapsetOuter> *gpuqo_run_idp_next(int gpuqo_algorithm, 
+						GpuqoPlannerInfo<BitmapsetOuter>* info,
+						list<remapper_transf_el_t<BitmapsetOuter> > &remap_list) 
+{
+	Remapper<BitmapsetOuter, BitmapsetInner> remapper(remap_list);
+
+	GpuqoPlannerInfo<BitmapsetInner> *new_info =remapper.remapPlannerInfo(info);
+
+	QueryTree<BitmapsetInner> *new_qt = gpuqo_run_idp(gpuqo_algorithm,new_info);
+
+	QueryTree<BitmapsetOuter> *new_qt_remap = remapper.remapQueryTree(new_qt);
+
+	delete new_info;
+	freeQueryTree(new_qt);
+
+	return new_qt_remap;
+}
 
 template<typename BitmapsetN>
 QueryTree<BitmapsetN> *gpuqo_run_idp(int gpuqo_algorithm, 
 									GpuqoPlannerInfo<BitmapsetN>* info)
 {
 	info->n_iters = min(info->n_rels, gpuqo_idp_n_iters);
+
+	LOG_PROFILE("IDP iteration with %d iterations (%d bits)\n", info->n_iters, BitmapsetN::SIZE);
 
 	QueryTree<BitmapsetN> *qt = gpuqo_run_switch(gpuqo_algorithm, info);
 
@@ -43,16 +65,16 @@ QueryTree<BitmapsetN> *gpuqo_run_idp(int gpuqo_algorithm,
 			}
 		}
 
-		Remapper<BitmapsetN> remapper(remap_list);
-		GpuqoPlannerInfo<BitmapsetN> *new_info =remapper.remapPlannerInfo(info);
-
-		QueryTree<BitmapsetN> *new_qt = gpuqo_run_idp(gpuqo_algorithm,new_info);
-
-		delete new_info;
-
-		remapper.remapQueryTree(new_qt);
-
-		return new_qt;
+		if (BitmapsetN::SIZE == 32 || remap_list.size() < 32) {
+			return gpuqo_run_idp_next<BitmapsetN, Bitmapset32>(
+											gpuqo_algorithm, info, remap_list);
+		} else if (BitmapsetN::SIZE == 64 || remap_list.size() < 64) {
+			return gpuqo_run_idp_next<BitmapsetN, Bitmapset64>(
+											gpuqo_algorithm, info, remap_list);
+		} else {
+			printf("ERROR: too many relations\n");
+			return NULL;	
+		}
 	}
 }
 

@@ -11,12 +11,12 @@
 #include "gpuqo_remapper.cuh"
 #include "gpuqo_cost.cuh"
 
-template<typename BitmapsetN>
-Remapper<BitmapsetN>::Remapper(list<remapper_transf_el_t<BitmapsetN> > _transf) 
+template<typename BitmapsetIN, typename BitmapsetOUT>
+Remapper<BitmapsetIN,BitmapsetOUT>::Remapper(list<remapper_transf_el_t<BitmapsetIN> > _transf) 
                                 : transf(_transf) {}
 
-template<typename BitmapsetN>
-void Remapper<BitmapsetN>::countEqClasses(GpuqoPlannerInfo<BitmapsetN>* info, 
+template<typename BitmapsetIN, typename BitmapsetOUT>
+void Remapper<BitmapsetIN,BitmapsetOUT>::countEqClasses(GpuqoPlannerInfo<BitmapsetIN>* info, 
                                         int* n, int* n_sels, int *n_fk, int *n_stats)
 {
     *n = 0;
@@ -26,7 +26,7 @@ void Remapper<BitmapsetN>::countEqClasses(GpuqoPlannerInfo<BitmapsetN>* info,
 
     for (int i = 0; i < info->eq_classes.n; i++){
         bool found = false;
-        for (remapper_transf_el_t<BitmapsetN> &e : transf){
+        for (remapper_transf_el_t<BitmapsetIN> &e : transf){
             if (info->eq_classes.relids[i].isSubset(e.from_relid)){
                 found = true;
                 break;
@@ -41,11 +41,11 @@ void Remapper<BitmapsetN>::countEqClasses(GpuqoPlannerInfo<BitmapsetN>* info,
     }
 }
 
-template<typename BitmapsetN>
-BitmapsetN Remapper<BitmapsetN>::remapRelid(BitmapsetN id)
+template<typename BitmapsetIN, typename BitmapsetOUT>
+BitmapsetOUT Remapper<BitmapsetIN,BitmapsetOUT>::remapRelid(BitmapsetIN id)
 {
-    BitmapsetN out = BitmapsetN(0);
-    for (remapper_transf_el_t<BitmapsetN> &e : transf){
+    BitmapsetOUT out = BitmapsetOUT(0);
+    for (remapper_transf_el_t<BitmapsetIN> &e : transf){
         if (e.from_relid.intersects(id)){
             out.set(e.to_idx+1);
         }
@@ -54,11 +54,11 @@ BitmapsetN Remapper<BitmapsetN>::remapRelid(BitmapsetN id)
     return out;
 }
 
-template<typename BitmapsetN>
-BitmapsetN Remapper<BitmapsetN>::remapRelidNoComposite(BitmapsetN id)
+template<typename BitmapsetIN, typename BitmapsetOUT>
+BitmapsetOUT Remapper<BitmapsetIN,BitmapsetOUT>::remapRelidNoComposite(BitmapsetIN id)
 {
-    BitmapsetN out = BitmapsetN(0);
-    for (remapper_transf_el_t<BitmapsetN> &e : transf){
+    BitmapsetOUT out = BitmapsetOUT(0);
+    for (remapper_transf_el_t<BitmapsetIN> &e : transf){
         if (e.from_relid.size() > 1)
             continue;
         if (e.from_relid.intersects(id)){
@@ -69,11 +69,11 @@ BitmapsetN Remapper<BitmapsetN>::remapRelidNoComposite(BitmapsetN id)
     return out;
 }
 
-template<typename BitmapsetN>
-BitmapsetN Remapper<BitmapsetN>::remapRelidInv(BitmapsetN id)
+template<typename BitmapsetIN, typename BitmapsetOUT>
+BitmapsetIN Remapper<BitmapsetIN,BitmapsetOUT>::remapRelidInv(BitmapsetOUT id)
 {
-    BitmapsetN out = BitmapsetN(0);
-    for (remapper_transf_el_t<BitmapsetN> &e : transf){
+    BitmapsetIN out = BitmapsetIN(0);
+    for (remapper_transf_el_t<BitmapsetIN> &e : transf){
         if (id.isSet(e.to_idx+1)){
             out |= e.from_relid;
         }
@@ -82,15 +82,15 @@ BitmapsetN Remapper<BitmapsetN>::remapRelidInv(BitmapsetN id)
     return out;
 }
 
-template<typename BitmapsetN>
-void Remapper<BitmapsetN>::remapEdgeTable(BitmapsetN* edge_table_from, 
-                                            BitmapsetN* edge_table_to,
+template<typename BitmapsetIN, typename BitmapsetOUT>
+void Remapper<BitmapsetIN,BitmapsetOUT>::remapEdgeTable(BitmapsetIN* edge_table_from, 
+                                            BitmapsetOUT* edge_table_to,
                                             bool ignore_composite)
 {
-    for (remapper_transf_el_t<BitmapsetN> &e : transf){
-        edge_table_to[e.to_idx] = BitmapsetN(0);
+    for (remapper_transf_el_t<BitmapsetIN> &e : transf){
+        edge_table_to[e.to_idx] = BitmapsetOUT(0);
         
-        BitmapsetN temp = e.from_relid;
+        BitmapsetIN temp = e.from_relid;
         while(!temp.empty()){
             int from_idx = temp.lowestPos()-1;
 
@@ -104,13 +104,13 @@ void Remapper<BitmapsetN>::remapEdgeTable(BitmapsetN* edge_table_from,
     }
 }
 
-template<typename BitmapsetN>
-void Remapper<BitmapsetN>::remapBaseRels(
-                                BaseRelation<BitmapsetN>* base_rels_from, 
-                                BaseRelation<BitmapsetN>* base_rels_to)
+template<typename BitmapsetIN, typename BitmapsetOUT>
+void Remapper<BitmapsetIN,BitmapsetOUT>::remapBaseRels(
+                                BaseRelation<BitmapsetIN>* base_rels_from, 
+                                BaseRelation<BitmapsetOUT>* base_rels_to)
 {
 
-    for (remapper_transf_el_t<BitmapsetN> &e : transf){
+    for (remapper_transf_el_t<BitmapsetIN> &e : transf){
         if (e.qt != NULL){
             base_rels_to[e.to_idx].id = remapRelid(e.from_relid);
             base_rels_to[e.to_idx].rows = e.qt->rows;
@@ -119,8 +119,14 @@ void Remapper<BitmapsetN>::remapBaseRels(
             base_rels_to[e.to_idx].pages = page_size(e.qt->rows, e.qt->width);
             base_rels_to[e.to_idx].tuples = e.qt->rows;
         } else {
-            base_rels_to[e.to_idx] = base_rels_from[e.from_relid.lowestPos()-1];
+            BaseRelation<BitmapsetIN> &baserel = base_rels_from[e.from_relid.lowestPos()-1];
+
             base_rels_to[e.to_idx].id = remapRelid(e.from_relid);
+            base_rels_to[e.to_idx].rows = baserel.rows;
+            base_rels_to[e.to_idx].cost = baserel.cost;
+            base_rels_to[e.to_idx].width = baserel.width;
+            base_rels_to[e.to_idx].pages = baserel.pages;
+            base_rels_to[e.to_idx].tuples = baserel.tuples;
         }
         
         if (e.from_relid.size() == 1){
@@ -133,16 +139,16 @@ void Remapper<BitmapsetN>::remapBaseRels(
     }
 }
 
-template<typename BitmapsetN>
-void Remapper<BitmapsetN>::remapEqClass(BitmapsetN* eq_class_from,
+template<typename BitmapsetIN, typename BitmapsetOUT>
+void Remapper<BitmapsetIN,BitmapsetOUT>::remapEqClass(BitmapsetIN* eq_class_from,
                                         float* sels_from,
-                                        BitmapsetN* fks_from,
+                                        BitmapsetIN* fks_from,
                                         VarStat* stats_from,
-                                        GpuqoPlannerInfo<BitmapsetN>* info_from,
+                                        GpuqoPlannerInfo<BitmapsetIN>* info_from,
                                         int off_sels_from, int off_fks_from,
-                                        BitmapsetN* eq_class_to,
+                                        BitmapsetOUT* eq_class_to,
                                         float* sels_to,
-                                        BitmapsetN* fks_to,
+                                        BitmapsetOUT* fks_to,
                                         VarStat* stats_to)
 {
     *eq_class_to = remapRelid(*eq_class_from);
@@ -151,15 +157,15 @@ void Remapper<BitmapsetN>::remapEqClass(BitmapsetN* eq_class_from,
     int s_to = eq_class_to->size();
 
     for (int idx_l_to = 0; idx_l_to < s_to; idx_l_to++){
-        BitmapsetN id_l_to = expandToMask(BitmapsetN::nth(idx_l_to), 
+        BitmapsetOUT id_l_to = expandToMask(BitmapsetOUT::nth(idx_l_to), 
                                             *eq_class_to); 
-        BitmapsetN id_l_from = remapRelidInv(id_l_to);
+        BitmapsetIN id_l_from = remapRelidInv(id_l_to);
         int idx_l_from = (id_l_from.allLower() & *eq_class_from).size();
 
         for (int idx_r_to = idx_l_to+1; idx_r_to < s_to; idx_r_to++){
-            BitmapsetN id_r_to = expandToMask(BitmapsetN::nth(idx_r_to), 
+            BitmapsetOUT id_r_to = expandToMask(BitmapsetOUT::nth(idx_r_to), 
                                                 *eq_class_to); 
-            BitmapsetN id_r_from = remapRelidInv(id_r_to);
+            BitmapsetIN id_r_from = remapRelidInv(id_r_to);
             int idx_r_from = (id_r_from.allLower() & *eq_class_from).size();
 
             int sels_to_idx = eqClassIndex(idx_l_to, idx_r_to, s_to);
@@ -183,21 +189,21 @@ void Remapper<BitmapsetN>::remapEqClass(BitmapsetN* eq_class_from,
     }
 }
 
-template<typename BitmapsetN>
-GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
-                                        GpuqoPlannerInfo<BitmapsetN>* old_info)
+template<typename BitmapsetIN, typename BitmapsetOUT>
+GpuqoPlannerInfo<BitmapsetOUT> *Remapper<BitmapsetIN,BitmapsetOUT>::remapPlannerInfo(
+                                        GpuqoPlannerInfo<BitmapsetIN>* old_info)
 {
     int n_rels = transf.size();
     int n_eq_classes, n_eq_class_sels, n_eq_class_fks, n_eq_class_stats; 
     countEqClasses(old_info, &n_eq_classes, &n_eq_class_sels, &n_eq_class_fks, &n_eq_class_stats); 
 
-    size_t size = plannerInfoSize<BitmapsetN>(n_eq_classes, n_eq_class_sels, 
+    size_t size = plannerInfoSize<BitmapsetOUT>(n_eq_classes, n_eq_class_sels, 
                                             n_eq_class_fks, n_eq_class_stats);
 
 	char* p = new char[size];
 
-	GpuqoPlannerInfo<BitmapsetN> *info = (GpuqoPlannerInfo<BitmapsetN>*) p;
-	p += plannerInfoBaseSize<BitmapsetN>();
+	GpuqoPlannerInfo<BitmapsetOUT> *info = (GpuqoPlannerInfo<BitmapsetOUT>*) p;
+	p += plannerInfoBaseSize<BitmapsetOUT>();
 
 	info->size = size;
 	info->n_rels = n_rels;
@@ -217,19 +223,19 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
 	info->eq_classes.n_fks = n_eq_class_fks;
 	info->eq_classes.n_stats = n_eq_class_stats;
 
-	info->eq_classes.relids = (BitmapsetN*) p;
-	p += plannerInfoEqClassesSize<BitmapsetN>(info->eq_classes.n);
+	info->eq_classes.relids = (BitmapsetOUT*) p;
+	p += plannerInfoEqClassesSize<BitmapsetOUT>(info->eq_classes.n);
 	info->eq_classes.sels = (float*) p;
-	p += plannerInfoEqClassSelsSize<BitmapsetN>(info->eq_classes.n_sels);
-	info->eq_classes.fks = (BitmapsetN*) p;
-	p += plannerInfoEqClassFksSize<BitmapsetN>(info->eq_classes.n_fks);
+	p += plannerInfoEqClassSelsSize<BitmapsetOUT>(info->eq_classes.n_sels);
+	info->eq_classes.fks = (BitmapsetOUT*) p;
+	p += plannerInfoEqClassFksSize<BitmapsetOUT>(info->eq_classes.n_fks);
 	info->eq_classes.stats = (VarStat*) p;
-	p += plannerInfoEqClassStatsSize<BitmapsetN>(info->eq_classes.n_stats);
+	p += plannerInfoEqClassStatsSize<BitmapsetOUT>(info->eq_classes.n_stats);
 
     int off_sel = 0, off_fk = 0, old_off_sel = 0, old_off_fk = 0, j = 0;
 	for (int i = 0; i < old_info->eq_classes.n; i++){
         bool found = false;
-        for (remapper_transf_el_t<BitmapsetN> &e : transf){
+        for (remapper_transf_el_t<BitmapsetIN> &e : transf){
             if (old_info->eq_classes.relids[i].isSubset(e.from_relid)){
                 found = true;
                 break;
@@ -259,30 +265,31 @@ GpuqoPlannerInfo<BitmapsetN> *Remapper<BitmapsetN>::remapPlannerInfo(
 	return info;
 }
 
-template<typename BitmapsetN>
-void Remapper<BitmapsetN>::remapQueryTree(QueryTree<BitmapsetN>* qt){
+template<typename BitmapsetIN, typename BitmapsetOUT>
+QueryTree<BitmapsetIN>* Remapper<BitmapsetIN,BitmapsetOUT>::remapQueryTree(QueryTree<BitmapsetOUT>* qt){
+    if (qt == NULL)
+        return NULL;
+
     if (qt->id.size() == 1){
         int idx = qt->id.lowestPos() - 1;
 
-        for (remapper_transf_el_t<BitmapsetN> &e : transf){
+        for (remapper_transf_el_t<BitmapsetIN> &e : transf){
             if (e.qt != NULL && e.to_idx == idx){
-                *qt = *e.qt;
-                
-                // TODO check
-                delete e.qt;
-
-                return;
+                return e.qt;
             }
         }
-        // otherwise
-        qt->id = remapRelidInv(qt->id);
-    } else {       
-        qt->id = remapRelidInv(qt->id);
-
-        remapQueryTree(qt->left);
-        remapQueryTree(qt->right);
     }
+
+    QueryTree<BitmapsetIN> *qt_out = new QueryTree<BitmapsetIN>;
+    qt_out->id = remapRelidInv(qt->id);
+    qt_out->left = remapQueryTree(qt->left);
+    qt_out->right = remapQueryTree(qt->right);
+    qt_out->rows = qt->rows;
+    qt_out->cost = qt->cost;
+    qt_out->width = qt->width;
+    return qt_out;
 }
 
-template class Remapper<Bitmapset32>;
-template class Remapper<Bitmapset64>;
+template class Remapper<Bitmapset32,Bitmapset32>;
+template class Remapper<Bitmapset64,Bitmapset64>;
+template class Remapper<Bitmapset64,Bitmapset32>;
