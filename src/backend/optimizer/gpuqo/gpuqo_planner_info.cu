@@ -21,8 +21,8 @@ static size_t bitmapset_size(int nwords){
 	return (offsetof(gpuqo_c::Bitmapset, words) + (nwords) * sizeof(gpuqo_c::bitmapword));
 }
 
-template<typename Bitmapset>
-Bitmapset convertBitmapset(gpuqo_c::Bitmapset* set);
+template<typename BitmapsetN>
+BitmapsetN convertBitmapset(gpuqo_c::Bitmapset* set);
 
 template<>
 Bitmapset32 convertBitmapset<Bitmapset32>(gpuqo_c::Bitmapset* set){
@@ -50,8 +50,8 @@ Bitmapset64 convertBitmapset<Bitmapset64>(gpuqo_c::Bitmapset* set){
     return Bitmapset64(set->words[0]);
 }
 
-template<typename Bitmapset>
-gpuqo_c::Bitmapset* convertBitmapset(Bitmapset set){
+template<typename BitmapsetN>
+gpuqo_c::Bitmapset* convertBitmapset(BitmapsetN set){
 	gpuqo_c::Bitmapset *result;
 
 	int nwords = (sizeof(set)*8 + BITS_PER_BITMAPWORD - 1) / BITS_PER_BITMAPWORD;
@@ -121,7 +121,7 @@ static void setParams(GpuqoPlannerInfo<BitmapsetN>* info) {
 }
 
 template<typename BitmapsetN>
-GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c){
+GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC *info_c){
 	size_t size = plannerInfoSize<BitmapsetN>(info_c->n_eq_classes, 
 							info_c->n_eq_class_sels, info_c->n_eq_class_fks,
 							info_c->n_eq_class_stats);
@@ -199,8 +199,8 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo 
 	return info;
 }
 
-template GpuqoPlannerInfo<Bitmapset32>* convertGpuqoPlannerInfo<Bitmapset32>(gpuqo_c::GpuqoPlannerInfo *info_c);
-template GpuqoPlannerInfo<Bitmapset64>* convertGpuqoPlannerInfo<Bitmapset64>(gpuqo_c::GpuqoPlannerInfo *info_c);
+template GpuqoPlannerInfo<Bitmapset32>* convertGpuqoPlannerInfo<Bitmapset32>(gpuqo_c::GpuqoPlannerInfoC *info_c);
+template GpuqoPlannerInfo<Bitmapset64>* convertGpuqoPlannerInfo<Bitmapset64>(gpuqo_c::GpuqoPlannerInfoC *info_c);
  
 template<typename BitmapsetN>
 GpuqoPlannerInfo<BitmapsetN>* copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN> *info){
@@ -242,11 +242,11 @@ template GpuqoPlannerInfo<Bitmapset32>* copyToDeviceGpuqoPlannerInfo<Bitmapset32
 template GpuqoPlannerInfo<Bitmapset64>* copyToDeviceGpuqoPlannerInfo<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64> *info);
 
 template<typename BitmapsetN>
-gpuqo_c::QueryTree* convertQueryTree(QueryTree<BitmapsetN>* qt){
+gpuqo_c::QueryTreeC* convertQueryTree(QueryTree<BitmapsetN>* qt){
 	if (qt == NULL)
 		return NULL;
 	
-	gpuqo_c::QueryTree *result = (gpuqo_c::QueryTree *) palloc(sizeof(gpuqo_c::QueryTree));
+	gpuqo_c::QueryTreeC *result = (gpuqo_c::QueryTreeC *) palloc(sizeof(gpuqo_c::QueryTreeC));
 	result->id = convertBitmapset<BitmapsetN>(qt->id);
 	result->left = convertQueryTree(qt->left);
 	result->right = convertQueryTree(qt->right);
@@ -260,6 +260,6 @@ gpuqo_c::QueryTree* convertQueryTree(QueryTree<BitmapsetN>* qt){
 	return result;
 }
 
-template gpuqo_c::QueryTree* convertQueryTree<Bitmapset32>(QueryTree<Bitmapset32>* qt);
-template gpuqo_c::QueryTree* convertQueryTree<Bitmapset64>(QueryTree<Bitmapset64>* qt);
+template gpuqo_c::QueryTreeC* convertQueryTree<Bitmapset32>(QueryTree<Bitmapset32>* qt);
+template gpuqo_c::QueryTreeC* convertQueryTree<Bitmapset64>(QueryTree<Bitmapset64>* qt);
   

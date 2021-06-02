@@ -69,10 +69,10 @@ __host__
 std::ostream & operator<<(std::ostream &os, const JoinRelation<BitmapsetN>& jr);
 
 template<typename Type>
-struct Bitmapset;
+struct GpuqoBitmapset;
 
 template<typename Type>
 __host__
-std::ostream & operator<<(std::ostream &os, const Bitmapset<Type>& bms);
+std::ostream & operator<<(std::ostream &os, const GpuqoBitmapset<Type>& bms);
 
 #endif							/* GPUQO_DEBUG_CUH */

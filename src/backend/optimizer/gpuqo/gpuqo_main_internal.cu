@@ -57,7 +57,7 @@ QueryTree<BitmapsetN> *gpuqo_run_switch(int gpuqo_algorithm,
 }
 
 template<typename BitmapsetN>
-static gpuqo_c::QueryTree *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfo* info_c)
+static gpuqo_c::QueryTreeC *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfoC* info_c)
 {
 	GpuqoPlannerInfo<BitmapsetN> *info = convertGpuqoPlannerInfo<BitmapsetN>(info_c);
 
@@ -83,7 +83,7 @@ static gpuqo_c::QueryTree *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlanne
 	return convertQueryTree(query_tree);
 }
 
-extern "C" gpuqo_c::QueryTree *gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfo* info_c){
+extern "C" gpuqo_c::QueryTreeC *gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfoC* info_c){
 	if (info_c->n_rels < 32){
 		return __gpuqo_run<Bitmapset32>(gpuqo_algorithm, info_c);
 	} else if (info_c->n_rels < 64){

@@ -18,22 +18,22 @@ typedef Bitmapset* EdgeMask;
 typedef Bitmapset* RelationID;
 
 
-typedef struct VarStat {
+typedef struct VarStatC {
 	float stadistinct;
 	float stanullfrac;
 	float mcvfreq;
-} VarStat;
+} VarStatC;
 
 typedef struct EqClassInfo{
 	EquivalenceClass* eclass;
 	RelationID relids;
 	float* sels;
-	VarStat* stats;
+	VarStatC* stats;
 	RelationID* fk;
 	struct EqClassInfo* next;
 } EqClassInfo;
 
-typedef struct BaseRelation{
+typedef struct BaseRelationC{
 	RelationID id;
 	float rows;
 	float tuples;
@@ -43,11 +43,11 @@ typedef struct BaseRelation{
 		float total;
 	} cost;
 	int width;
-} BaseRelation;
+} BaseRelationC;
 
-typedef struct GpuqoPlannerInfo{
+typedef struct GpuqoPlannerInfoC{
 	int n_rels;
-	BaseRelation *base_rels;
+	BaseRelationC *base_rels;
 	EdgeMask* edge_table;
 	EdgeMask* indexed_edge_table;
 	EqClassInfo* eq_classes;
@@ -55,9 +55,9 @@ typedef struct GpuqoPlannerInfo{
     int n_eq_class_sels;
     int n_eq_class_fks;
     int n_eq_class_stats;
-} GpuqoPlannerInfo;
+} GpuqoPlannerInfoC;
 
-typedef struct QueryTree{
+typedef struct QueryTreeC{
 	RelationID id;
 	float rows;
 	struct {
@@ -65,8 +65,8 @@ typedef struct QueryTree{
 		float total;
 	} cost;
 	int width;
-	struct QueryTree* left;
-	struct QueryTree* right;
-} QueryTree;
+	struct QueryTreeC* left;
+	struct QueryTreeC* right;
+} QueryTreeC;
 	
 #endif							/* GPUQO_PLANNER_INFO_H */

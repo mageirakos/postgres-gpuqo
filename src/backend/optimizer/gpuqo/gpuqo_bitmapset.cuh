@@ -19,7 +19,7 @@
 #define N_TO_SHOW 32
 
 template<typename T>
-class Bitmapset{
+class GpuqoBitmapset{
 public: 
     T bits;
 
@@ -32,25 +32,25 @@ public:
     static constexpr int SIZE = sizeof(T)*8;
 
     __host__ __device__
-    inline static Bitmapset<T> nth(unsigned n){
+    inline static GpuqoBitmapset<T> nth(unsigned n){
         return ((T)1) << n;
     }
     
     __host__ __device__
-    inline Bitmapset<T>(){}
+    inline GpuqoBitmapset<T>(){}
     
     __host__ __device__
-    inline Bitmapset<T>(const T &_bits){
+    inline GpuqoBitmapset<T>(const T &_bits){
         bits = _bits;
     }
     
     __host__ __device__
-    inline Bitmapset<T>(const Bitmapset<T> &other){
+    inline GpuqoBitmapset<T>(const GpuqoBitmapset<T> &other){
         bits = other.bits;
     }
     
     __host__ __device__
-    inline Bitmapset<T>(const Bitmapset<T> volatile &other){
+    inline GpuqoBitmapset<T>(const GpuqoBitmapset<T> volatile &other){
         bits = other.bits;
     }
     
@@ -65,12 +65,12 @@ public:
     }
 
     __host__ __device__
-    inline Bitmapset<T> cmp() const{
+    inline GpuqoBitmapset<T> cmp() const{
         return ~bits;
     }
 
     __host__ __device__
-    inline Bitmapset<T> lowest() const{
+    inline GpuqoBitmapset<T> lowest() const{
         return blsi(bits);
     }
 
@@ -80,7 +80,7 @@ public:
     }
 
     __host__ __device__
-    inline Bitmapset<T> highest() const{
+    inline GpuqoBitmapset<T> highest() const{
         return nth(highestPos());
     }
     
@@ -90,49 +90,49 @@ public:
     }
 
     __host__ __device__
-    inline Bitmapset<T> allLower() const{
+    inline GpuqoBitmapset<T> allLower() const{
         Assert(!empty());
         return lowest().bits-1;
     }
 
     __host__ __device__
-    inline Bitmapset<T> allLowerInc() const{
+    inline GpuqoBitmapset<T> allLowerInc() const{
         Assert(!empty());
         return bits | (bits-1);
     }
 
     __host__ __device__
-    inline Bitmapset<T> unionSet(const Bitmapset<T> &other) const{
+    inline GpuqoBitmapset<T> unionSet(const GpuqoBitmapset<T> &other) const{
         return bits | other.bits;
     }
 
     __host__ __device__
-    inline Bitmapset<T> intersectionSet(const Bitmapset<T> &other) const{
+    inline GpuqoBitmapset<T> intersectionSet(const GpuqoBitmapset<T> &other) const{
         return bits & other.bits;
     }
 
     __host__ __device__
-    inline Bitmapset<T> differenceSet(const Bitmapset<T> &other) const{
+    inline GpuqoBitmapset<T> differenceSet(const GpuqoBitmapset<T> &other) const{
         return intersectionSet(other.cmp());
     }
 
     __host__ __device__
-    inline bool intersects(const Bitmapset<T> &other) const{
+    inline bool intersects(const GpuqoBitmapset<T> &other) const{
         return !intersectionSet(other).empty();
     }
 
     __host__ __device__
-    inline bool isSubset(const Bitmapset<T> &other) const{
+    inline bool isSubset(const GpuqoBitmapset<T> &other) const{
         return intersectionSet(other) == *this;
     }
 
     __host__ __device__
-    inline Bitmapset<T> set(unsigned n){
+    inline GpuqoBitmapset<T> set(unsigned n){
         return *this = unionSet(nth(n));
     }
 
     __host__ __device__
-    inline Bitmapset<T> unset(unsigned n){
+    inline GpuqoBitmapset<T> unset(unsigned n){
         return *this = differenceSet(nth(n));
     }
 
@@ -142,7 +142,7 @@ public:
     }
 
     __host__ __device__
-    inline Bitmapset<T> nextPermutation() const{
+    inline GpuqoBitmapset<T> nextPermutation() const{
         T t = (bits | (bits - 1)) + 1;  
         return t | (((blsi(t) / blsi(bits)) >> 1) - 1);  
     }
@@ -156,111 +156,111 @@ public:
     }
 
     __host__ __device__
-    inline Bitmapset<T> operator|(const Bitmapset<T> &other) const{
+    inline GpuqoBitmapset<T> operator|(const GpuqoBitmapset<T> &other) const{
         return unionSet(other);
     }
 
     __host__ __device__
-    inline Bitmapset<T> operator&(const Bitmapset<T> &other) const{
+    inline GpuqoBitmapset<T> operator&(const GpuqoBitmapset<T> &other) const{
         return intersectionSet(other);
     }
 
     __host__ __device__
-    inline Bitmapset<T> operator^(const Bitmapset<T> &other) const{
+    inline GpuqoBitmapset<T> operator^(const GpuqoBitmapset<T> &other) const{
         return bits ^ other.bits;
     }
 
     __host__ __device__
-    inline Bitmapset<T> operator-(const Bitmapset<T> &other) const{
+    inline GpuqoBitmapset<T> operator-(const GpuqoBitmapset<T> &other) const{
         return differenceSet(other);
     }
 
     __host__ __device__
-    inline Bitmapset<T> operator<<(const unsigned x) const{
+    inline GpuqoBitmapset<T> operator<<(const unsigned x) const{
         return bits << x;
     }
 
     __host__ __device__
-    inline Bitmapset<T> operator>>(const unsigned x) const{
+    inline GpuqoBitmapset<T> operator>>(const unsigned x) const{
         return bits >> x;
     }
 
     __host__ __device__
-    inline Bitmapset<T> operator++(int) {
+    inline GpuqoBitmapset<T> operator++(int) {
         return bits++;
     }
 
     __host__ __device__
-    inline Bitmapset<T> operator~() const{
+    inline GpuqoBitmapset<T> operator~() const{
         return cmp();
     }
 
     __host__ __device__
-    inline Bitmapset<T> &operator|=(const Bitmapset<T> &other){
+    inline GpuqoBitmapset<T> &operator|=(const GpuqoBitmapset<T> &other){
         return *this = unionSet(other);
     }
 
     __host__ __device__
-    inline Bitmapset<T> &operator&=(const Bitmapset<T> &other){
+    inline GpuqoBitmapset<T> &operator&=(const GpuqoBitmapset<T> &other){
         return *this = intersectionSet(other);
     }
 
     __host__ __device__
-    inline Bitmapset<T> &operator^=(const Bitmapset<T> &other){
+    inline GpuqoBitmapset<T> &operator^=(const GpuqoBitmapset<T> &other){
         bits ^= other.bits;
         return *this;
     }
 
     __host__ __device__
-    inline Bitmapset<T> &operator-=(const Bitmapset<T> &other){
+    inline GpuqoBitmapset<T> &operator-=(const GpuqoBitmapset<T> &other){
         return *this = differenceSet(other);
     }
 
     __host__ __device__
-    inline bool operator==(const Bitmapset<T> &other) const{
+    inline bool operator==(const GpuqoBitmapset<T> &other) const{
         return bits == other.bits;
     }
 
     __host__ __device__
-    inline bool operator!=(const Bitmapset<T> &other) const{
+    inline bool operator!=(const GpuqoBitmapset<T> &other) const{
         return bits != other.bits;
     }
 
     __host__ __device__
-    inline bool operator<(const Bitmapset<T> &other) const{
+    inline bool operator<(const GpuqoBitmapset<T> &other) const{
         return bits < other.bits;
     }
 
     __host__ __device__
-    inline bool operator<=(const Bitmapset<T> &other) const{
+    inline bool operator<=(const GpuqoBitmapset<T> &other) const{
         return bits < other.bits;
     }
 
     __host__ __device__
-    inline bool operator>(const Bitmapset<T> &other) const{
+    inline bool operator>(const GpuqoBitmapset<T> &other) const{
         return bits > other.bits;
     }
 
     __host__ __device__
-    inline bool operator>=(const Bitmapset<T> &other) const{
+    inline bool operator>=(const GpuqoBitmapset<T> &other) const{
         return bits > other.bits;
     }
 
 
     __host__ __device__
-    inline Bitmapset<T> &operator=(const Bitmapset<T> &other){
+    inline GpuqoBitmapset<T> &operator=(const GpuqoBitmapset<T> &other){
         bits = other.bits;
         return *this;
     }
 
     __host__ __device__
-    inline Bitmapset<T> &operator=(const Bitmapset<T> volatile &other){
+    inline GpuqoBitmapset<T> &operator=(const GpuqoBitmapset<T> volatile &other){
         bits = other.bits;
         return *this;
     }
 
     __host__ __device__
-    inline Bitmapset<T> operator=(const Bitmapset<T> other) volatile{
+    inline GpuqoBitmapset<T> operator=(const GpuqoBitmapset<T> other) volatile{
         bits = other.bits;
         return *this;
     }
@@ -269,7 +269,7 @@ public:
 
 template<>
 __host__ __device__
-inline size_t Bitmapset<unsigned int>::hash() const{
+inline size_t GpuqoBitmapset<unsigned int>::hash() const{
     unsigned int x = bits;
     x ^= x >> 16;
     x *= 0x85ebca6b;
@@ -281,7 +281,7 @@ inline size_t Bitmapset<unsigned int>::hash() const{
 
 template<>
 __host__ __device__
-inline size_t Bitmapset<unsigned long long int>::hash() const{
+inline size_t GpuqoBitmapset<unsigned long long int>::hash() const{
     unsigned long long int x = bits;
     x ^= x >> 33;
     x *= 0xff51afd7ed558ccdLLU;
@@ -293,39 +293,39 @@ inline size_t Bitmapset<unsigned long long int>::hash() const{
 
 template<typename T>
 __host__ __device__
-inline Bitmapset<T> nextSubset(const Bitmapset<T> &subset, const Bitmapset<T> &set){
-    return Bitmapset<T>(set.bits & (subset.bits - set.bits));
+inline GpuqoBitmapset<T> nextSubset(const GpuqoBitmapset<T> &subset, const GpuqoBitmapset<T> &set){
+    return GpuqoBitmapset<T>(set.bits & (subset.bits - set.bits));
 }
 
 template<typename T>
 __host__ __device__
-inline Bitmapset<T> expandToMask(const Bitmapset<T> &val, const Bitmapset<T> &mask){
-    return Bitmapset<T>(pdep(val.bits, mask.bits));
+inline GpuqoBitmapset<T> expandToMask(const GpuqoBitmapset<T> &val, const GpuqoBitmapset<T> &mask){
+    return GpuqoBitmapset<T>(pdep(val.bits, mask.bits));
 }
 
 template <typename Type>
 __device__
-inline Bitmapset<Type> atomicCAS(Bitmapset<Type> *address, Bitmapset<Type> compare, Bitmapset<Type> val){
+inline GpuqoBitmapset<Type> atomicCAS(GpuqoBitmapset<Type> *address, GpuqoBitmapset<Type> compare, GpuqoBitmapset<Type> val){
     return atomicCAS(&address->bits, compare.bits, val.bits);
 }
 
 template <typename Type>
 __device__
-inline Bitmapset<Type> atomicOr(Bitmapset<Type> *address, Bitmapset<Type> val){
+inline GpuqoBitmapset<Type> atomicOr(GpuqoBitmapset<Type> *address, GpuqoBitmapset<Type> val){
     return atomicOr(&address->bits, val.bits);
 }
 
 namespace std {
     template<typename T>
-    struct hash<Bitmapset<T> > {
-        inline size_t operator()(const Bitmapset<T>& x) const {
+    struct hash<GpuqoBitmapset<T> > {
+        inline size_t operator()(const GpuqoBitmapset<T>& x) const {
             return hash<T>{}(x.bits);
         }
     };
 }
 
-typedef Bitmapset<unsigned int> Bitmapset32;
-typedef Bitmapset<unsigned long long int> Bitmapset64;
+typedef GpuqoBitmapset<unsigned int> Bitmapset32;
+typedef GpuqoBitmapset<unsigned long long int> Bitmapset64;
 
 template<typename BitmapsetN>
 using uint_t = typename BitmapsetN::type;

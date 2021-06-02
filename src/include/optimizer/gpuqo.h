@@ -20,7 +20,7 @@
 extern RelOptInfo *gpuqo(PlannerInfo *root,
 						int n_rels, List *initial_rels);
 
-extern QueryTree* gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfo* info);
+extern QueryTreeC* gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info);
 
 extern bool gpuqo_check_can_run(PlannerInfo* root);
 

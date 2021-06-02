@@ -29,7 +29,7 @@ std::ostream & operator<<(std::ostream &os, const ulong2& idxs)
 
 template <typename Type>
 __host__
-std::ostream & operator<<(std::ostream &os, const Bitmapset<Type>& bms){
+std::ostream & operator<<(std::ostream &os, const GpuqoBitmapset<Type>& bms){
     os<<"["<<std::bitset<N_TO_SHOW>(bms.toUint())<<"]";
     return os;
 }

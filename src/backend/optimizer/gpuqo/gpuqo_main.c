@@ -42,13 +42,13 @@
 
 int gpuqo_algorithm;
 
-static BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
+static BaseRelationC makeBaseRelation(RelOptInfo* rel, PlannerInfo* root);
 static EdgeMask* makeEdgeTable(PlannerInfo* root, int n_rels);
-static void printQueryTree(QueryTree* qt, int indent);
-static void printEdges(GpuqoPlannerInfo* info);
-static RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels);
-static void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlannerInfo* info, int n_rels);
-static void set_eq_class_foreign_keys(PlannerInfo *root, GpuqoPlannerInfo *info,
+static void printQueryTree(QueryTreeC* qt, int indent);
+static void printEdges(GpuqoPlannerInfoC* info);
+static RelOptInfo* queryTree2Plan(QueryTreeC* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels);
+static void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlannerInfoC* info, int n_rels);
+static void set_eq_class_foreign_keys(PlannerInfo *root, GpuqoPlannerInfoC *info,
                             Relids outer_relids, Relids inner_relids,
                             SpecialJoinInfo *sjinfo, List **restrictlist);
 
@@ -68,7 +68,7 @@ gpuqo_check_can_run(PlannerInfo* root)
     return true;
 }
 
-void printQueryTree(QueryTree* qt, int indent){
+void printQueryTree(QueryTreeC* qt, int indent){
     int i;
 
     /* since this function recurses, it could be driven to stack overflow */
@@ -85,7 +85,7 @@ void printQueryTree(QueryTree* qt, int indent){
     printQueryTree(qt->right, indent + 2);
 }
 
-void printEdges(GpuqoPlannerInfo* info){
+void printEdges(GpuqoPlannerInfoC* info){
     printf("\nEdges:\n");
     for (int i = 0; i < info->n_rels; i++){
         RelationID edges = info->edge_table[i];
@@ -118,7 +118,7 @@ void printEdges(GpuqoPlannerInfo* info){
 
 void
 set_eq_class_foreign_keys(PlannerInfo *root,
-                            GpuqoPlannerInfo *info,
+                            GpuqoPlannerInfoC *info,
                             Relids outer_relids,
                             Relids inner_relids,
                             SpecialJoinInfo *sjinfo,
@@ -196,7 +196,7 @@ set_eq_class_foreign_keys(PlannerInfo *root,
     }
 }
 
-RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels){
+RelOptInfo* queryTree2Plan(QueryTreeC* qt, int level, PlannerInfo *root, int n_rels, List *initial_rels){
     RelOptInfo* left_rel = NULL;
     RelOptInfo* right_rel = NULL;
     RelOptInfo* this_rel = NULL;
@@ -248,8 +248,8 @@ RelOptInfo* queryTree2Plan(QueryTree* qt, int level, PlannerInfo *root, int n_re
     return this_rel;
 }
 
-BaseRelation makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
-    BaseRelation baserel;
+BaseRelationC makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
+    BaseRelationC baserel;
     
     baserel.rows = rel->rows;
     baserel.tuples = rel->tuples;
@@ -283,9 +283,9 @@ EdgeMask* makeEdgeTable(PlannerInfo* root, int n_rels){
     return edge_table;
 }
 
-static VarStat extractStats(PlannerInfo *root, Node *hashkey)
+static VarStatC extractStats(PlannerInfo *root, Node *hashkey)
 {
-    VarStat     out;
+    VarStatC     out;
 	VariableStatData vardata;
 	bool		isdefault;
 	AttStatsSlot sslot;
@@ -343,7 +343,7 @@ static VarStat extractStats(PlannerInfo *root, Node *hashkey)
     return out;
 }
 
-void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlannerInfo* info, int n_rels){
+void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlannerInfoC* info, int n_rels){
     ListCell* lc_inner;
     ListCell* lc_outer;
     ListCell* lc_inner_path;
@@ -430,7 +430,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                         ec->sels = (float*) palloc(sizeof(float)*n_sels);
                         ec->eclass = rinfo->parent_ec;
                         ec->fk = (RelationID*) palloc(sizeof(RelationID)*size);
-                        ec->stats = (VarStat*) palloc(sizeof(VarStat)*size);
+                        ec->stats = (VarStatC*) palloc(sizeof(VarStatC)*size);
                         for (int i_fk = 0; i_fk < size; i_fk++){
                             ec->fk[i_fk] = NULL;
                             ec->stats[i_fk].mcvfreq = 0;
@@ -515,16 +515,16 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     ListCell* lc;
     int i;
     RelOptInfo* rel;
-    GpuqoPlannerInfo* info;
-    QueryTree* query_tree;
+    GpuqoPlannerInfoC* info;
+    QueryTreeC* query_tree;
 
 #ifdef OPTIMIZER_DEBUG
     printf("Hello, here is gpuqo!\n");
 #endif
 
-    info = (GpuqoPlannerInfo*) palloc(sizeof(GpuqoPlannerInfo));
+    info = (GpuqoPlannerInfoC*) palloc(sizeof(GpuqoPlannerInfoC));
     
-    info->base_rels = (BaseRelation*) palloc(n_rels * sizeof(BaseRelation));
+    info->base_rels = (BaseRelationC*) palloc(n_rels * sizeof(BaseRelationC));
 
     info->n_rels = n_rels;
     info->eq_classes = NULL;

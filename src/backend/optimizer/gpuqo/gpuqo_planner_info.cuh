@@ -77,8 +77,8 @@ struct QueryTree{
 	float rows;
 	Cost cost;
 	int width;
-	struct QueryTree* left;
-	struct QueryTree* right;
+	struct QueryTree<BitmapsetN>* left;
+	struct QueryTree<BitmapsetN>* right;
 };
 
 template<typename BitmapsetN>
@@ -187,7 +187,7 @@ inline size_t plannerInfoSize(size_t n_eq_classes, size_t n_eq_class_sels,
 
 template<typename BitmapsetN>
 GpuqoPlannerInfo<BitmapsetN>* 
-convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfo *info_c);
+convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC *info_c);
 
 template<typename BitmapsetN>
 GpuqoPlannerInfo<BitmapsetN>* 
@@ -198,6 +198,6 @@ GpuqoPlannerInfo<BitmapsetN>*
 deleteGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN> *info);
 
 template<typename BitmapsetN>
-gpuqo_c::QueryTree* convertQueryTree(QueryTree<BitmapsetN> *info);
+gpuqo_c::QueryTreeC* convertQueryTree(QueryTree<BitmapsetN> *info);
 
 #endif							/* GPUQO_PLANNER_INFO_CUH */

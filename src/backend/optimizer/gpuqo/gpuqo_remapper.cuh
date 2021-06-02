@@ -39,12 +39,10 @@ private:
     void remapBaseRels(BaseRelation<BitmapsetN>* base_rels_from,
                         BaseRelation<BitmapsetN>* base_rels_to);
     void remapEqClass(BitmapsetN* eq_class_from, float* sels_from, 
-                    BitmapsetN* fks_from,
-                    VarStat* stats_from,
+                    BitmapsetN* fks_from, VarStat* stats_from,
                     GpuqoPlannerInfo<BitmapsetN>* info_from,
-                    int off_sels_from, int off_fks_from,
-                    BitmapsetN* eq_class_to, float* sels_to,
-                    BitmapsetN* fks_to,
+                    int off_sels_from, int off_fks_from, 
+                    BitmapsetN* eq_class_to, float* sels_to, BitmapsetN* fks_to,
                     VarStat* stats_to);
 
 public:
