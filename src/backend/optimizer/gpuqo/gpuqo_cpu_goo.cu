@@ -77,7 +77,7 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
 
     for (auto i = relations.begin(); i != relations.end(); i++) {
             for (auto j = i; j != relations.end(); j++) {
-                if (is_disjoint((*i)->id, (*j)->id)) {
+                if (are_valid_pair((*i)->id, (*j)->id, info)) {
                     QueryTree<BitmapsetN>* qt = join(**i, **j, info);
                     heap.push_back(qt);
                     push_heap(heap.begin(), heap.end(), compare);
@@ -115,7 +115,7 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
 
         // add all its combinations with other relations to the heap
         for (auto j = relations.begin(); j != relations.end(); j++) {
-            if (is_disjoint(smallest->id, (*j)->id)) {
+            if (are_valid_pair(smallest->id, (*j)->id, info)) {
                 QueryTree<BitmapsetN>* qt = join(*smallest, **j, info);
                 heap.push_back(qt);
                 push_heap(heap.begin(), heap.end(), compare);

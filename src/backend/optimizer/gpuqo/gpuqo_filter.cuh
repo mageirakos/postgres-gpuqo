@@ -54,11 +54,35 @@ bool are_connected(BitmapsetN left_edges, BitmapsetN right_id,
 template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
+bool are_connected_ids(BitmapsetN left_id, BitmapsetN right_id,
+                GpuqoPlannerInfo<BitmapsetN>* info)
+{
+    BitmapsetN left_edges = BitmapsetN(0);
+    while (!left_id.empty()) {
+        int baserel_idx = left_id.lowestPos()-1;
+        left_edges |= info->edge_table[baserel_idx];
+        left_id.unset(baserel_idx+1);
+    }
+    return are_connected(left_edges, right_id, info);
+}
+
+template<typename BitmapsetN>
+__host__ __device__
+__forceinline__
 bool are_connected_rel(JoinRelationDetailed<BitmapsetN> &left_rel, 
                     JoinRelationDetailed<BitmapsetN> &right_rel,
                     GpuqoPlannerInfo<BitmapsetN>* info)
 {
     return are_connected(left_rel.edges, right_rel.id, info);
+}
+
+template<typename BitmapsetN>
+__host__ __device__
+__forceinline__
+bool are_valid_pair(BitmapsetN left_id, BitmapsetN right_id,
+                GpuqoPlannerInfo<BitmapsetN>* info)
+{
+    return are_connected_ids(left_id, right_id, info) && is_disjoint(left_id, right_id);
 }
 
 template<typename BitmapsetN>
