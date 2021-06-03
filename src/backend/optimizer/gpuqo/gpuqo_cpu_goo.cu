@@ -1,6 +1,7 @@
 /*------------------------------------------------------------------------
  *
- * gpuqo_cpu_dpccp.cu
+ * gpuqo_cpu_goo.cu
+ *      Greedy Operator Ordering approximate algorithm
  *
  * src/backend/optimizer/gpuqo/gpuqo_dpccp.cu
  *
@@ -17,7 +18,6 @@
 #include "optimizer/gpuqo_common.h"
 
 #include "gpuqo.cuh"
-#include "gpuqo_timing.cuh"
 #include "gpuqo_debug.cuh"
 #include "gpuqo_cost.cuh"
 #include "gpuqo_filter.cuh"

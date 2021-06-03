@@ -14,7 +14,7 @@
 int gpuqo_idp_n_iters;
 
 template<typename BitmapsetOuter, typename BitmapsetInner>
-QueryTree<BitmapsetOuter> *gpuqo_run_idp_next(int gpuqo_algorithm, 
+QueryTree<BitmapsetOuter> *gpuqo_run_idp1_next(int gpuqo_algorithm, 
 						GpuqoPlannerInfo<BitmapsetOuter>* info,
 						list<remapper_transf_el_t<BitmapsetOuter> > &remap_list) 
 {
@@ -22,7 +22,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp_next(int gpuqo_algorithm,
 
 	GpuqoPlannerInfo<BitmapsetInner> *new_info =remapper.remapPlannerInfo(info);
 
-	QueryTree<BitmapsetInner> *new_qt = gpuqo_run_idp(gpuqo_algorithm,new_info);
+	QueryTree<BitmapsetInner> *new_qt = gpuqo_run_idp1(gpuqo_algorithm,new_info);
 
 	QueryTree<BitmapsetOuter> *new_qt_remap = remapper.remapQueryTree(new_qt);
 
@@ -33,7 +33,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp_next(int gpuqo_algorithm,
 }
 
 template<typename BitmapsetN>
-QueryTree<BitmapsetN> *gpuqo_run_idp(int gpuqo_algorithm, 
+QueryTree<BitmapsetN> *gpuqo_run_idp1(int gpuqo_algorithm, 
 									GpuqoPlannerInfo<BitmapsetN>* info)
 {
 	info->n_iters = min(info->n_rels, gpuqo_idp_n_iters);
@@ -66,10 +66,10 @@ QueryTree<BitmapsetN> *gpuqo_run_idp(int gpuqo_algorithm,
 		}
 
 		if (BitmapsetN::SIZE == 32 || remap_list.size() < 32) {
-			return gpuqo_run_idp_next<BitmapsetN, Bitmapset32>(
+			return gpuqo_run_idp1_next<BitmapsetN, Bitmapset32>(
 											gpuqo_algorithm, info, remap_list);
 		} else if (BitmapsetN::SIZE == 64 || remap_list.size() < 64) {
-			return gpuqo_run_idp_next<BitmapsetN, Bitmapset64>(
+			return gpuqo_run_idp1_next<BitmapsetN, Bitmapset64>(
 											gpuqo_algorithm, info, remap_list);
 		} else {
 			printf("ERROR: too many relations\n");
@@ -78,5 +78,5 @@ QueryTree<BitmapsetN> *gpuqo_run_idp(int gpuqo_algorithm,
 	}
 }
 
-template QueryTree<Bitmapset32> *gpuqo_run_idp<Bitmapset32>(int,  GpuqoPlannerInfo<Bitmapset32>*);
-template QueryTree<Bitmapset64> *gpuqo_run_idp<Bitmapset64>(int,  GpuqoPlannerInfo<Bitmapset64>*);
+template QueryTree<Bitmapset32> *gpuqo_run_idp1<Bitmapset32>(int,  GpuqoPlannerInfo<Bitmapset32>*);
+template QueryTree<Bitmapset64> *gpuqo_run_idp1<Bitmapset64>(int,  GpuqoPlannerInfo<Bitmapset64>*);

@@ -49,7 +49,7 @@ extern QueryTree<BitmapsetN>* gpuqo_run_switch(int gpuqo_algorithm,
 											GpuqoPlannerInfo<BitmapsetN>* info);
 
 template<typename BitmapsetN>
-extern QueryTree<BitmapsetN>* gpuqo_run_idp(int gpuqo_algorithm, 
+extern QueryTree<BitmapsetN>* gpuqo_run_idp1(int gpuqo_algorithm, 
 											GpuqoPlannerInfo<BitmapsetN>* info);
 
 template<typename BitmapsetN>
