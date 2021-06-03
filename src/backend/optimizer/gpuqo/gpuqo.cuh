@@ -85,6 +85,9 @@ extern QueryTree<BitmapsetN>* gpuqo_cpu_dpsub_parallel(GpuqoPlannerInfo<Bitmapse
 template<typename BitmapsetN>
 extern QueryTree<BitmapsetN>* gpuqo_dpe_dpccp(GpuqoPlannerInfo<BitmapsetN>* info);
 
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info);
+
 
 template<typename BitmapsetN>
 extern Remapper<BitmapsetN,BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN>* info);

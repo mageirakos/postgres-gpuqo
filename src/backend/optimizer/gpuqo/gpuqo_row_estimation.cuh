@@ -121,6 +121,20 @@ estimate_join_rows(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
     return rows > 1 ? round(rows) : 1;
 }
 
+template<typename BitmapsetN>
+__host__ __device__
+static float 
+estimate_join_rows(QueryTree<BitmapsetN> &left_rel, 
+                   QueryTree<BitmapsetN> &right_rel, 
+                   GpuqoPlannerInfo<BitmapsetN>* info)
+{
+    float sel = estimate_join_selectivity(left_rel.id, right_rel.id, info);
+    float rows = sel * left_rel.rows * right_rel.rows;
+
+    // clamp the number of rows
+    return rows > 1 ? round(rows) : 1;
+}
+
 
 template<typename BitmapsetN>
 __host__ __device__

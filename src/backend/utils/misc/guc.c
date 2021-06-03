@@ -470,6 +470,7 @@ const struct config_enum_entry gpuqo_algorithm_options[] = {
 	{"dpe_dpsize", GPUQO_DPE_DPSIZE, false},
 	{"dpe_dpsub", GPUQO_DPE_DPSUB, false},
 	{"dpe_dpccp", GPUQO_DPE_DPCCP, false},
+	{"cpu_goo", GPUQO_CPU_GOO, false},
 	{NULL, 0, false}
 };
 
