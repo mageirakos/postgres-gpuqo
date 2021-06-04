@@ -61,6 +61,10 @@ ifeq ($(simulate_complex_cost_function),yes)
 NVCCFLAGS += -DSIMULATE_COMPLEX_COST_FUNCTION
 endif
 
+ifeq ($(cost_function),cout)
+NVCCFLAGS += -DGPUQO_COST_FUNCTION_COUT
+endif
+
 GENCODE_FLAGS = $(foreach sm, $(with_cudasm), -gencode arch=compute_$(sm),code=sm_$(sm))
 BUILDDIR = $(top_builddir)/$(subdir)
 
