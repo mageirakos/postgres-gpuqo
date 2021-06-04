@@ -78,7 +78,7 @@ static gpuqo_c::QueryTreeC *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlann
 	else
 		query_tree = gpuqo_run_idp1(gpuqo_algorithm, remap_info);
 
-	remapper.remapQueryTree(query_tree);
+	query_tree = remapper.remapQueryTree(query_tree);
 
 	delete remap_info;
 	delete info;
