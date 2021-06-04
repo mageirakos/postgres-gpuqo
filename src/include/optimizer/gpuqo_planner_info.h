@@ -37,7 +37,6 @@ typedef struct BaseRelationC{
 	RelationID id;
 	float rows;
 	float tuples;
-	float pages;
 	struct {
 		float startup;
 		float total;

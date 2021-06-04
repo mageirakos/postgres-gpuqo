@@ -87,7 +87,6 @@ struct BaseRelation{
 	float rows;
 	float tuples;
 	int width;
-	float pages;
 	struct Cost cost;
 	bool composite;
 };

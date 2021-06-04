@@ -147,7 +147,6 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC
 		info->base_rels[i].rows = info_c->base_rels[i].rows;
 		info->base_rels[i].tuples = info_c->base_rels[i].tuples;
 		info->base_rels[i].width = info_c->base_rels[i].width;
-		info->base_rels[i].pages = info_c->base_rels[i].pages;
 		info->base_rels[i].cost.startup = info_c->base_rels[i].cost.startup;
 		info->base_rels[i].cost.total = info_c->base_rels[i].cost.total;
 		info->base_rels[i].composite = false;

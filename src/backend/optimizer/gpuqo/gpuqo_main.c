@@ -254,7 +254,6 @@ BaseRelationC makeBaseRelation(RelOptInfo* rel, PlannerInfo* root){
     baserel.rows = rel->rows;
     baserel.tuples = rel->tuples;
     baserel.width = rel->reltarget->width;
-    baserel.pages = rel->pages;
     baserel.cost.total = rel->cheapest_total_path->total_cost;
     baserel.cost.startup = rel->cheapest_total_path->startup_cost;
     baserel.id = bms_copy(rel->relids);

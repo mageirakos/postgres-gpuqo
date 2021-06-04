@@ -116,7 +116,6 @@ void Remapper<BitmapsetIN,BitmapsetOUT>::remapBaseRels(
             base_rels_to[e.to_idx].rows = e.qt->rows;
             base_rels_to[e.to_idx].cost = e.qt->cost;
             base_rels_to[e.to_idx].width = e.qt->width;
-            base_rels_to[e.to_idx].pages = page_size(e.qt->rows, e.qt->width);
             base_rels_to[e.to_idx].tuples = e.qt->rows;
         } else {
             BaseRelation<BitmapsetIN> &baserel = base_rels_from[e.from_relid.lowestPos()-1];
@@ -125,7 +124,6 @@ void Remapper<BitmapsetIN,BitmapsetOUT>::remapBaseRels(
             base_rels_to[e.to_idx].rows = baserel.rows;
             base_rels_to[e.to_idx].cost = baserel.cost;
             base_rels_to[e.to_idx].width = baserel.width;
-            base_rels_to[e.to_idx].pages = baserel.pages;
             base_rels_to[e.to_idx].tuples = baserel.tuples;
         }
         
