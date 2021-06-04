@@ -48,7 +48,7 @@ __host__ __device__
 static float page_size(float tuples, int width);
 
 __host__ __device__
-static void ExecChooseHashTableSize(double ntuples, int tupwidth, int sort_mem,
+static void ExecChooseHashTableSize(float ntuples, int tupwidth, int sort_mem,
                                     int *virtualbuckets,
                                     int *physicalbuckets,
                                     int *numbatches);
@@ -62,13 +62,13 @@ cost_qual_eval(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
 template <typename BitmapsetN>
 __host__ __device__
 static float 
-estimate_hash_innerbucketsize(BitmapsetN inner_rel_id, BitmapsetN outer_rel_id,
+estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
                             GpuqoPlannerInfo<BitmapsetN>* info);
 
 template <typename BitmapsetN>
 __host__ __device__
 static float
-estimate_hash_bucketsize(VarStat &stat, BaseRelation<BitmapsetN> &baserel, 
+__estimate_hash_bucketsize(VarStat &stat, BaseRelation<BitmapsetN> &baserel, 
                         int nbuckets, GpuqoPlannerInfo<BitmapsetN>* info);
 
 /*
@@ -81,8 +81,8 @@ estimate_hash_bucketsize(VarStat &stat, BaseRelation<BitmapsetN> &baserel,
 template <typename BitmapsetN>
 __host__ __device__
 static struct Cost
-cost_nestloop(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
-                BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
+cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
+                BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
 	float		startup_cost = 0.0f;
@@ -160,8 +160,8 @@ cost_nestloop(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
 template <typename BitmapsetN>
 __host__ __device__
 static struct Cost 
-cost_hashjoin(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
-                BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
+cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
+                BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
 	float		startup_cost = 0.0f;
@@ -248,7 +248,7 @@ cost_hashjoin(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
 	 * wrong for non-unique-ified paths.
 	 */
     // assuming not unique
-    innerbucketsize = estimate_hash_innerbucketsize(inner_rel_id, outer_rel_id, virtualbuckets, info);
+    innerbucketsize = estimate_hash_innerbucketsize(outer_rel_id, inner_rel_id, virtualbuckets, info);
 
 	/*
 	 * if inner relation is too big then we will need to "batch" the join,
@@ -436,7 +436,7 @@ ExecChooseHashTableSize(float ntuples, int tupwidth, int sort_mem,
 template <typename BitmapsetN>
 __host__ __device__
 static float 
-estimate_hash_innerbucketsize(BitmapsetN inner_rel_id, BitmapsetN outer_rel_id,
+estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
                             int nbuckets,
                             GpuqoPlannerInfo<BitmapsetN>* info)
 {
@@ -462,7 +462,7 @@ estimate_hash_innerbucketsize(BitmapsetN inner_rel_id, BitmapsetN outer_rel_id,
             BaseRelation<BitmapsetN>& baserel = info->base_rels[out_id.lowestPos()-1];
             VarStat stat = info->eq_classes.stats[off_stats+out_idx];
 
-            float thisbucketsize = estimate_hash_bucketsize(stat, baserel, nbuckets, info);
+            float thisbucketsize = __estimate_hash_bucketsize(stat, baserel, nbuckets, info);
             
             if (innerbucketsize > thisbucketsize)
                 innerbucketsize = thisbucketsize;
@@ -478,7 +478,7 @@ estimate_hash_innerbucketsize(BitmapsetN inner_rel_id, BitmapsetN outer_rel_id,
             BaseRelation<BitmapsetN>& baserel = info->base_rels[in_id.lowestPos()-1];
             VarStat stat = info->eq_classes.stats[off_stats+in_idx];
 
-            float thisbucketsize = estimate_hash_bucketsize(stat, baserel, nbuckets, info);
+            float thisbucketsize = __estimate_hash_bucketsize(stat, baserel, nbuckets, info);
             
             if (innerbucketsize > thisbucketsize)
                 innerbucketsize = thisbucketsize;
@@ -526,7 +526,7 @@ estimate_hash_innerbucketsize(BitmapsetN inner_rel_id, BitmapsetN outer_rel_id,
 template <typename BitmapsetN>
 __host__ __device__
 static float
-estimate_hash_bucketsize(VarStat &stats, BaseRelation<BitmapsetN> &baserel, 
+__estimate_hash_bucketsize(VarStat &stats, BaseRelation<BitmapsetN> &baserel, 
                         int nbuckets, GpuqoPlannerInfo<BitmapsetN>* info)
 {
 	float		estfract,

@@ -40,24 +40,26 @@ cost_baserel(BaseRelation<BitmapsetN> &base_rel){
 template <typename BitmapsetN>
 __host__ __device__
 static struct Cost
-cost_nestloop(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
-                BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
+cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
+                BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
     return (struct Cost) {
         .startup = 0.0f,
+        .total = outer_rel.cost.total + outer_rel.rows * inner_rel.cost.total
     };
 }
 
 template <typename BitmapsetN>
 __host__ __device__
 static struct Cost
-cost_hashjoin(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
-                BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
+cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
+                BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
     return (struct Cost) {
         .startup = 0.0f,
+        .total = HASHJOIN_COEFF * join_rel_rows + inner_rel.cost.total + outer_rel.cost.total
     };
 }
 

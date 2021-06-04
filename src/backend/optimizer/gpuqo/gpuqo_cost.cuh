@@ -32,20 +32,20 @@
 template<typename BitmapsetN>
 __host__ __device__
 static struct Cost 
-calc_join_cost(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
-                BitmapsetN right_rel_id, JoinRelation<BitmapsetN> &right_rel,
+calc_join_cost(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
+                BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
     struct Cost min_cost, nlj_cost, hj_cost;
 
     min_cost.total = info->params.disable_cost;
 
-    nlj_cost = cost_nestloop(left_rel_id, left_rel, right_rel_id, right_rel, join_rel_rows, info);
+    nlj_cost = cost_nestloop(outer_rel_id, outer_rel, inner_rel_id, inner_rel, join_rel_rows, info);
 
     if (nlj_cost.total < min_cost.total)
         min_cost = nlj_cost;
 
-    hj_cost = cost_hashjoin(left_rel_id, left_rel, right_rel_id, right_rel, join_rel_rows, info);
+    hj_cost = cost_hashjoin(outer_rel_id, outer_rel, inner_rel_id, inner_rel, join_rel_rows, info);
 
     if (hj_cost.total < min_cost.total)
         min_cost = hj_cost;
