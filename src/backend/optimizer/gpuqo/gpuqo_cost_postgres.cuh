@@ -454,9 +454,8 @@ estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
         if (match_l.empty() || match_r.empty())
             continue;
 
-        BitmapsetN tmp_outer_rels = outer_rel_id;
-        while(!tmp_outer_rels.empty()){
-            BitmapsetN out_id = tmp_outer_rels.lowest();
+        while(!match_l.empty()){
+            BitmapsetN out_id = match_l.lowest();
             int out_idx = (out_id.allLower() & ec_relids).size();
 
             BaseRelation<BitmapsetN>& baserel = info->base_rels[out_id.lowestPos()-1];
@@ -467,12 +466,11 @@ estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
             if (innerbucketsize > thisbucketsize)
                 innerbucketsize = thisbucketsize;
 
-            tmp_outer_rels ^= out_id;
+            match_l ^= out_id;
         }
 
-        BitmapsetN tmp_inner_rels = inner_rel_id;
-        while(!tmp_inner_rels.empty()){
-            BitmapsetN in_id = tmp_inner_rels.lowest();
+        while(!match_r.empty()){
+            BitmapsetN in_id = match_r.lowest();
             int in_idx = (in_id.allLower() & ec_relids).size();
 
             BaseRelation<BitmapsetN>& baserel = info->base_rels[in_id.lowestPos()-1];
@@ -483,7 +481,7 @@ estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
             if (innerbucketsize > thisbucketsize)
                 innerbucketsize = thisbucketsize;
 
-            tmp_inner_rels ^= in_id;
+            match_r ^= in_id;
         }
 
         off_stats += ec_relids.size();
