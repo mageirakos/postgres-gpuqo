@@ -9,6 +9,7 @@
  */
 
 #include "gpuqo.cuh"
+#include "gpuqo_query_tree.cuh"
 
 template<typename BitmapsetN>
 QueryTree<BitmapsetN> *gpuqo_run_switch(int gpuqo_algorithm, 
@@ -75,15 +76,26 @@ static gpuqo_c::QueryTreeC *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlann
 	QueryTree<BitmapsetN> *query_tree;
 	if (gpuqo_idp_n_iters <= 1 || gpuqo_idp_n_iters >= info->n_rels)
 		query_tree = gpuqo_run_switch(gpuqo_algorithm, remap_info);
-	else
-		query_tree = gpuqo_run_idp1(gpuqo_algorithm, remap_info);
+	else{
+		switch(gpuqo_idp_type) {
+			case GPUQO_IDP1:
+				query_tree = gpuqo_run_idp1(gpuqo_algorithm, remap_info);
+				break;
+			case GPUQO_IDP2:
+				query_tree = gpuqo_run_idp2(gpuqo_algorithm, remap_info);
+				break;
+			default:
+				printf("Unkonwn IDP type\n");
+		}
+	}
 
-	query_tree = remapper.remapQueryTree(query_tree);
+	QueryTree<BitmapsetN> *new_qt = remapper.remapQueryTree(query_tree);
+	freeQueryTree(query_tree);
 
 	delete remap_info;
 	delete info;
 
-	return convertQueryTree(query_tree);
+	return convertQueryTree(new_qt);
 }
 
 extern "C" gpuqo_c::QueryTreeC *gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfoC* info_c){

@@ -25,6 +25,11 @@ typedef enum GpuqoAlgorithm {
 	GPUQO_CPU_GOO
 } GpuqoAlgorithm;
 
+typedef enum GpuqoIDPType {
+	GPUQO_IDP1 = 1,
+	GPUQO_IDP2 = 2
+} GpuqoIDPType;
+
 extern int gpuqo_algorithm;
 extern int gpuqo_scratchpad_size_mb;
 extern int gpuqo_max_memo_size_mb;
@@ -44,6 +49,7 @@ extern bool gpuqo_dpsub_tree_enable;
 extern bool gpuqo_dpsub_bicc_enable;
 extern bool gpuqo_spanning_tree_enable;
 extern int gpuqo_idp_n_iters;
+extern int gpuqo_idp_type;
 
 #ifdef __CUDA_ARCH__
 __host__ __device__

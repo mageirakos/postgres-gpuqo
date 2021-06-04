@@ -474,6 +474,12 @@ const struct config_enum_entry gpuqo_algorithm_options[] = {
 	{NULL, 0, false}
 };
 
+const struct config_enum_entry gpuqo_idp_type_options[] = {
+	{"IDP1", GPUQO_IDP1, false},
+	{"IDP2", GPUQO_IDP2, false},
+	{NULL, 0, false}
+};
+
 static struct config_enum_entry shared_memory_options[] = {
 #ifndef WIN32
 	{"sysv", SHMEM_TYPE_SYSV, false},
@@ -4769,6 +4775,15 @@ static struct config_enum ConfigureNamesEnum[] =
 		},
 		&gpuqo_algorithm,
 		GPUQO_DPSIZE, gpuqo_algorithm_options,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_idp_type", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Switch IDP mode (IDP1 or IDP2)"),
+			NULL
+		},
+		&gpuqo_idp_type,
+		GPUQO_IDP2, gpuqo_idp_type_options,
 		NULL, NULL, NULL
 	},
 
