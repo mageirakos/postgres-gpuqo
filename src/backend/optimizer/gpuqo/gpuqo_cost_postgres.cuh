@@ -30,8 +30,8 @@
 	(((uintptr_t) (LEN) + ((ALIGNVAL) - 1)) & ~((uintptr_t) ((ALIGNVAL) - 1)))
 #define MAXALIGN(LEN) TYPEALIGN(MAXIMUM_ALIGNOF,LEN)
 
-#define LOG2(x)  (log(x) / 0.693147180559945)
-#define LOG6(x)  (log(x) / 1.79175946922805)
+#define LOG2(x)  (logf(x) / 0.693147180559945f)
+#define LOG6(x)  (logf(x) / 1.79175946922805f)
 
 #define COST_FUNCTION_OVERHEAD 3000L
 
@@ -85,8 +85,8 @@ cost_nestloop(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
-	float		startup_cost = 0;
-	float		run_cost = 0;
+	float		startup_cost = 0.0f;
+	float		run_cost = 0.0f;
 	float		cpu_per_tuple;
 	QualCost	restrict_qual_cost;
 	float		outer_path_rows = outer_rel.rows;
@@ -110,7 +110,7 @@ cost_nestloop(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
     // TODO check if this is right
     // in our case, all quals are in the join so the selectivity should be the 
     // same    
-    joininfactor = 1.0;
+    joininfactor = 1.0f;
 
 	/* cost of source data */
 
@@ -129,7 +129,7 @@ cost_nestloop(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
         * charge startup cost for each iteration of inner path, except we
         * already charged the first startup_cost in our own startup
     */
-    run_cost += (outer_path_rows - 1) * inner_rel.cost.startup;
+    run_cost += (outer_path_rows - 1.0f) * inner_rel.cost.startup;
 
 	run_cost += outer_path_rows *
 		(inner_rel.cost.total - inner_rel.cost.startup) * joininfactor;
@@ -164,8 +164,8 @@ cost_hashjoin(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
-	float		startup_cost = 0;
-	float		run_cost = 0;
+	float		startup_cost = 0.0f;
+	float		run_cost = 0.0f;
 	float		cpu_per_tuple;
 	float       hash_selec;
 	float       qp_selec;
@@ -204,8 +204,8 @@ cost_hashjoin(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
 	hash_qual_cost = cost_qual_eval(outer_rel_id, inner_rel_id, info);
 	num_hashclauses = hash_qual_cost.n_quals; // TODO check
 	qp_selec = 1.0f;
-	qp_qual_cost.startup = 0;
-	qp_qual_cost.per_tuple = 0;
+	qp_qual_cost.startup = 0.0f;
+	qp_qual_cost.per_tuple = 0.0f;
 
 	/* approx # tuples passing the hash quals */
 	hashjointuples = ceil(hash_selec * outer_path_rows * inner_path_rows);
@@ -259,13 +259,13 @@ cost_hashjoin(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
 	 */
 	if (numbatches)
 	{
-		double		outerpages = page_size(outer_path_rows,
+		float		outerpages = page_size(outer_path_rows,
 										   outer_rel.width);
-		double		innerpages = page_size(inner_path_rows,
+		float		innerpages = page_size(inner_path_rows,
 										   inner_rel.width);
 
 		startup_cost += innerpages;
-		run_cost += innerpages + 2 * outerpages;
+		run_cost += innerpages + 2.0f * outerpages;
 	}
 
 	/* CPU costs */
@@ -278,7 +278,7 @@ cost_hashjoin(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
 	 * attached to the join are IN quals, which should be true.)
 	 */
     // assuming all clauses are hash clauses
-    joininfactor = 1.0;
+    joininfactor = 1.0f;
 
 	/*
 	 * The number of tuple comparisons needed is the number of outer
@@ -314,8 +314,8 @@ cost_hashjoin(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
 	 * that unfairly penalizes the hash.  Probably it'd be better to keep
 	 * track of disable penalty separately from cost.
 	 */
-	if (innerbytes > outerbytes && outerbytes > 0)
-		run_cost *= sqrt(innerbytes / outerbytes);
+	if (innerbytes > outerbytes && outerbytes > 0.0f)
+		run_cost *= sqrtf(innerbytes / outerbytes);
 
 	return (struct Cost){
         .startup = startup_cost,
@@ -330,23 +330,23 @@ cost_hashjoin(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
 
 __host__ __device__
 static void
-ExecChooseHashTableSize(double ntuples, int tupwidth, int sort_mem,
+ExecChooseHashTableSize(float ntuples, int tupwidth, int sort_mem,
 						int *virtualbuckets,
 						int *physicalbuckets,
 						int *numbatches)
 {
 	int			tupsize;
-	double		inner_rel_bytes;
+	float		inner_rel_bytes;
 	long		hash_table_bytes;
-	double		dtmp;
+	float		dtmp;
 	int			nbatch;
 	int			nbuckets;
 	int			totalbuckets;
 	int			bucketsize;
 
 	/* Force a plausible relation size if no info */
-	if (ntuples <= 0.0)
-		ntuples = 1000.0;
+	if (ntuples <= 0.0f)
+		ntuples = 1000.0f;
 
 	/*
 	 * Estimate tupsize based on footprint of tuple in hashtable... but
@@ -440,7 +440,7 @@ estimate_hash_innerbucketsize(BitmapsetN inner_rel_id, BitmapsetN outer_rel_id,
                             int nbuckets,
                             GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    float innerbucketsize = 1.0;
+    float innerbucketsize = 1.0f;
 
     // for each ec that involves any baserel on the left and on the right,
     // count 1 cpu operation (we are assuming 'equals' operators only)
@@ -538,16 +538,16 @@ estimate_hash_bucketsize(VarStat &stats, BaseRelation<BitmapsetN> &baserel,
 	 * Obtain number of distinct data values in raw relation.
 	 */
 	ndistinct = stats.stadistinct;
-	if (ndistinct < 0.0)
+	if (ndistinct < 0.0f)
 		ndistinct = -ndistinct * baserel.tuples;
 
-	if (ndistinct <= 0.0)		/* ensure we can divide */
+	if (ndistinct <= 0.0f)		/* ensure we can divide */
 	{
-		return 0.1;
+		return 0.1f;
 	}
 
 	/* Also compute avg freq of all distinct data values in raw relation */
-	avgfreq = (1.0 - stats.stanullfrac) / ndistinct;
+	avgfreq = (1.0f - stats.stanullfrac) / ndistinct;
 
 	/*
 	 * Adjust ndistinct to account for restriction clauses.  Observe we
@@ -566,9 +566,9 @@ estimate_hash_bucketsize(VarStat &stats, BaseRelation<BitmapsetN> &baserel,
 	 * values; otherwise it is 1/ndistinct.
 	 */
 	if (ndistinct > nbuckets)
-		estfract = 1.0 / nbuckets;
+		estfract = 1.0f / nbuckets;
 	else
-		estfract = 1.0 / ndistinct;
+		estfract = 1.0f / ndistinct;
 
 	/*
 	 * Look up the frequency of the most common value, if available.
@@ -579,7 +579,7 @@ estimate_hash_bucketsize(VarStat &stats, BaseRelation<BitmapsetN> &baserel,
 	 * Adjust estimated bucketsize upward to account for skewed
 	 * distribution.
 	 */
-	if (avgfreq > 0.0 && mcvfreq > avgfreq)
+	if (avgfreq > 0.0f && mcvfreq > avgfreq)
 		estfract *= mcvfreq / avgfreq;
 
 	/*
@@ -587,10 +587,10 @@ estimate_hash_bucketsize(VarStat &stats, BaseRelation<BitmapsetN> &baserel,
 	 * produce an out-of-range result).  We set the lower bound a little
 	 * above zero, since zero isn't a very sane result.
 	 */
-	if (estfract < 1.0e-6)
-		estfract = 1.0e-6;
-	else if (estfract > 1.0)
-		estfract = 1.0;
+	if (estfract < 1.0e-6f)
+		estfract = 1.0e-6f;
+	else if (estfract > 1.0f)
+		estfract = 1.0f;
 
 	return estfract;
 }
@@ -612,9 +612,9 @@ cost_qual_eval(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
 {
     struct QualCost cost;
 
-    cost.startup = 0;
-    cost.per_tuple = 0;
-    cost.n_quals = 0;
+    cost.startup = 0.0f;
+    cost.per_tuple = 0.0f;
+    cost.n_quals = 0.0f;
 
     // for each ec that involves any baserel on the left and on the right,
     // count 1 cpu operation (we are assuming 'equals' operators only)

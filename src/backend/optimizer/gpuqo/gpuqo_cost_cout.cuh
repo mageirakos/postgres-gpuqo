@@ -21,17 +21,17 @@
 #include "gpuqo_debug.cuh"
 #include "gpuqo_row_estimation.cuh"
 
-#define BASEREL_COEFF   0.2
-#define HASHJOIN_COEFF  1
-#define INDEXSCAN_COEFF 2
-#define SORT_COEFF      2
+#define BASEREL_COEFF   0.2f
+#define HASHJOIN_COEFF  1.0f
+#define INDEXSCAN_COEFF 2.0f
+#define SORT_COEFF      2.0f
 
 template<typename BitmapsetN>
 __host__ __device__
 static struct Cost
 cost_baserel(BaseRelation<BitmapsetN> &base_rel){
     return (struct Cost) {
-        .startup = 0.0,
+        .startup = 0.0f,
         .total = BASEREL_COEFF * base_rel.tuples
     };
 }
@@ -45,8 +45,7 @@ cost_nestloop(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
     return (struct Cost) {
-        .startup = 0.0,
-        .total = outer_rel.cost + outer_rel.rows * inner_rel.cost
+        .startup = 0.0f,
     };
 }
 
@@ -58,8 +57,7 @@ cost_hashjoin(BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
     return (struct Cost) {
-        .startup = 0.0,
-        .total = HASHJOIN_COEFF * join_rel_rows + inner_rel.cost + outer_rel.cost
+        .startup = 0.0f,
     };
 }
 
