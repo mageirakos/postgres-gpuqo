@@ -149,8 +149,8 @@ void DependencyBuffer<BitmapsetN>::clear(){
 
 template<typename BitmapsetN>
 DependencyBuffer<BitmapsetN>::~DependencyBuffer(){
-    delete free_nodes;
-    delete queues;
+    delete[] free_nodes;
+    delete[] queues;
 }
 
 template class DependencyBuffer<Bitmapset32>;

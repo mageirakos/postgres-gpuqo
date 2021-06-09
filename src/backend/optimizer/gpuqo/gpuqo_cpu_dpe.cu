@@ -407,8 +407,8 @@ gpuqo_cpu_dpe(GpuqoPlannerInfo<BitmapsetN>* info, CPUAlgorithm<BitmapsetN, hasht
     pthread_cond_destroy(&join_func.depbufs.avail_jobs);
     pthread_cond_destroy(&join_func.depbufs.all_threads_waiting);
     pthread_mutex_destroy(&join_func.depbufs.depbuf_mutex);
-    delete join_func.threads;
-    delete join_func.thread_args;
+    delete[] join_func.threads;
+    delete[] join_func.thread_args;
 
     STOP_TIMING(gpuqo_cpu_dpe);
     PRINT_TIMING(gpuqo_cpu_dpe);

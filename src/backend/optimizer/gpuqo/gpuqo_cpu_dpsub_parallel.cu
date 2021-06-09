@@ -217,8 +217,8 @@ void parallel_enumerate(GpuqoPlannerInfo<BitmapsetN>* info,
         pthread_join(threads[i], NULL);
     }
 
-    delete thread_args;
-    delete threads;
+    delete[] thread_args;
+    delete[] threads;
 }
 
 template<typename BitmapsetN>
