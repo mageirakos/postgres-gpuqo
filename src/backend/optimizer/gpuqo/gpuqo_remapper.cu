@@ -44,7 +44,7 @@ void Remapper<BitmapsetIN,BitmapsetOUT>::countEqClasses(GpuqoPlannerInfo<Bitmaps
 template<typename BitmapsetIN, typename BitmapsetOUT>
 BitmapsetOUT Remapper<BitmapsetIN,BitmapsetOUT>::remapRelid(BitmapsetIN id)
 {
-    BitmapsetOUT out = BitmapsetOUT(0);
+    BitmapsetOUT out(0);
     for (remapper_transf_el_t<BitmapsetIN> &e : transf){
         if (e.from_relid.intersects(id)){
             out.set(e.to_idx+1);
@@ -192,13 +192,14 @@ GpuqoPlannerInfo<BitmapsetOUT> *Remapper<BitmapsetIN,BitmapsetOUT>::remapPlanner
                                         GpuqoPlannerInfo<BitmapsetIN>* old_info)
 {
     int n_rels = transf.size();
-    int n_eq_classes, n_eq_class_sels, n_eq_class_fks, n_eq_class_stats; 
-    countEqClasses(old_info, &n_eq_classes, &n_eq_class_sels, &n_eq_class_fks, &n_eq_class_stats); 
+    int n_eq_classes, n_eq_class_sels, n_eq_class_fks, n_eq_class_vars; 
+    countEqClasses(old_info, &n_eq_classes, &n_eq_class_sels, &n_eq_class_fks, &n_eq_class_vars); 
 
     size_t size = plannerInfoSize<BitmapsetOUT>(n_eq_classes, n_eq_class_sels, 
-                                            n_eq_class_fks, n_eq_class_stats);
+                                            n_eq_class_fks, n_eq_class_vars);
 
 	char* p = new char[size];
+    memset(p, 0, size);
 
 	GpuqoPlannerInfo<BitmapsetOUT> *info = (GpuqoPlannerInfo<BitmapsetOUT>*) p;
 	p += plannerInfoBaseSize<BitmapsetOUT>();
@@ -208,8 +209,9 @@ GpuqoPlannerInfo<BitmapsetOUT> *Remapper<BitmapsetIN,BitmapsetOUT>::remapPlanner
 	info->n_iters = old_info->n_iters;
     info->params = old_info->params;
 
+    initGpuqoPlannerInfo(info);
+
     remapEdgeTable(old_info->edge_table, info->edge_table);
-    remapEdgeTable(old_info->indexed_edge_table, info->indexed_edge_table);
 
     if (gpuqo_spanning_tree_enable)
         remapEdgeTable(old_info->subtrees, info->subtrees);
@@ -291,3 +293,6 @@ QueryTree<BitmapsetIN>* Remapper<BitmapsetIN,BitmapsetOUT>::remapQueryTree(Query
 template class Remapper<Bitmapset32,Bitmapset32>;
 template class Remapper<Bitmapset64,Bitmapset64>;
 template class Remapper<Bitmapset64,Bitmapset32>;
+template class Remapper<BitmapsetDynamic,BitmapsetDynamic>;
+template class Remapper<BitmapsetDynamic,Bitmapset64>;
+template class Remapper<BitmapsetDynamic,Bitmapset32>;

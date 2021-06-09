@@ -27,7 +27,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp1_next(int gpuqo_algorithm,
 
 	QueryTree<BitmapsetOuter> *new_qt_remap = remapper.remapQueryTree(new_qt);
 
-	delete new_info;
+	freeGpuqoPlannerInfo(new_info);
 	freeQueryTree(new_qt);
 
 	return new_qt_remap;
@@ -93,7 +93,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp2_next(int gpuqo_algorithm,
 
 	QueryTree<BitmapsetOuter> *new_qt_remap = remapper.remapQueryTree(new_qt);
 
-	delete new_info;
+	freeGpuqoPlannerInfo(new_info);
 	freeQueryTree(new_qt);
 
 	return new_qt_remap;
@@ -114,7 +114,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp2_dp(int gpuqo_algorithm,
 
 	QueryTree<BitmapsetOuter> *new_qt_remap = remapper.remapQueryTree(new_qt);
 
-	delete new_info;
+	freeGpuqoPlannerInfo(new_info);
 	freeQueryTree(new_qt);
 
 	return new_qt_remap;
@@ -128,28 +128,30 @@ QueryTree<BitmapsetN> *gpuqo_run_idp2(int gpuqo_algorithm,
 
 	LOG_PROFILE("IDP2 iteration with %d iterations: %d sets remaining (%d bits)\n", info->n_iters, info->n_rels, BitmapsetN::SIZE);
 
-	if (info->n_iters == info->n_rels) {
-		return gpuqo_run_switch(gpuqo_algorithm, info);
-	}
-
-	QueryTree<BitmapsetN> *goo_qt = gpuqo_cpu_goo(info);
-
-	Assert(goo_qt->left != NULL && goo_qt->right != NULL);
-	
 	BitmapsetN reopTables;
-	if (goo_qt->left != NULL 
-			&& (goo_qt->right != NULL 
-				|| goo_qt->left->id.size() < goo_qt->right->id.size()))
-	{
-		reopTables = goo_qt->left->id;
-	} else if (goo_qt->right != NULL) {
-		reopTables = goo_qt->right->id;
+	if (info->n_iters == info->n_rels) {
+		reopTables = BitmapsetN(0);
+		for (int i = 0; i < info->n_rels; i++) {
+			reopTables |= info->base_rels[i].id;
+		}
 	} else {
-		printf("FATAL ERROR\n");
-		abort();
-	}
+		QueryTree<BitmapsetN> *goo_qt = gpuqo_cpu_goo(info);
 
-	freeQueryTree(goo_qt);
+		Assert(goo_qt->left != NULL && goo_qt->right != NULL);
+		
+		if (goo_qt->left != NULL 
+				&& (goo_qt->right != NULL 
+					|| goo_qt->left->id.size() < goo_qt->right->id.size()))
+		{
+			reopTables = goo_qt->left->id;
+		} else if (goo_qt->right != NULL) {
+			reopTables = goo_qt->right->id;
+		} else {
+			printf("FATAL ERROR\n");
+			abort();
+		}
+		freeQueryTree(goo_qt);
+	}
 
 	list<remapper_transf_el_t<BitmapsetN> > remap_list;
 	int i = 0;
@@ -160,7 +162,7 @@ QueryTree<BitmapsetN> *gpuqo_run_idp2(int gpuqo_algorithm,
 		list_el.qt = NULL;
 		remap_list.push_back(list_el);
 
-		reopTables ^= list_el.from_relid;
+		reopTables -= list_el.from_relid;
 	}
 
 	QueryTree<BitmapsetN> *qt;
@@ -174,6 +176,10 @@ QueryTree<BitmapsetN> *gpuqo_run_idp2(int gpuqo_algorithm,
 	} else {
 		printf("ERROR: too many relations\n");
 		return NULL;	
+	}
+
+	if (info->n_iters == info->n_rels){
+		return qt;
 	}
 
 	remap_list.clear();
@@ -201,10 +207,11 @@ QueryTree<BitmapsetN> *gpuqo_run_idp2(int gpuqo_algorithm,
 		return gpuqo_run_idp2_next<BitmapsetN, Bitmapset64>(
 										gpuqo_algorithm, info, remap_list);
 	} else {
-		printf("ERROR: too many relations\n");
-		return NULL;	
+		return gpuqo_run_idp2_next<BitmapsetN, BitmapsetDynamic>(
+										gpuqo_algorithm, info, remap_list);
 	}
 }
 
 template QueryTree<Bitmapset32> *gpuqo_run_idp2<Bitmapset32>(int,  GpuqoPlannerInfo<Bitmapset32>*);
 template QueryTree<Bitmapset64> *gpuqo_run_idp2<Bitmapset64>(int,  GpuqoPlannerInfo<Bitmapset64>*);
+template QueryTree<BitmapsetDynamic> *gpuqo_run_idp2<BitmapsetDynamic>(int,  GpuqoPlannerInfo<BitmapsetDynamic>*);

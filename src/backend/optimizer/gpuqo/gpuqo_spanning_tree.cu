@@ -70,6 +70,7 @@ void minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info){
 
 template void minimumSpanningTree<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32> *info);
 template void minimumSpanningTree<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64> *info);
+template void minimumSpanningTree<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic> *info);
 
 
 template<typename BitmapsetN>
@@ -97,3 +98,4 @@ void buildSubTrees(BitmapsetN* subtrees, GpuqoPlannerInfo<BitmapsetN> *info){
 
 template void buildSubTrees<Bitmapset32>(Bitmapset32* subtrees, GpuqoPlannerInfo<Bitmapset32> *info);
 template void buildSubTrees<Bitmapset64>(Bitmapset64* subtrees, GpuqoPlannerInfo<Bitmapset64> *info);
+template void buildSubTrees<BitmapsetDynamic>(BitmapsetDynamic* subtrees, GpuqoPlannerInfo<BitmapsetDynamic> *info);

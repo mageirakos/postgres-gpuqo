@@ -14,6 +14,7 @@
 
 #include "gpuqo.cuh"
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
@@ -42,6 +43,7 @@ bool is_disjoint(JoinRelation<BitmapsetN> &join_rel)
     );
 }
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
@@ -51,6 +53,7 @@ bool are_connected(BitmapsetN left_edges, BitmapsetN right_id,
     return left_edges.intersects(right_id);
 }
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
@@ -76,6 +79,7 @@ bool are_connected_rel(JoinRelationDetailed<BitmapsetN> &left_rel,
     return are_connected(left_rel.edges, right_rel.id, info);
 }
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
@@ -105,7 +109,7 @@ BitmapsetN get_neighbours(BitmapsetN set, BitmapsetN* edge_table){
  * 
  * NB: `from` must be included in `subset`.
  */
- template<typename BitmapsetN>
+template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
 BitmapsetN grow(BitmapsetN from, BitmapsetN subset, BitmapsetN* edge_table)

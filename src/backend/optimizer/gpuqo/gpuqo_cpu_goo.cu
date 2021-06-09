@@ -90,6 +90,7 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
     QueryTree<BitmapsetN> *smallest = NULL;
     do {
         // pop join with smallest result set
+        Assert(!heap.empty());
         pop_heap(heap.begin(), heap.end(), compare);
         smallest = heap.back();
         heap.pop_back();
@@ -143,3 +144,4 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
 
 template QueryTree<Bitmapset32>* gpuqo_cpu_goo<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
 template QueryTree<Bitmapset64>* gpuqo_cpu_goo<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);
+template QueryTree<BitmapsetDynamic>* gpuqo_cpu_goo<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic>*);

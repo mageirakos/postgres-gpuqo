@@ -12,25 +12,8 @@
 
 #include <optimizer/gpuqo_common.h>
 #include "gpuqo_bitmapset.cuh"
-
-#define SIZEOF_VOID_P 8
-#define FLEXIBLE_ARRAY_MEMBER /**/
-
-namespace gpuqo_c{
-	typedef uint64_t uint64;
-	typedef int64_t int64;
-	typedef uint32_t uint32;
-	typedef int32_t int32;
-	#include <optimizer/gpuqo_planner_info.h>
-};
-
-typedef Bitmapset32 EdgeMask;
-typedef Bitmapset32 RelationID;
-
-struct Cost {
-	float startup;
-	float total;
-};
+#include "gpuqo_bitmapset_dynamic.cuh"
+#include "gpuqo_postgres.cuh"
 
 // structure representing join of two relations used by CUDA and CPU code 
 // of GPUQO
@@ -81,7 +64,7 @@ struct BaseRelation{
 	float rows;
 	float tuples;
 	int width;
-	struct Cost cost;
+	PathCost cost;
 	bool composite;
 };
 
@@ -131,7 +114,47 @@ struct GpuqoPlannerInfo{
 
 	EqClasses<BitmapsetN> eq_classes;
 };
+
+template<>
+struct GpuqoPlannerInfo<BitmapsetDynamic>{
+	unsigned int size;
+
+	int n_rels;
+	int n_iters;
+
+	GpuqoPlannerInfoParams params;
+	
+	BaseRelation<BitmapsetDynamic> *base_rels;
+	BitmapsetDynamic *edge_table;
+	BitmapsetDynamic *subtrees;
+
+	EqClasses<BitmapsetDynamic> eq_classes;
 };
+
+template<typename BitmapsetN>
+static
+void initGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN>* info) { }
+
+template<> 
+void initGpuqoPlannerInfo<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic>* info) { 
+	info->base_rels = new BaseRelation<BitmapsetDynamic>[info->n_rels];
+	info->edge_table = new BitmapsetDynamic[info->n_rels];
+	info->subtrees = new BitmapsetDynamic[info->n_rels];
+}
+
+template<typename BitmapsetN>
+static
+void freeGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN>* info) {
+	delete info;
+}
+
+template<>
+void freeGpuqoPlannerInfo<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic>* info) {
+	delete[] info->base_rels;
+	delete[] info->edge_table;
+	delete[] info->subtrees;
+	delete info;
+}
 
 __host__ __device__
 inline size_t align64(size_t size) {
@@ -186,7 +209,7 @@ inline size_t plannerInfoSize(size_t n_eq_classes, size_t n_eq_class_sels,
 
 template<typename BitmapsetN>
 GpuqoPlannerInfo<BitmapsetN>* 
-convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC *info_c);
+convertGpuqoPlannerInfo(GpuqoPlannerInfoC *info_c);
 
 template<typename BitmapsetN>
 GpuqoPlannerInfo<BitmapsetN>* 
@@ -197,6 +220,6 @@ GpuqoPlannerInfo<BitmapsetN>*
 deleteGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN> *info);
 
 template<typename BitmapsetN>
-gpuqo_c::QueryTreeC* convertQueryTree(QueryTree<BitmapsetN> *info);
+QueryTreeC* convertQueryTree(QueryTree<BitmapsetN> *info);
 
 #endif							/* GPUQO_PLANNER_INFO_CUH */

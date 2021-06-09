@@ -36,14 +36,14 @@ Remapper<BitmapsetN,BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN
         bfs_idx++;
 
         while (!edges.empty()){
-            BitmapsetN next_r = edges.lowest();
-            int next = edges.lowestPos() - 1;
+            int next = edges.lowestPos();
+            Assert(next > 0);
 
-            if (!seen.intersects(next_r)){
-                bfs_queue[bfs_queue_back_idx++] = next;
+            if (!seen.isSet(next)){
+                bfs_queue[bfs_queue_back_idx++] = next - 1;
             }
             
-            edges ^= next_r;
+            edges.unset(next);
         }
         seen |= info->edge_table[base_rel_idx];
     }
@@ -53,3 +53,4 @@ Remapper<BitmapsetN,BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN
 
 template Remapper<Bitmapset32,Bitmapset32> makeBFSIndexRemapper<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
 template Remapper<Bitmapset64,Bitmapset64> makeBFSIndexRemapper<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);
+template Remapper<BitmapsetDynamic,BitmapsetDynamic> makeBFSIndexRemapper<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic>*);

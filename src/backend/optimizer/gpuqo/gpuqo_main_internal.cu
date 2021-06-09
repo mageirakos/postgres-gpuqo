@@ -61,7 +61,7 @@ QueryTree<BitmapsetN> *gpuqo_run_switch(int gpuqo_algorithm,
 }
 
 template<typename BitmapsetN>
-static gpuqo_c::QueryTreeC *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfoC* info_c)
+static QueryTreeC *__gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c)
 {
 	GpuqoPlannerInfo<BitmapsetN> *info = convertGpuqoPlannerInfo<BitmapsetN>(info_c);
 
@@ -92,19 +92,50 @@ static gpuqo_c::QueryTreeC *__gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlann
 	QueryTree<BitmapsetN> *new_qt = remapper.remapQueryTree(query_tree);
 	freeQueryTree(query_tree);
 
-	delete remap_info;
-	delete info;
+	freeGpuqoPlannerInfo(remap_info);
+	freeGpuqoPlannerInfo(info);
 
 	return convertQueryTree(new_qt);
 }
 
-extern "C" gpuqo_c::QueryTreeC *gpuqo_run(int gpuqo_algorithm, gpuqo_c::GpuqoPlannerInfoC* info_c){
+template<typename BitmapsetN>
+static QueryTreeC *__gpuqo_run_idp2(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c)
+{
+	GpuqoPlannerInfo<BitmapsetN> *info = convertGpuqoPlannerInfo<BitmapsetN>(info_c);
+
+	if (gpuqo_spanning_tree_enable){
+		minimumSpanningTree(info);
+		buildSubTrees(info->subtrees, info);
+	}
+
+	Remapper<BitmapsetN,BitmapsetN> remapper = makeBFSIndexRemapper(info);
+	GpuqoPlannerInfo<BitmapsetN> *remap_info = remapper.remapPlannerInfo(info);
+
+	QueryTree<BitmapsetN> *query_tree = gpuqo_run_idp2(gpuqo_algorithm, remap_info);
+
+
+	QueryTree<BitmapsetN> *new_qt = remapper.remapQueryTree(query_tree);
+	freeQueryTree(query_tree);
+
+	freeGpuqoPlannerInfo(remap_info);
+	freeGpuqoPlannerInfo(info);
+
+	return convertQueryTree(new_qt);
+}
+
+extern "C" QueryTreeC *gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c){
 	if (info_c->n_rels < 32){
 		return __gpuqo_run<Bitmapset32>(gpuqo_algorithm, info_c);
 	} else if (info_c->n_rels < 64){
 		return __gpuqo_run<Bitmapset64>(gpuqo_algorithm, info_c);
 	} else {
-		printf("ERROR: too many relations\n");
-		return NULL;	
+		if (gpuqo_idp_n_iters > 1 && gpuqo_idp_n_iters < 64 
+			&& gpuqo_idp_type == GPUQO_IDP2)
+		{
+			return __gpuqo_run_idp2<BitmapsetDynamic>(gpuqo_algorithm, info_c);
+		} else {
+			printf("ERROR: too many relations. Use IDP2.\n");
+			return NULL;	
+		}
 	}
 }

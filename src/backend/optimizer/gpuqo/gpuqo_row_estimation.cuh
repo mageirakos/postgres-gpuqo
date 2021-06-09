@@ -20,6 +20,7 @@
 #include "gpuqo_timing.cuh"
 #include "gpuqo_debug.cuh"
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 static float fkselc_of_ec(int off_fk, BitmapsetN ec_relids, 
@@ -40,6 +41,28 @@ static float fkselc_of_ec(int off_fk, BitmapsetN ec_relids,
     return NANF;
 }
 
+template<>
+__host__ __device__
+float fkselc_of_ec<BitmapsetDynamic>(int off_fk, BitmapsetDynamic ec_relids, 
+                    BitmapsetDynamic outer_rels, BitmapsetDynamic inner_rels, 
+                    GpuqoPlannerInfo<BitmapsetDynamic>* info) 
+{
+    while(!outer_rels.empty()){
+        int out_pos = outer_rels.lowestPos();
+        BitmapsetDynamic out_id = BitmapsetDynamic::nth(out_pos);
+        int out_idx = (out_id.allLower() & ec_relids).size();
+        BitmapsetDynamic match = inner_rels & info->eq_classes.fks[off_fk+out_idx];
+        if (!match.empty()){
+            int in_idx = match.lowestPos()-1;
+            return 1.0 / max(1.0f, info->base_rels[in_idx].tuples);
+        }
+
+        outer_rels.unset(out_pos);
+    }
+    return NANF;
+}
+
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 static float 
@@ -78,6 +101,7 @@ estimate_ec_selectivity(BitmapsetN ec_relids, int off_sels, int off_fks,
     return info->eq_classes.sels[off_sels+idx];
 }
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 static float 
@@ -107,6 +131,7 @@ estimate_join_selectivity(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
     return sel;
 }
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 static float 
@@ -121,6 +146,7 @@ estimate_join_rows(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
     return rows > 1 ? round(rows) : 1;
 }
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 static float 
@@ -135,7 +161,7 @@ estimate_join_rows(QueryTree<BitmapsetN> &left_rel,
     return rows > 1 ? round(rows) : 1;
 }
 
-
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 static int 

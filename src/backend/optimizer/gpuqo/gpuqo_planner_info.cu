@@ -14,18 +14,15 @@
 #include "gpuqo_planner_info.cuh"
 #include "gpuqo_cost.cuh"
 
-extern "C" void *palloc0(size_t size);
-extern "C" void *palloc(size_t size);
-
 static size_t bitmapset_size(int nwords){
-	return (offsetof(gpuqo_c::Bitmapset, words) + (nwords) * sizeof(gpuqo_c::bitmapword));
+	return (offsetof(Bitmapset, words) + (nwords) * sizeof(bitmapword));
 }
 
 template<typename BitmapsetN>
-BitmapsetN convertBitmapset(gpuqo_c::Bitmapset* set);
+BitmapsetN convertBitmapset(Bitmapset* set);
 
 template<>
-Bitmapset32 convertBitmapset<Bitmapset32>(gpuqo_c::Bitmapset* set){
+Bitmapset32 convertBitmapset<Bitmapset32>(Bitmapset* set){
 	if (set == NULL)
 		return Bitmapset32(0);
 
@@ -38,8 +35,9 @@ Bitmapset32 convertBitmapset<Bitmapset32>(gpuqo_c::Bitmapset* set){
     }
     return Bitmapset32(set->words[0] & 0xFFFFFFFFULL);
 }
+
 template<>
-Bitmapset64 convertBitmapset<Bitmapset64>(gpuqo_c::Bitmapset* set){
+Bitmapset64 convertBitmapset<Bitmapset64>(Bitmapset* set){
 	if (set == NULL)
 		return Bitmapset64(0);
 
@@ -50,13 +48,18 @@ Bitmapset64 convertBitmapset<Bitmapset64>(gpuqo_c::Bitmapset* set){
     return Bitmapset64(set->words[0]);
 }
 
+template<>
+BitmapsetDynamic convertBitmapset<BitmapsetDynamic>(Bitmapset* set){
+	return BitmapsetDynamic(bms_copy(set));
+}
+
 template<typename BitmapsetN>
-gpuqo_c::Bitmapset* convertBitmapset(BitmapsetN set){
-	gpuqo_c::Bitmapset *result;
+Bitmapset* convertBitmapset(BitmapsetN set){
+	Bitmapset *result;
 
 	int nwords = (sizeof(set)*8 + BITS_PER_BITMAPWORD - 1) / BITS_PER_BITMAPWORD;
 
-	result = (gpuqo_c::Bitmapset *) palloc0(bitmapset_size(nwords));
+	result = (Bitmapset *) palloc0(bitmapset_size(nwords));
 	result->nwords = nwords;
 
 	while (!set.empty()){
@@ -64,11 +67,17 @@ gpuqo_c::Bitmapset* convertBitmapset(BitmapsetN set){
 		int wordnum = x / BITS_PER_BITMAPWORD;
 		int bitnum = x % BITS_PER_BITMAPWORD;
 
-		result->words[wordnum] |= ((gpuqo_c::bitmapword) 1 << bitnum);
+		result->words[wordnum] |= ((bitmapword) 1 << bitnum);
 		set.unset(x);
 	}
 
 	return result;
+}
+
+
+template<>
+Bitmapset* convertBitmapset<BitmapsetDynamic>(BitmapsetDynamic set){
+	return bms_copy(set.bms);
 }
 
 
@@ -121,12 +130,13 @@ static void setParams(GpuqoPlannerInfo<BitmapsetN>* info) {
 }
 
 template<typename BitmapsetN>
-GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC *info_c){
+GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(GpuqoPlannerInfoC *info_c){
 	size_t size = plannerInfoSize<BitmapsetN>(info_c->n_eq_classes, 
 							info_c->n_eq_class_sels, info_c->n_eq_class_fks,
-							info_c->n_eq_class_stats);
+							info_c->n_eq_class_vars);
 
 	char* p = new char[size];
+	memset(p, 0, size);
 
 	GpuqoPlannerInfo<BitmapsetN> *info = (GpuqoPlannerInfo<BitmapsetN>*) p;
 	p += plannerInfoBaseSize<BitmapsetN>();
@@ -134,6 +144,8 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC
 	info->size = size;
 	info->n_rels = info_c->n_rels;
 	info->n_iters = info_c->n_rels; // will be overwritten by IDP
+
+	initGpuqoPlannerInfo(info);
 
 	setParams(info);
 
@@ -194,8 +206,9 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC
 	return info;
 }
 
-template GpuqoPlannerInfo<Bitmapset32>* convertGpuqoPlannerInfo<Bitmapset32>(gpuqo_c::GpuqoPlannerInfoC *info_c);
-template GpuqoPlannerInfo<Bitmapset64>* convertGpuqoPlannerInfo<Bitmapset64>(gpuqo_c::GpuqoPlannerInfoC *info_c);
+template GpuqoPlannerInfo<Bitmapset32>* convertGpuqoPlannerInfo<Bitmapset32>(GpuqoPlannerInfoC *info_c);
+template GpuqoPlannerInfo<Bitmapset64>* convertGpuqoPlannerInfo<Bitmapset64>(GpuqoPlannerInfoC *info_c);
+template GpuqoPlannerInfo<BitmapsetDynamic>* convertGpuqoPlannerInfo<BitmapsetDynamic>(GpuqoPlannerInfoC *info_c);
  
 template<typename BitmapsetN>
 GpuqoPlannerInfo<BitmapsetN>* copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN> *info){
@@ -237,11 +250,11 @@ template GpuqoPlannerInfo<Bitmapset32>* copyToDeviceGpuqoPlannerInfo<Bitmapset32
 template GpuqoPlannerInfo<Bitmapset64>* copyToDeviceGpuqoPlannerInfo<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64> *info);
 
 template<typename BitmapsetN>
-gpuqo_c::QueryTreeC* convertQueryTree(QueryTree<BitmapsetN>* qt){
+QueryTreeC* convertQueryTree(QueryTree<BitmapsetN>* qt){
 	if (qt == NULL)
 		return NULL;
 	
-	gpuqo_c::QueryTreeC *result = (gpuqo_c::QueryTreeC *) palloc(sizeof(gpuqo_c::QueryTreeC));
+	QueryTreeC *result = (QueryTreeC *) palloc(sizeof(QueryTreeC));
 	result->id = convertBitmapset<BitmapsetN>(qt->id);
 	result->left = convertQueryTree(qt->left);
 	result->right = convertQueryTree(qt->right);
@@ -254,6 +267,7 @@ gpuqo_c::QueryTreeC* convertQueryTree(QueryTree<BitmapsetN>* qt){
 	return result;
 }
 
-template gpuqo_c::QueryTreeC* convertQueryTree<Bitmapset32>(QueryTree<Bitmapset32>* qt);
-template gpuqo_c::QueryTreeC* convertQueryTree<Bitmapset64>(QueryTree<Bitmapset64>* qt);
+template QueryTreeC* convertQueryTree<Bitmapset32>(QueryTree<Bitmapset32>* qt);
+template QueryTreeC* convertQueryTree<Bitmapset64>(QueryTree<Bitmapset64>* qt);
+template QueryTreeC* convertQueryTree<BitmapsetDynamic>(QueryTree<BitmapsetDynamic>* qt);
   
