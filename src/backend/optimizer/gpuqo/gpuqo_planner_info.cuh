@@ -39,7 +39,7 @@ struct JoinRelation{
 	BitmapsetN left_rel_id;
 	BitmapsetN right_rel_id;
 	float rows;
-	struct Cost cost;
+	PathCost cost;
 	int width;
 
 public:
@@ -65,17 +65,11 @@ struct JoinRelationDpsize : public JoinRelationDetailed<BitmapsetN> {
 	uint_t<BitmapsetN> right_rel_idx;
 };
 
-struct VarStat {
-	float stadistinct;
-	float stanullfrac;
-	float mcvfreq;
-};
-
 template<typename BitmapsetN>
 struct QueryTree{
 	BitmapsetN id;
 	float rows;
-	Cost cost;
+	PathCost cost;
 	int width;
 	struct QueryTree<BitmapsetN>* left;
 	struct QueryTree<BitmapsetN>* right;
@@ -109,6 +103,18 @@ struct GpuqoPlannerInfoParams {
 		int work_mem;
 };
 
+template<typename BitmapsetN>
+struct EqClasses {
+		int n;
+		BitmapsetN* relids;
+		int n_sels;
+		float* sels;
+		int n_fks;
+		BitmapsetN* fks; 
+		int n_vars;
+		VarInfo* vars;
+};
+
 
 template<typename BitmapsetN>
 struct GpuqoPlannerInfo{
@@ -121,19 +127,10 @@ struct GpuqoPlannerInfo{
 	
 	BaseRelation<BitmapsetN> base_rels[BitmapsetN::SIZE];
 	BitmapsetN edge_table[BitmapsetN::SIZE];
-	BitmapsetN indexed_edge_table[BitmapsetN::SIZE];
 	BitmapsetN subtrees[BitmapsetN::SIZE];
 
-	struct {
-		int n;
-		BitmapsetN* relids;
-		int n_sels;
-		float* sels;
-		int n_fks;
-		BitmapsetN* fks; 
-		int n_stats;
-		VarStat* stats;
-	} eq_classes;
+	EqClasses<BitmapsetN> eq_classes;
+};
 };
 
 __host__ __device__
@@ -171,20 +168,20 @@ inline size_t plannerInfoEqClassFksSize(int n_eq_class_fks) {
 
 template<typename BitmapsetN>
 __host__ __device__
-inline size_t plannerInfoEqClassStatsSize(int n_eq_class_stats) {
-	return align64(sizeof(struct VarStat) * n_eq_class_stats);
+inline size_t plannerInfoEqClassVarsSize(int n_eq_class_vars) {
+	return align64(sizeof(struct VarInfo) * n_eq_class_vars);
 }
 
 template<typename BitmapsetN>
 __host__ __device__
 inline size_t plannerInfoSize(size_t n_eq_classes, size_t n_eq_class_sels, 
-						size_t n_eq_class_fks, size_t n_eq_class_stats) 
+						size_t n_eq_class_fks, size_t n_eq_class_vars) 
 {
 	return plannerInfoBaseSize<BitmapsetN>() 
 		+ plannerInfoEqClassesSize<BitmapsetN>(n_eq_classes)
 		+ plannerInfoEqClassSelsSize<BitmapsetN>(n_eq_class_sels)
 		+ plannerInfoEqClassFksSize<BitmapsetN>(n_eq_class_fks)
-		+ plannerInfoEqClassStatsSize<BitmapsetN>(n_eq_class_stats);
+		+ plannerInfoEqClassVarsSize<BitmapsetN>(n_eq_class_vars);
 }
 
 template<typename BitmapsetN>

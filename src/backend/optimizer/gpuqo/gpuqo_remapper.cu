@@ -17,12 +17,12 @@ Remapper<BitmapsetIN,BitmapsetOUT>::Remapper(list<remapper_transf_el_t<Bitmapset
 
 template<typename BitmapsetIN, typename BitmapsetOUT>
 void Remapper<BitmapsetIN,BitmapsetOUT>::countEqClasses(GpuqoPlannerInfo<BitmapsetIN>* info, 
-                                        int* n, int* n_sels, int *n_fk, int *n_stats)
+                                        int* n, int* n_sels, int *n_fk, int *n_vars)
 {
     *n = 0;
     *n_sels = 0;
     *n_fk = 0;
-    *n_stats = 0;
+    *n_vars = 0;
 
     for (int i = 0; i < info->eq_classes.n; i++){
         bool found = false;
@@ -35,7 +35,7 @@ void Remapper<BitmapsetIN,BitmapsetOUT>::countEqClasses(GpuqoPlannerInfo<Bitmaps
         if (!found){
             (*n)++;
             (*n_fk) += info->eq_classes.relids[i].size();
-            (*n_stats) += info->eq_classes.relids[i].size();
+            (*n_vars) += info->eq_classes.relids[i].size();
             (*n_sels) += eqClassNSels(info->eq_classes.relids[i].size());
         }
     }
@@ -141,13 +141,13 @@ template<typename BitmapsetIN, typename BitmapsetOUT>
 void Remapper<BitmapsetIN,BitmapsetOUT>::remapEqClass(BitmapsetIN* eq_class_from,
                                         float* sels_from,
                                         BitmapsetIN* fks_from,
-                                        VarStat* stats_from,
+                                        VarInfo* vars_from,
                                         GpuqoPlannerInfo<BitmapsetIN>* info_from,
                                         int off_sels_from, int off_fks_from,
                                         BitmapsetOUT* eq_class_to,
                                         float* sels_to,
                                         BitmapsetOUT* fks_to,
-                                        VarStat* stats_to)
+                                        VarInfo* vars_to)
 {
     *eq_class_to = remapRelid(*eq_class_from);
 
@@ -183,7 +183,7 @@ void Remapper<BitmapsetIN,BitmapsetOUT>::remapEqClass(BitmapsetIN* eq_class_from
         }
         fks_to[idx_l_to] = remapRelidNoComposite(fks_from[idx_l_from]);
         // TODO choose one at random... maybe this can be improved
-        stats_to[idx_l_to] = stats_from[idx_l_from]; 
+        vars_to[idx_l_to] = vars_from[idx_l_from]; 
     }
 }
 
@@ -219,7 +219,7 @@ GpuqoPlannerInfo<BitmapsetOUT> *Remapper<BitmapsetIN,BitmapsetOUT>::remapPlanner
 	info->eq_classes.n = n_eq_classes;
 	info->eq_classes.n_sels = n_eq_class_sels;
 	info->eq_classes.n_fks = n_eq_class_fks;
-	info->eq_classes.n_stats = n_eq_class_stats;
+	info->eq_classes.n_vars = n_eq_class_vars;
 
 	info->eq_classes.relids = (BitmapsetOUT*) p;
 	p += plannerInfoEqClassesSize<BitmapsetOUT>(info->eq_classes.n);
@@ -227,8 +227,8 @@ GpuqoPlannerInfo<BitmapsetOUT> *Remapper<BitmapsetIN,BitmapsetOUT>::remapPlanner
 	p += plannerInfoEqClassSelsSize<BitmapsetOUT>(info->eq_classes.n_sels);
 	info->eq_classes.fks = (BitmapsetOUT*) p;
 	p += plannerInfoEqClassFksSize<BitmapsetOUT>(info->eq_classes.n_fks);
-	info->eq_classes.stats = (VarStat*) p;
-	p += plannerInfoEqClassStatsSize<BitmapsetOUT>(info->eq_classes.n_stats);
+	info->eq_classes.vars = (VarInfo*) p;
+	p += plannerInfoEqClassVarsSize<BitmapsetOUT>(info->eq_classes.n_vars);
 
     int off_sel = 0, off_fk = 0, old_off_sel = 0, old_off_fk = 0, j = 0;
 	for (int i = 0; i < old_info->eq_classes.n; i++){
@@ -244,12 +244,12 @@ GpuqoPlannerInfo<BitmapsetOUT> *Remapper<BitmapsetIN,BitmapsetOUT>::remapPlanner
                 &old_info->eq_classes.relids[i], 
                 &old_info->eq_classes.sels[old_off_sel], 
                 &old_info->eq_classes.fks[old_off_fk], 
-                &old_info->eq_classes.stats[old_off_fk], 
+                &old_info->eq_classes.vars[old_off_fk], 
                 old_info, old_off_sel, old_off_fk,
                 &info->eq_classes.relids[j], 
                 &info->eq_classes.sels[off_sel],
                 &info->eq_classes.fks[off_fk],
-                &info->eq_classes.stats[off_fk]
+                &info->eq_classes.vars[off_fk]
             );
             off_fk += info->eq_classes.relids[j].size();
             off_sel += eqClassNSels(info->eq_classes.relids[j].size());

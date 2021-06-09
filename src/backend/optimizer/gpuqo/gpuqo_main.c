@@ -282,9 +282,9 @@ EdgeMask* makeEdgeTable(PlannerInfo* root, int n_rels){
     return edge_table;
 }
 
-static VarStatC extractStats(PlannerInfo *root, Node *hashkey)
+static VarStats extractStats(PlannerInfo *root, Node *hashkey)
 {
-    VarStatC     out;
+    VarStats     out;
 	VariableStatData vardata;
 	bool		isdefault;
 	AttStatsSlot sslot;
@@ -346,10 +346,9 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
     ListCell* lc_inner;
     ListCell* lc_outer;
     ListCell* lc_inner_path;
+    ListCell* lc_iclause;
     ListCell* lc_restrictinfo;
     int i_out, i_in;
-
-    info->indexed_edge_table = (EdgeMask*) palloc0(n_rels * sizeof(EdgeMask));
 
     i_out = 0;
     foreach(lc_outer, initial_rels){
@@ -411,10 +410,9 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
 
 
                     while (ec != NULL){
-                        if (bms_equal(ec->relids, rinfo->parent_ec->ec_relids))
+                        if (ec->eclass == rinfo->parent_ec)
                             break;
                         ec = ec->next;
-
                     };
 
                     if (ec == NULL){
@@ -429,17 +427,18 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                         ec->sels = (float*) palloc(sizeof(float)*n_sels);
                         ec->eclass = rinfo->parent_ec;
                         ec->fk = (RelationID*) palloc(sizeof(RelationID)*size);
-                        ec->stats = (VarStatC*) palloc(sizeof(VarStatC)*size);
+                        ec->vars = (VarInfo*) palloc(sizeof(VarInfo)*size);
                         for (int i_fk = 0; i_fk < size; i_fk++){
                             ec->fk[i_fk] = NULL;
-                            ec->stats[i_fk].mcvfreq = 0;
-                            ec->stats[i_fk].stadistinct = 0;
-                            ec->stats[i_fk].stanullfrac = 0;
+                            ec->vars[i_fk].stats.mcvfreq = 0;
+                            ec->vars[i_fk].stats.stadistinct = 0;
+                            ec->vars[i_fk].stats.stanullfrac = 0;
+                            ec->vars[i_fk].index.available = false;
                         }
                         info->n_eq_classes++;
                         info->n_eq_class_sels += n_sels;
                         info->n_eq_class_fks += size;
-                        info->n_eq_class_stats += size;
+                        info->n_eq_class_vars += size;
                     } else {
                         size = bms_num_members(ec->relids);
                     }
@@ -449,43 +448,55 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                     if (idx_l < idx_r){ // prevent duplicates
                         idx = eqClassIndex(idx_l, idx_r, size);
                         ec->sels[idx] = rinfo->norm_selec;
-
-                        if (bms_is_subset(rinfo->right_relids,
-							  rel_inner->relids)) {
-
-                            ec->stats[idx_r] = extractStats(root,
-                                                get_rightop(rinfo->clause));
-
-                        } else {
-                            ec->stats[idx_r] = extractStats(root,
-                                                get_leftop(rinfo->clause));
-                        }
-                        
-                        if (bms_is_subset(rinfo->right_relids,
-							  rel_outer->relids)) {
-
-                            ec->stats[idx_l] = extractStats(root,
-                                                get_rightop(rinfo->clause));
-
-                        } else {
-                            ec->stats[idx_l] = extractStats(root,
-                                                get_leftop(rinfo->clause));
-                        }
-
                     }
-                    
-                        
-                }
 
-                foreach(lc_inner_path, rel_inner->pathlist){
-                    Path* path = (Path*) lfirst(lc_inner_path);
-                    if (path->pathtype == T_IndexScan){
-                        if (bms_num_members(PATH_REQ_OUTER(path)) == 1 
+                    if (bms_is_subset(rinfo->right_relids,
+                            rel_inner->relids)) {
+
+                        ec->vars[idx_r].stats = extractStats(root,
+                                            get_rightop(rinfo->clause));
+
+                    } else {
+                        ec->vars[idx_r].stats = extractStats(root,
+                                            get_leftop(rinfo->clause));
+                    }
+                        
+                    foreach(lc_inner_path, rel_inner->pathlist){
+                        Path* path = (Path*) lfirst(lc_inner_path);
+                        IndexPath* ipath;
+                        
+                        if (path->pathtype != T_IndexScan)
+                            continue;
+                        if (!(bms_num_members(PATH_REQ_OUTER(path)) == 1 
                                 && bms_overlap(PATH_REQ_OUTER(path),
                                     rel_outer->relids
-                                )){
-                            info->indexed_edge_table[i_in] = bms_add_member(info->indexed_edge_table[i_in], i_out+1);
-                            break;
+                                )))
+                            continue;
+
+                        ipath = (IndexPath*) path;
+                        foreach(lc_iclause, ipath->indexclauses){
+                            IndexClause *iclause = (IndexClause*) lfirst(lc_iclause);
+
+                            if (iclause->rinfo->parent_ec != ec->eclass) 
+                                continue;
+
+                            if (ipath->indexinfo->rel == rel_inner) {
+                                if (ec->vars[idx_r].index.available)
+                                    continue;
+                                ec->vars[idx_r].index.available = true;
+                                ec->vars[idx_r].index.cost.total = path->total_cost;
+                                ec->vars[idx_r].index.cost.startup = path->startup_cost;
+                                ec->vars[idx_r].index.rows = path->rows;
+                            } else if (ipath->indexinfo->rel == rel_outer) {
+                                if (ec->vars[idx_l].index.available)
+                                    continue;
+                                ec->vars[idx_l].index.available = true;
+                                ec->vars[idx_l].index.cost.total = path->total_cost;
+                                ec->vars[idx_l].index.cost.startup = path->startup_cost;
+                                ec->vars[idx_l].index.rows = path->rows;
+                            } else {
+                                printf("WTF: Index matches no relation!\n");
+                            }
                         }
                     }
                 }
@@ -518,7 +529,6 @@ static void
 GpuqoPlannerInfoC__free(GpuqoPlannerInfoC* info) 
 {
     EqClassInfo_list__free(info->eq_classes);
-    pfree(info->indexed_edge_table);
     pfree(info->base_rels);
     pfree(info->edge_table);
     pfree(info);
@@ -552,7 +562,7 @@ gpuqo(PlannerInfo *root, int n_rels, List *initial_rels)
     info->n_eq_classes = 0;
     info->n_eq_class_sels = 0;
     info->n_eq_class_fks = 0;
-    info->n_eq_class_stats = 0;
+    info->n_eq_class_vars = 0;
 
     i = 0;
     foreach(lc, initial_rels){

@@ -139,7 +139,6 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC
 
 	for (int i=0; i < info->n_rels; i++){
 		info->edge_table[i] = convertBitmapset<BitmapsetN>(info_c->edge_table[i]);
-		info->indexed_edge_table[i] = convertBitmapset<BitmapsetN>(info_c->indexed_edge_table[i]);
 	}
 
 	for (int i=0; i < info->n_rels; i++){
@@ -147,26 +146,25 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC
 		info->base_rels[i].rows = info_c->base_rels[i].rows;
 		info->base_rels[i].tuples = info_c->base_rels[i].tuples;
 		info->base_rels[i].width = info_c->base_rels[i].width;
-		info->base_rels[i].cost.startup = info_c->base_rels[i].cost.startup;
-		info->base_rels[i].cost.total = info_c->base_rels[i].cost.total;
+		info->base_rels[i].cost = info_c->base_rels[i].cost;
 		info->base_rels[i].composite = false;
 	}
 
 	info->eq_classes.n = info_c->n_eq_classes;
 	info->eq_classes.n_sels = info_c->n_eq_class_sels;
 	info->eq_classes.n_fks = info_c->n_eq_class_fks;
-	info->eq_classes.n_stats = info_c->n_eq_class_stats;
+	info->eq_classes.n_vars = info_c->n_eq_class_vars;
 
 	BitmapsetN* eq_classes = (BitmapsetN*) p;
 	p += plannerInfoEqClassesSize<BitmapsetN>(info->eq_classes.n);
-	float* eq_class_sels = (float*) p;
+	float* ec_sels = (float*) p;
 	p += plannerInfoEqClassSelsSize<BitmapsetN>(info->eq_classes.n_sels);
-	BitmapsetN* eq_class_fk = (BitmapsetN*) p;
+	BitmapsetN* ec_fks = (BitmapsetN*) p;
 	p += plannerInfoEqClassFksSize<BitmapsetN>(info->eq_classes.n_fks);
-	VarStat* eq_class_stats = (VarStat*) p;
-	p += plannerInfoEqClassStatsSize<BitmapsetN>(info->eq_classes.n_stats);
+	VarInfo* ec_vars = (VarInfo*) p;
+	p += plannerInfoEqClassVarsSize<BitmapsetN>(info->eq_classes.n_vars);
 
-	gpuqo_c::EqClassInfo *ec = info_c->eq_classes;
+	EqClassInfo *ec = info_c->eq_classes;
 	int i = 0;
 	int offset_sels = 0;
 	int offset_fks = 0;
@@ -176,13 +174,11 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC
 		int s = eq_classes[i].size();
 		int n = eqClassNSels(s);
 		for (int j = 0; j < n; j++)
-			eq_class_sels[offset_sels+j] = ec->sels[j];
+			ec_sels[offset_sels+j] = ec->sels[j];
 
 		for (int j = 0; j < s; j++){
-			eq_class_fk[offset_fks+j] = convertBitmapset<BitmapsetN>(ec->fk[j]);
-			eq_class_stats[offset_fks+j].mcvfreq = ec->stats[j].mcvfreq;
-			eq_class_stats[offset_fks+j].stadistinct = ec->stats[j].stadistinct;
-			eq_class_stats[offset_fks+j].stanullfrac = ec->stats[j].stanullfrac;
+			ec_fks[offset_fks+j] = convertBitmapset<BitmapsetN>(ec->fk[j]);
+			ec_vars[offset_fks+j] = ec->vars[j];
 		}
 		
 		offset_sels += n;
@@ -191,9 +187,9 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(gpuqo_c::GpuqoPlannerInfoC
 		ec = ec->next;
 	}
 	info->eq_classes.relids = eq_classes;
-	info->eq_classes.sels = eq_class_sels;
-	info->eq_classes.fks = eq_class_fk;
-	info->eq_classes.stats = eq_class_stats;
+	info->eq_classes.sels = ec_sels;
+	info->eq_classes.fks = ec_fks;
+	info->eq_classes.vars = ec_vars;
 
 	return info;
 }
@@ -227,10 +223,10 @@ GpuqoPlannerInfo<BitmapsetN>* copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo<Bitm
 	cudaMemcpy((void*)tmp_info.eq_classes.fks, info->eq_classes.fks, 
 		sizeof(BitmapsetN) * info->eq_classes.n_fks, cudaMemcpyHostToDevice);
 	
-	tmp_info.eq_classes.stats = (VarStat*) p;
-	p += plannerInfoEqClassStatsSize<BitmapsetN>(info->eq_classes.n_stats);
-	cudaMemcpy((void*)tmp_info.eq_classes.stats, info->eq_classes.stats, 
-		sizeof(VarStat) * info->eq_classes.n_stats, cudaMemcpyHostToDevice);
+	tmp_info.eq_classes.vars = (VarInfo*) p;
+	p += plannerInfoEqClassVarsSize<BitmapsetN>(info->eq_classes.n_vars);
+	cudaMemcpy((void*)tmp_info.eq_classes.vars, info->eq_classes.vars, 
+		sizeof(VarInfo) * info->eq_classes.n_vars, cudaMemcpyHostToDevice);
 	
 	cudaMemcpy(info_gpu, &tmp_info, sizeof(GpuqoPlannerInfo<BitmapsetN>), cudaMemcpyHostToDevice);
 
@@ -250,8 +246,7 @@ gpuqo_c::QueryTreeC* convertQueryTree(QueryTree<BitmapsetN>* qt){
 	result->left = convertQueryTree(qt->left);
 	result->right = convertQueryTree(qt->right);
 	result->width = qt->width;
-	result->cost.total = qt->cost.total;
-	result->cost.startup = qt->cost.startup;
+	result->cost = qt->cost;
 	result->rows = qt->rows;
 
 	free(qt);

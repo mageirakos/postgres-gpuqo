@@ -179,7 +179,7 @@ void do_join(JoinRelation<BitmapsetN> &jr_out,
     Assert(!right_rel_id.empty());
 
     float jr_rows = estimate_join_rows(left_rel_id, left_rel, right_rel_id, right_rel, info);
-    struct Cost jr_cost = calc_join_cost(left_rel_id, left_rel, right_rel_id, right_rel, jr_rows, info);
+    struct PathCost jr_cost = calc_join_cost(left_rel_id, left_rel, right_rel_id, right_rel, jr_rows, info);
     int jr_width = get_join_width(left_rel_id, left_rel, right_rel_id, right_rel, info);
 
     if (jr_cost.total < jr_out.cost.total){

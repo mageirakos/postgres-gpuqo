@@ -146,21 +146,4 @@ get_join_width(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
     return left_rel.width + right_rel.width;
 }
 
-template<typename BitmapsetN>
-__host__ __device__
-static bool has_useful_index(BitmapsetN left_rel_id, BitmapsetN right_rel_id, 
-                            GpuqoPlannerInfo<BitmapsetN>* info){
-    if (right_rel_id.size() != 1)  // inner must be base rel
-        return false;
-
-    // -1 since it's 1-indexed, 
-    // another -1 since relation with id 0b10 is at index 0 and so on
-    int baserel_right_idx = right_rel_id.lowestPos() - 1;
-
-    if (info->base_rels[baserel_right_idx].composite)
-        return false;
-    
-    return left_rel_id.intersects(info->indexed_edge_table[baserel_right_idx]);
-}
-
 #endif // GPUQO_ROW_ESTIMATION_CUH

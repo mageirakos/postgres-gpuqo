@@ -78,5 +78,30 @@ static inline int eqClassIndex(int idx_l, int idx_r, int size){
 // ceiled integer division
 #define ceil_div(a,b) (((a)+(b)-1)/(b)) 
 
+// some common definitions
+
+typedef struct PathCost {
+	float startup;
+	float total;
+} PathCost;
+
+typedef struct GpuqoIndexInfo {
+	bool available;
+	float rows;
+	PathCost cost;
+} GpuqoIndexInfo;
+
+
+typedef struct VarStats {
+	float stadistinct;
+	float stanullfrac;
+	float mcvfreq;
+} VarStats;
+
+typedef struct VarInfo {
+	VarStats stats;
+	GpuqoIndexInfo index;
+} VarInfo;
+
 
 #endif							/* GPUQO_COMMON_H */

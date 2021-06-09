@@ -185,8 +185,8 @@ void evaluateFilteredDPSubKernel(BitmapsetN* pending_keys, BitmapsetN* scratchpa
             info_sh->eq_classes.fks = (BitmapsetN*) p;
             p += plannerInfoEqClassFksSize<BitmapsetN>(info->eq_classes.n_fks);
             
-            info_sh->eq_classes.stats = (VarStat*) p;
-            p += plannerInfoEqClassStatsSize<BitmapsetN>(info->eq_classes.n_stats);
+            info_sh->eq_classes.vars = (VarInfo*) p;
+            p += plannerInfoEqClassVarsSize<BitmapsetN>(info->eq_classes.n_vars);
         } else {
             info_sh->eq_classes.relids = info->eq_classes.relids;
             info_sh->eq_classes.sels = info->eq_classes.sels;

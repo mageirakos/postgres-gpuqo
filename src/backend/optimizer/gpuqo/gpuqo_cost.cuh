@@ -31,24 +31,62 @@
 
 template<typename BitmapsetN>
 __host__ __device__
-static struct Cost 
+static struct PathCost 
 calc_join_cost(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
                 BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    struct Cost min_cost, nlj_cost, hj_cost;
+    struct PathCost min_cost, tmp_cost;
 
-    min_cost.total = info->params.disable_cost;
+    min_cost.total = NANF;
 
-    nlj_cost = cost_nestloop(outer_rel_id, outer_rel, inner_rel_id, inner_rel, join_rel_rows, info);
+    tmp_cost = cost_nestloop(outer_rel_id, outer_rel, inner_rel_id, inner_rel, join_rel_rows, info);
 
-    if (nlj_cost.total < min_cost.total)
-        min_cost = nlj_cost;
+    if (isnan(min_cost.total) || tmp_cost.total < min_cost.total)
+        min_cost = tmp_cost;
 
-    hj_cost = cost_hashjoin(outer_rel_id, outer_rel, inner_rel_id, inner_rel, join_rel_rows, info);
+    tmp_cost = cost_hashjoin(outer_rel_id, outer_rel, inner_rel_id, inner_rel, join_rel_rows, info);
 
-    if (hj_cost.total < min_cost.total)
-        min_cost = hj_cost;
+    if (tmp_cost.total < min_cost.total)
+        min_cost = tmp_cost;
+
+    // if it is a base relation, check if I can use an index
+    if (inner_rel_id.size() == 1) {
+        for (int i=0, off_vars=0; 
+            i<info->eq_classes.n; 
+            off_vars += info->eq_classes.relids[i].size(),
+            i++)
+        {
+            BitmapsetN ec_relids = info->eq_classes.relids[i];
+            
+            BitmapsetN match_l = ec_relids & outer_rel_id;
+            BitmapsetN match_r = ec_relids & inner_rel_id;
+
+            if (match_l.empty() || match_r.empty())
+                continue;
+
+            BitmapsetN in_id = match_r.lowest();
+            int in_idx = (in_id.allLower() & ec_relids).size();
+
+            BaseRelation<BitmapsetN>& baserel = info->base_rels[in_id.lowestPos()-1];
+            VarInfo var = info->eq_classes.vars[off_vars+in_idx];
+
+            if (!var.index.available)
+                continue;
+
+            struct JoinRelation<BitmapsetN> indexed_inner_rel;
+            indexed_inner_rel.left_rel_id = inner_rel.left_rel_id;
+            indexed_inner_rel.right_rel_id = inner_rel.right_rel_id;
+            indexed_inner_rel.rows = var.index.rows;
+            indexed_inner_rel.cost = var.index.cost;
+
+            tmp_cost = cost_nestloop(outer_rel_id, outer_rel, inner_rel_id, indexed_inner_rel, join_rel_rows, info);
+            if (tmp_cost.total < min_cost.total)
+                min_cost = tmp_cost;
+        }
+    }
+
+    
 
 #if defined(SIMULATE_COMPLEX_COST_FUNCTION) && COST_FUNCTION_OVERHEAD>0
     //Additional overhead to simulate complex cost functions

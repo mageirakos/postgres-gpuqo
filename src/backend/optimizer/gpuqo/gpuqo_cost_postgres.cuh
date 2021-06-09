@@ -68,7 +68,7 @@ estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
 template <typename BitmapsetN>
 __host__ __device__
 static float
-__estimate_hash_bucketsize(VarStat &stat, BaseRelation<BitmapsetN> &baserel, 
+__estimate_hash_bucketsize(VarInfo &stat, BaseRelation<BitmapsetN> &baserel, 
                         int nbuckets, GpuqoPlannerInfo<BitmapsetN>* info);
 
 /*
@@ -80,7 +80,7 @@ __estimate_hash_bucketsize(VarStat &stat, BaseRelation<BitmapsetN> &baserel,
  */
 template <typename BitmapsetN>
 __host__ __device__
-static struct Cost
+static struct PathCost
 cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
                 BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
@@ -142,7 +142,7 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 	cpu_per_tuple = info->params.cpu_tuple_cost + restrict_qual_cost.per_tuple;
 	run_cost += cpu_per_tuple * ntuples;
 
-	return (struct Cost){
+	return (struct PathCost){
         .startup = startup_cost,
         .total = startup_cost + run_cost
     }; 
@@ -159,7 +159,7 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
  */
 template <typename BitmapsetN>
 __host__ __device__
-static struct Cost 
+static struct PathCost 
 cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
                 BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
@@ -218,7 +218,7 @@ cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 	startup_cost += inner_rel.cost.total;
 
 	/*
-	 * Cost of computing hash function: must do it once per input tuple.
+	 * PathCost of computing hash function: must do it once per input tuple.
 	 * We charge one cpu_operator_cost for each column's hash function.
 	 *
 	 * XXX when a hashclause is more complex than a single operator, we
@@ -317,7 +317,7 @@ cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 	if (innerbytes > outerbytes && outerbytes > 0.0f)
 		run_cost *= sqrtf(innerbytes / outerbytes);
 
-	return (struct Cost){
+	return (struct PathCost){
         .startup = startup_cost,
         .total = startup_cost + run_cost
     }; 
@@ -444,8 +444,11 @@ estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
 
     // for each ec that involves any baserel on the left and on the right,
     // count 1 cpu operation (we are assuming 'equals' operators only)
-    int off_stats = 0;
-    for (int i=0; i<info->eq_classes.n; i++){
+    for (int i=0, off_vars=0; 
+		i<info->eq_classes.n; 
+		off_vars += info->eq_classes.relids[i].size(),
+		i++)
+	{
         BitmapsetN ec_relids = info->eq_classes.relids[i];
         
         BitmapsetN match_l = ec_relids & outer_rel_id;
@@ -459,9 +462,9 @@ estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
             int out_idx = (out_id.allLower() & ec_relids).size();
 
             BaseRelation<BitmapsetN>& baserel = info->base_rels[out_id.lowestPos()-1];
-            VarStat stat = info->eq_classes.stats[off_stats+out_idx];
+            VarInfo var = info->eq_classes.vars[off_vars+out_idx];
 
-            float thisbucketsize = __estimate_hash_bucketsize(stat, baserel, nbuckets, info);
+            float thisbucketsize = __estimate_hash_bucketsize(var, baserel, nbuckets, info);
             
             if (innerbucketsize > thisbucketsize)
                 innerbucketsize = thisbucketsize;
@@ -474,17 +477,15 @@ estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
             int in_idx = (in_id.allLower() & ec_relids).size();
 
             BaseRelation<BitmapsetN>& baserel = info->base_rels[in_id.lowestPos()-1];
-            VarStat stat = info->eq_classes.stats[off_stats+in_idx];
+            VarInfo var = info->eq_classes.vars[off_vars+in_idx];
 
-            float thisbucketsize = __estimate_hash_bucketsize(stat, baserel, nbuckets, info);
+            float thisbucketsize = __estimate_hash_bucketsize(var, baserel, nbuckets, info);
             
             if (innerbucketsize > thisbucketsize)
                 innerbucketsize = thisbucketsize;
 
             match_r ^= in_id;
         }
-
-        off_stats += ec_relids.size();
     }
     
     return innerbucketsize;
@@ -524,7 +525,7 @@ estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
 template <typename BitmapsetN>
 __host__ __device__
 static float
-__estimate_hash_bucketsize(VarStat &stats, BaseRelation<BitmapsetN> &baserel, 
+__estimate_hash_bucketsize(VarInfo &vars, BaseRelation<BitmapsetN> &baserel, 
                         int nbuckets, GpuqoPlannerInfo<BitmapsetN>* info)
 {
 	float		estfract,
@@ -535,7 +536,7 @@ __estimate_hash_bucketsize(VarStat &stats, BaseRelation<BitmapsetN> &baserel,
 	/*
 	 * Obtain number of distinct data values in raw relation.
 	 */
-	ndistinct = stats.stadistinct;
+	ndistinct = vars.stats.stadistinct;
 	if (ndistinct < 0.0f)
 		ndistinct = -ndistinct * baserel.tuples;
 
@@ -545,7 +546,7 @@ __estimate_hash_bucketsize(VarStat &stats, BaseRelation<BitmapsetN> &baserel,
 	}
 
 	/* Also compute avg freq of all distinct data values in raw relation */
-	avgfreq = (1.0f - stats.stanullfrac) / ndistinct;
+	avgfreq = (1.0f - vars.stats.stanullfrac) / ndistinct;
 
 	/*
 	 * Adjust ndistinct to account for restriction clauses.  Observe we
@@ -571,7 +572,7 @@ __estimate_hash_bucketsize(VarStat &stats, BaseRelation<BitmapsetN> &baserel,
 	/*
 	 * Look up the frequency of the most common value, if available.
 	 */
-	mcvfreq = stats.mcvfreq;
+	mcvfreq = vars.stats.mcvfreq;
 
 	/*
 	 * Adjust estimated bucketsize upward to account for skewed
@@ -658,7 +659,7 @@ page_size(float tuples, int width)
 
 template<typename BitmapsetN>
 __host__ __device__
-static struct Cost
+static struct PathCost
 cost_baserel(BaseRelation<BitmapsetN> &base_rel){
     return base_rel.cost;
 }

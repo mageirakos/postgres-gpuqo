@@ -30,7 +30,7 @@ private:
     list<remapper_transf_el_t<BitmapsetIN> > transf;
 
     void countEqClasses(GpuqoPlannerInfo<BitmapsetIN>* info, 
-                                            int* n, int* n_sels, int *n_fk, int *n_stats);
+                                            int* n, int* n_sels, int *n_fk, int *n_vars);
     BitmapsetOUT remapRelid(BitmapsetIN id);
     BitmapsetOUT remapRelidNoComposite(BitmapsetIN id);
     BitmapsetIN remapRelidInv(BitmapsetOUT id);
@@ -39,11 +39,11 @@ private:
     void remapBaseRels(BaseRelation<BitmapsetIN>* base_rels_from,
                         BaseRelation<BitmapsetOUT>* base_rels_to);
     void remapEqClass(BitmapsetIN* eq_class_from, float* sels_from, 
-                    BitmapsetIN* fks_from, VarStat* stats_from,
+                    BitmapsetIN* fks_from, VarInfo* vars_from,
                     GpuqoPlannerInfo<BitmapsetIN>* info_from,
                     int off_sels_from, int off_fks_from, 
                     BitmapsetOUT* eq_class_to, float* sels_to, BitmapsetOUT* fks_to,
-                    VarStat* stats_to);
+                    VarInfo* vars_to);
 
 public:
     Remapper<BitmapsetIN,BitmapsetOUT>(list<remapper_transf_el_t<BitmapsetIN>> _transf);
