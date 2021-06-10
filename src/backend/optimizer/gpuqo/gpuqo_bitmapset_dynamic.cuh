@@ -49,6 +49,13 @@ public:
     unsigned size() const{
         return bms_num_members(bms);
     }
+    
+    unsigned nbits() const{
+        if (bms == NULL)
+            return 0;
+
+        return bms->nwords*BITS_PER_BITMAPWORD;
+    }
 
     bool empty() const{
         return bms_is_empty(bms);
@@ -192,9 +199,11 @@ static
 BitmapsetDynamic expandToMask(const BitmapsetDynamic &val, const BitmapsetDynamic &mask){
     int m = 0, v = 0;
     BitmapsetDynamic out = mask;
-    for (; m < mask.size() && v < val.size(); m++) {
+    for (; m < mask.nbits() && v < val.nbits(); m++) {
         if (mask.isSet(m)){
-            out.set(v++);
+            if (!val.isSet(v))
+                out.unset(m);
+            v++;
         }
     }
 
