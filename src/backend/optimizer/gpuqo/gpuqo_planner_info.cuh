@@ -70,6 +70,7 @@ struct BaseRelation{
 
 struct GpuqoPlannerInfoParams {
 		float effective_cache_size;
+		float seq_page_cost;
 		float random_page_cost;
 		float cpu_tuple_cost;
 		float cpu_index_tuple_cost;

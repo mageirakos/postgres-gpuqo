@@ -30,6 +30,12 @@
 	(((uintptr_t) (LEN) + ((ALIGNVAL) - 1)) & ~((uintptr_t) ((ALIGNVAL) - 1)))
 #define MAXALIGN(LEN) TYPEALIGN(MAXIMUM_ALIGNOF,LEN)
 
+struct HashSkewBucketSkeleton
+{
+	uint32_t		hashvalue;
+	void*           tuples;
+};
+
 #define LOG2(x)  (logf(x) / 0.693147180559945f)
 #define LOG6(x)  (logf(x) / 1.79175946922805f)
 
@@ -41,6 +47,17 @@ struct QualCost{
     float per_tuple;
 };
 
+struct BucketStats {
+	float mcvfreq;
+	float bucketsize;
+};
+
+struct HtszRes {
+	int numbuckets;
+	int numbatches;
+	int num_skew_mcvs;
+};
+
 __host__ __device__
 static float relation_byte_size(float tuples, int width);
 
@@ -48,10 +65,12 @@ __host__ __device__
 static float page_size(float tuples, int width);
 
 __host__ __device__
-static void ExecChooseHashTableSize(float ntuples, int tupwidth, int sort_mem,
-                                    int *virtualbuckets,
-                                    int *physicalbuckets,
-                                    int *numbatches);
+static float clamp_row_est(float nrows);
+
+__host__ __device__
+static HtszRes ExecChooseHashTableSize(float ntuples, int tupwidth, int work_mem);
+
+
 
 template <typename BitmapsetN>
 __host__ __device__
@@ -61,8 +80,8 @@ cost_qual_eval(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
 
 template <typename BitmapsetN>
 __host__ __device__
-static float 
-estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
+static BucketStats 
+estimate_hash_bucket_stats(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
                             GpuqoPlannerInfo<BitmapsetN>* info);
 
 template <typename BitmapsetN>
@@ -70,6 +89,21 @@ __host__ __device__
 static float
 __estimate_hash_bucketsize(VarInfo &stat, BaseRelation<BitmapsetN> &baserel, 
                         int nbuckets, GpuqoPlannerInfo<BitmapsetN>* info);
+
+
+__host__ __device__
+inline int floor_log2(long num) {
+	return sizeof(num)*8 - 1 - clz(num);
+}
+
+__host__ __device__
+inline int ceil_log2(long num) {
+	int res = floor_log2(num);
+	if (1L<<res == num)
+		return res;
+	else
+		return res+1;
+}
 
 /*
  * cost_nestloop
@@ -150,12 +184,13 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 
 /*
  * cost_hashjoin
- *	  Determines and returns the cost of joining two relations using the
- *	  hash join algorithm.
+ *	  Refer to Postgres cost function for details.
  *
- * 'path' is already filled in except for the cost fields
- *
- * Note: path's hashclauses should be a subset of the joinrestrictinfo list
+ * Assumptions:
+ *  - all quals are of type "A = B"
+ *  - inner join
+ *  - not parallel
+ * 
  */
 template <typename BitmapsetN>
 __host__ __device__
@@ -167,50 +202,24 @@ cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 	float		startup_cost = 0.0f;
 	float		run_cost = 0.0f;
 	float		cpu_per_tuple;
-	float       hash_selec;
-	float       qp_selec;
 	QualCost	hash_qual_cost;
-	QualCost	qp_qual_cost;
 	float		hashjointuples;
-	float		__attribute__((unused)) qptuples; // TODO
+	float		virtualbuckets;
 	float		outer_path_rows = outer_rel.rows;
 	float		inner_path_rows = inner_rel.rows;
-	float		outerbytes = relation_byte_size(outer_path_rows,
-											  outer_rel.width);
-	float		innerbytes = relation_byte_size(inner_path_rows,
-											  outer_rel.width);
-	int			num_hashclauses;
-	int			virtualbuckets;
-	int			physicalbuckets;
-	int			numbatches;
-	float innerbucketsize;
-	float joininfactor;
+	float		inner_path_rows_total = inner_path_rows;
+	HtszRes htsz_res;
+	BucketStats bucket_stats;
 
 	if (!info->params.enable_hashjoin)
 		startup_cost += info->params.disable_cost;
 
+	
 	/*
-	 * Compute cost and selectivity of the hashquals and qpquals (other
-	 * restriction clauses) separately.  We use approx_selectivity here
-	 * for speed --- in most cases, any errors won't affect the result
-	 * much.
-	 *
-	 * Note: it's probably bogus to use the normal selectivity calculation
-	 * here when either the outer or inner path is a UniquePath.
+	 * Compute cost of the hashquals and qpquals (other restriction clauses)
+	 * separately.
 	 */
-    // TODO check
-    // I am assuming all clauses are hashclauses
-	hash_selec = min(1.0f, join_rel_rows/(outer_path_rows*inner_path_rows));
 	hash_qual_cost = cost_qual_eval(outer_rel_id, inner_rel_id, info);
-	num_hashclauses = hash_qual_cost.n_quals; // TODO check
-	qp_selec = 1.0f;
-	qp_qual_cost.startup = 0.0f;
-	qp_qual_cost.per_tuple = 0.0f;
-
-	/* approx # tuples passing the hash quals */
-	hashjointuples = ceil(hash_selec * outer_path_rows * inner_path_rows);
-	/* approx # tuples passing qpquals as well */
-	qptuples = ceil(hashjointuples * qp_selec);
 
 	/* cost of source data */
 	startup_cost += outer_rel.cost.startup;
@@ -218,104 +227,102 @@ cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 	startup_cost += inner_rel.cost.total;
 
 	/*
-	 * PathCost of computing hash function: must do it once per input tuple.
-	 * We charge one cpu_operator_cost for each column's hash function.
+	 * Cost of computing hash function: must do it once per input tuple. We
+	 * charge one info->params.cpu_operator_cost for each column's hash function.  Also,
+	 * tack on one info->params.cpu_tuple_cost per inner row, to model the costs of
+	 * inserting the row into the hashtable.
 	 *
-	 * XXX when a hashclause is more complex than a single operator, we
-	 * really should charge the extra eval costs of the left or right
-	 * side, as appropriate, here.	This seems more work than it's worth
-	 * at the moment.
+	 * XXX when a hashclause is more complex than a single operator, we really
+	 * should charge the extra eval costs of the left or right side, as
+	 * appropriate, here.  This seems more work than it's worth at the moment.
 	 */
-	startup_cost += info->params.cpu_operator_cost * num_hashclauses * inner_path_rows;
-	run_cost += info->params.cpu_operator_cost * num_hashclauses * outer_path_rows;
-
-	/* Get hash table size that executor would use for inner relation */
-	ExecChooseHashTableSize(inner_path_rows,
-							inner_rel.width,
-                            info->params.work_mem,
-							&virtualbuckets,
-							&physicalbuckets,
-							&numbatches);
+	startup_cost += (info->params.cpu_operator_cost * hash_qual_cost.n_quals + info->params.cpu_tuple_cost)
+		* inner_path_rows;
+	run_cost += info->params.cpu_operator_cost * hash_qual_cost.n_quals * outer_path_rows;
 
 	/*
-	 * Determine bucketsize fraction for inner relation.  We use the
-	 * smallest bucketsize estimated for any individual hashclause; this
-	 * is undoubtedly conservative.
+	 * Get hash table size that executor would use for inner relation.
 	 *
-	 * BUT: if inner relation has been unique-ified, we can assume it's good
-	 * for hashing.  This is important both because it's the right answer,
-	 * and because we avoid contaminating the cache with a value that's
-	 * wrong for non-unique-ified paths.
+	 * XXX for the moment, always assume that skew optimization will be
+	 * performed.  As long as SKEW_WORK_MEM_PERCENT is small, it's not worth
+	 * trying to determine that for sure.
+	 *
+	 * XXX at some point it might be interesting to try to account for skew
+	 * optimization in the cost estimate, but for now, we don't.
 	 */
-    // assuming not unique
-    innerbucketsize = estimate_hash_innerbucketsize(outer_rel_id, inner_rel_id, virtualbuckets, info);
+	htsz_res = ExecChooseHashTableSize(inner_path_rows_total, inner_rel.width, info->params.work_mem);
 
 	/*
-	 * if inner relation is too big then we will need to "batch" the join,
-	 * which implies writing and reading most of the tuples to disk an
-	 * extra time.	Charge one cost unit per page of I/O (correct since it
-	 * should be nice and sequential...).  Writing the inner rel counts as
-	 * startup cost, all the rest as run cost.
+	 * If inner relation is too big then we will need to "batch" the join,
+	 * which implies writing and reading most of the tuples to disk an extra
+	 * time.  Charge seq_page_cost per page, since the I/O should be nice and
+	 * sequential.  Writing the inner rel counts as startup cost, all the rest
+	 * as run cost.
 	 */
-	if (numbatches)
+	if (htsz_res.numbatches > 1)
 	{
 		float		outerpages = page_size(outer_path_rows,
 										   outer_rel.width);
 		float		innerpages = page_size(inner_path_rows,
 										   inner_rel.width);
 
-		startup_cost += innerpages;
-		run_cost += innerpages + 2.0f * outerpages;
+		startup_cost += info->params.seq_page_cost * innerpages;
+		run_cost += info->params.seq_page_cost * (innerpages + 2.0f * outerpages);
 	}
+
+	/* and compute the number of "virtual" buckets in the whole join */
+	virtualbuckets = (float) htsz_res.numbuckets * (float) htsz_res.numbatches;
+
+
+	bucket_stats = estimate_hash_bucket_stats(outer_rel_id, inner_rel_id, virtualbuckets, info);
+
+	/*
+	 * If the bucket holding the inner MCV would exceed work_mem, we don't
+	 * want to hash unless there is really no other alternative, so apply
+	 * disable_cost.  (The executor normally copes with excessive memory usage
+	 * by splitting batches, but obviously it cannot separate equal values
+	 * that way, so it will be unable to drive the batch size below work_mem
+	 * when this is true.)
+	 */
+	if (relation_byte_size(clamp_row_est(inner_path_rows * bucket_stats.mcvfreq),
+						   inner_rel.width) >
+		(info->params.work_mem * 1024L))
+		startup_cost += info->params.disable_cost;
 
 	/* CPU costs */
 
+	// TODO inner_unique
 	/*
-	 * If we're doing JOIN_IN then we will stop comparing inner tuples to
-	 * an outer tuple as soon as we have one match.  Account for the
-	 * effects of this by scaling down the cost estimates in proportion to
-	 * the expected output size.  (This assumes that all the quals
-	 * attached to the join are IN quals, which should be true.)
-	 */
-    // assuming all clauses are hash clauses
-    joininfactor = 1.0f;
+	* The number of tuple comparisons needed is the number of outer
+	* tuples times the typical number of tuples in a hash bucket, which
+	* is the inner relation size times its bucketsize fraction.  At each
+	* one, we need to evaluate the hashjoin quals.  But actually,
+	* charging the full qual eval cost at each tuple is pessimistic,
+	* since we don't evaluate the quals unless the hash values match
+	* exactly.  For lack of a better idea, halve the cost estimate to
+	* allow for that.
+	*/
+	startup_cost += hash_qual_cost.startup;
+	run_cost += hash_qual_cost.per_tuple * outer_path_rows *
+		clamp_row_est(inner_path_rows * bucket_stats.bucketsize) * 0.5f;
 
 	/*
-	 * The number of tuple comparisons needed is the number of outer
-	 * tuples times the typical number of tuples in a hash bucket, which
-	 * is the inner relation size times its bucketsize fraction.  At each
-	 * one, we need to evaluate the hashjoin quals.
-	 */
-	startup_cost += hash_qual_cost.startup;
-	run_cost += hash_qual_cost.per_tuple *
-		outer_path_rows * ceil(inner_path_rows * innerbucketsize) *
-		joininfactor;
+	* Get approx # tuples passing the hashquals.  We use
+	* approx_tuple_count here because we need an estimate done with
+	* JOIN_INNER semantics.
+	*/
+	hashjointuples = join_rel_rows;
 
 	/*
 	 * For each tuple that gets through the hashjoin proper, we charge
 	 * cpu_tuple_cost plus the cost of evaluating additional restriction
-	 * clauses that are to be applied at the join.	(This is pessimistic
-	 * since not all of the quals may get evaluated at each tuple.)
+	 * clauses that are to be applied at the join.  (This is pessimistic since
+	 * not all of the quals may get evaluated at each tuple.)
 	 */
-	startup_cost += qp_qual_cost.startup;
-	cpu_per_tuple = info->params.cpu_tuple_cost + qp_qual_cost.per_tuple;
-	run_cost += cpu_per_tuple * hashjointuples * joininfactor;
+	cpu_per_tuple = info->params.cpu_tuple_cost;
+	run_cost += cpu_per_tuple * hashjointuples;
 
-	/*
-	 * Bias against putting larger relation on inside.	We don't want an
-	 * absolute prohibition, though, since larger relation might have
-	 * better bucketsize --- and we can't trust the size estimates
-	 * unreservedly, anyway.  Instead, inflate the run cost by the square
-	 * root of the size ratio.	(Why square root?  No real good reason,
-	 * but it seems reasonable...)
-	 *
-	 * Note: before 7.4 we implemented this by inflating startup cost; but if
-	 * there's a disable_cost component in the input paths' startup cost,
-	 * that unfairly penalizes the hash.  Probably it'd be better to keep
-	 * track of disable penalty separately from cost.
-	 */
-	if (innerbytes > outerbytes && outerbytes > 0.0f)
-		run_cost *= sqrtf(innerbytes / outerbytes);
+	/* tlist WTF? */
 
 	return (struct PathCost){
         .startup = startup_cost,
@@ -323,124 +330,165 @@ cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
     }; 
 }
 
-/* Target bucket loading (tuples per bucket) */
-#define NTUP_PER_BUCKET			10
-/* Fudge factor to allow for inaccuracy of input estimates */
-#define FUDGE_FAC				2.0
+/* Magic numbers (see Postgres) */
+#define NTUP_PER_BUCKET			1
+#define SKEW_WORK_MEM_PERCENT	2
+#define SKEW_OVERHEAD  84
+#define TUPLE_OVERHEAD  32
+#define RELATION_OVERHEAD 24
 
-__host__ __device__
-static void
-ExecChooseHashTableSize(float ntuples, int tupwidth, int sort_mem,
-						int *virtualbuckets,
-						int *physicalbuckets,
-						int *numbatches)
+HtszRes
+ExecChooseHashTableSize(float ntuples, int tupwidth, int work_mem)
 {
 	int			tupsize;
 	float		inner_rel_bytes;
+	long		bucket_bytes;
 	long		hash_table_bytes;
-	float		dtmp;
-	int			nbatch;
-	int			nbuckets;
-	int			totalbuckets;
-	int			bucketsize;
+	long		skew_table_bytes;
+	long		max_pointers;
+	long		mppow2;
+	float		dbuckets;
+	float		space_allowed;
+	HtszRes     res;
+
+	res.numbatches = 1;
 
 	/* Force a plausible relation size if no info */
-	if (ntuples <= 0.0f)
-		ntuples = 1000.0f;
+	if (ntuples <= 0.0)
+		ntuples = 1000.0;
 
 	/*
-	 * Estimate tupsize based on footprint of tuple in hashtable... but
-	 * what about palloc overhead?
+	 * Estimate tupsize based on footprint of tuple in hashtable... note this
+	 * does not allow for any palloc overhead.  The manipulations of spaceUsed
+	 * don't count palloc overhead either.
 	 */
-	tupsize = MAXALIGN(tupwidth) + MAXALIGN(sizeof(void*));
-	inner_rel_bytes = ntuples * tupsize * FUDGE_FAC;
+	tupsize = TUPLE_OVERHEAD + MAXALIGN(tupwidth);
+	inner_rel_bytes = ntuples * tupsize;
 
 	/*
-	 * Target in-memory hashtable size is sort_mem kilobytes.
+	 * Target in-memory hashtable size is work_mem kilobytes.
 	 */
-	hash_table_bytes = sort_mem * 1024L;
+	hash_table_bytes = work_mem * 1024L;
+
+	space_allowed = hash_table_bytes;
 
 	/*
-	 * Count the number of hash buckets we want for the whole relation,
-	 * for an average bucket load of NTUP_PER_BUCKET (per virtual
-	 * bucket!).  It has to fit in an int, however.
+	 * If skew optimization is possible, estimate the number of skew buckets
+	 * that will fit in the memory allowed, and decrement the assumed space
+	 * available for the main hash table accordingly.
+	 *
+	 * We make the optimistic assumption that each skew bucket will contain
+	 * one inner-relation tuple.  If that turns out to be low, we will recover
+	 * at runtime by reducing the number of skew buckets.
+	 *
+	 * hashtable->skewBucket will have up to 8 times as many HashSkewBucket
+	 * pointers as the number of MCVs we allow, since ExecHashBuildSkewHash
+	 * will round up to the next power of 2 and then multiply by 4 to reduce
+	 * collisions.
 	 */
-	dtmp = ceil(ntuples * FUDGE_FAC / NTUP_PER_BUCKET);
-	if (dtmp < INT_MAX)
-		totalbuckets = (int) dtmp;
-	else
-		totalbuckets = INT_MAX;
-	if (totalbuckets <= 0)
-		totalbuckets = 1;
+
+	skew_table_bytes = hash_table_bytes * SKEW_WORK_MEM_PERCENT / 100;
+
+	/*----------
+		* Divisor is:
+		* size of a hash tuple +
+		* worst-case size of skewBucket[] per MCV +
+		* size of skewBucketNums[] entry +
+		* size of skew bucket struct itself
+		*----------
+		*/
+	res.num_skew_mcvs = skew_table_bytes / (tupsize + SKEW_OVERHEAD);
+	if (res.num_skew_mcvs > 0)
+		hash_table_bytes -= skew_table_bytes;
 
 	/*
-	 * Count the number of buckets we think will actually fit in the
-	 * target memory size, at a loading of NTUP_PER_BUCKET (physical
-	 * buckets). NOTE: FUDGE_FAC here determines the fraction of the
-	 * hashtable space reserved to allow for nonuniform distribution of
-	 * hash values. Perhaps this should be a different number from the
-	 * other uses of FUDGE_FAC, but since we have no real good way to pick
-	 * either one...
+	 * Set nbuckets to achieve an average bucket load of NTUP_PER_BUCKET when
+	 * memory is filled, assuming a single batch; but limit the value so that
+	 * the pointer arrays we'll try to allocate do not exceed work_mem nor
+	 * MaxAllocSize.
+	 *
+	 * Note that both nbuckets and nbatch must be powers of 2 to make
+	 * ExecHashGetBucketAndBatch fast.
 	 */
-	bucketsize = NTUP_PER_BUCKET * tupsize;
-	nbuckets = (int) (hash_table_bytes / (bucketsize * FUDGE_FAC));
-	if (nbuckets <= 0)
-		nbuckets = 1;
-	/* Ensure we can allocate an array of nbuckets pointers */
-	nbuckets = min(nbuckets, (int)(MaxAllocSize / sizeof(void *)));
+	max_pointers = space_allowed / sizeof(void*);
+	max_pointers = min(max_pointers, MaxAllocSize / sizeof(void*));
+	/* If max_pointers isn't a power of 2, must round it down to one */
+	mppow2 = 1L << ceil_log2(max_pointers);
+	if (max_pointers != mppow2)
+		max_pointers = mppow2 / 2;
 
-	if (totalbuckets <= nbuckets)
+	/* Also ensure we avoid integer overflow in nbatch and nbuckets */
+	/* (this step is redundant given the current value of MaxAllocSize) */
+	max_pointers = min(max_pointers, (long) INT_MAX / 2);
+
+	dbuckets = ceilf(ntuples / NTUP_PER_BUCKET);
+	dbuckets = min(dbuckets, (float) max_pointers);
+	res.numbuckets  = (int) dbuckets;
+	/* don't let nbuckets be really small, though ... */
+	res.numbuckets  = max(res.numbuckets , 1024);
+	/* ... and force it to be a power of 2. */
+	res.numbuckets  = 1 << ceil_log2(res.numbuckets );
+
+	/*
+	 * If there's not enough space to store the projected number of tuples and
+	 * the required bucket headers, we will need multiple batches.
+	 */
+	bucket_bytes = sizeof(void*) * res.numbuckets ;
+	if (inner_rel_bytes + bucket_bytes > hash_table_bytes)
 	{
+		/* We'll need multiple batches */
+		long		lbuckets;
+		float		dbatch;
+		int			minbatch;
+		long		bucket_size;
+
 		/*
-		 * We have enough space, so no batching.  In theory we could even
-		 * reduce nbuckets, but since that could lead to poor behavior if
-		 * estimated ntuples is much less than reality, it seems better to
-		 * make more buckets instead of fewer.
+		 * Estimate the number of buckets we'll want to have when work_mem is
+		 * entirely full.  Each bucket will contain a bucket pointer plus
+		 * NTUP_PER_BUCKET tuples, whose projected size already includes
+		 * overhead for the hash code, pointer to the next tuple, etc.
 		 */
-		totalbuckets = nbuckets;
-		nbatch = 0;
-	}
-	else
-	{
+		bucket_size = (tupsize * NTUP_PER_BUCKET + sizeof(void*));
+		lbuckets = 1L << ceil_log2(hash_table_bytes / bucket_size);
+		lbuckets = min(lbuckets, max_pointers);
+		res.numbuckets = (int) lbuckets;
+		res.numbuckets = 1 << ceil_log2(res.numbuckets);
+		bucket_bytes = res.numbuckets * sizeof(void*);
+
 		/*
-		 * Need to batch; compute how many batches we want to use. Note
-		 * that nbatch doesn't have to have anything to do with the ratio
-		 * totalbuckets/nbuckets; in fact, it is the number of groups we
-		 * will use for the part of the data that doesn't fall into the
-		 * first nbuckets hash buckets.  We try to set it to make all the
-		 * batches the same size.
+		 * Buckets are simple pointers to hashjoin tuples, while tupsize
+		 * includes the pointer, hash code, and MinimalTupleData.  So buckets
+		 * should never really exceed 25% of work_mem (even for
+		 * NTUP_PER_BUCKET=1); except maybe for work_mem values that are not
+		 * 2^N bytes, where we might get more because of doubling. So let's
+		 * look for 50% here.
 		 */
-		dtmp = ceil((inner_rel_bytes - hash_table_bytes) /
-					hash_table_bytes);
-		if (dtmp < MaxAllocSize / sizeof(void *))
-			nbatch = (int) dtmp;
-		else
-			nbatch = MaxAllocSize / sizeof(void *);
-		if (nbatch <= 0)
-			nbatch = 1;
+		Assert(bucket_bytes <= hash_table_bytes / 2);
+
+		/* Calculate required number of batches. */
+		dbatch = ceilf(inner_rel_bytes / (hash_table_bytes - bucket_bytes));
+		dbatch = min(dbatch, (float) max_pointers);
+		minbatch = (int) dbatch;
+		res.numbatches = max(2, 1<<ceil_log2(minbatch));
 	}
 
-	/*
-	 * Now, totalbuckets is the number of (virtual) hashbuckets for the
-	 * whole relation, and nbuckets is the number of physical hashbuckets
-	 * we will use in the first pass.  Data falling into the first
-	 * nbuckets virtual hashbuckets gets handled in the first pass;
-	 * everything else gets divided into nbatch batches to be processed in
-	 * additional passes.
-	 */
-	*virtualbuckets = totalbuckets;
-	*physicalbuckets = nbuckets;
-	*numbatches = nbatch;
+	Assert(res.numbuckets > 0);
+	Assert(res.numbatches > 0);
+
+	return res;
 }
 
 template <typename BitmapsetN>
 __host__ __device__
-static float 
-estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
+static BucketStats 
+estimate_hash_bucket_stats(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
                             int nbuckets,
                             GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    float innerbucketsize = 1.0f;
+    BucketStats stats;
+	
+	stats.bucketsize = 1.0f;
+	stats.mcvfreq = 1.0f;
 
     // for each ec that involves any baserel on the left and on the right,
     // count 1 cpu operation (we are assuming 'equals' operators only)
@@ -457,21 +505,6 @@ estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
         if (match_l.empty() || match_r.empty())
             continue;
 
-        while(!match_l.empty()){
-            BitmapsetN out_id = match_l.lowest();
-            int out_idx = (out_id.allLower() & ec_relids).size();
-
-            BaseRelation<BitmapsetN>& baserel = info->base_rels[out_id.lowestPos()-1];
-            VarInfo var = info->eq_classes.vars[off_vars+out_idx];
-
-            float thisbucketsize = __estimate_hash_bucketsize(var, baserel, nbuckets, info);
-            
-            if (innerbucketsize > thisbucketsize)
-                innerbucketsize = thisbucketsize;
-
-            match_l ^= out_id;
-        }
-
         while(!match_r.empty()){
             BitmapsetN in_id = match_r.lowest();
             int in_idx = (in_id.allLower() & ec_relids).size();
@@ -481,14 +514,17 @@ estimate_hash_innerbucketsize(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
 
             float thisbucketsize = __estimate_hash_bucketsize(var, baserel, nbuckets, info);
             
-            if (innerbucketsize > thisbucketsize)
-                innerbucketsize = thisbucketsize;
+            if (stats.bucketsize > thisbucketsize)
+                stats.bucketsize = thisbucketsize;
+
+            if (stats.mcvfreq > var.stats.mcvfreq)
+                stats.mcvfreq = var.stats.mcvfreq;
 
             match_r ^= in_id;
         }
     }
     
-    return innerbucketsize;
+    return stats;
 }
 
 
@@ -549,15 +585,18 @@ __estimate_hash_bucketsize(VarInfo &vars, BaseRelation<BitmapsetN> &baserel,
 	avgfreq = (1.0f - vars.stats.stanullfrac) / ndistinct;
 
 	/*
-	 * Adjust ndistinct to account for restriction clauses.  Observe we
-	 * are assuming that the data distribution is affected uniformly by
-	 * the restriction clauses!
+	 * Adjust ndistinct to account for restriction clauses.  Observe we are
+	 * assuming that the data distribution is affected uniformly by the
+	 * restriction clauses!
 	 *
 	 * XXX Possibly better way, but much more expensive: multiply by
-	 * selectivity of rel's restriction clauses that mention the target
-	 * Var.
+	 * selectivity of rel's restriction clauses that mention the target Var.
 	 */
-	ndistinct *= baserel.rows / baserel.tuples;
+	if (baserel.tuples > 0)
+	{
+		ndistinct *= baserel.rows / baserel.tuples;
+		ndistinct = clamp_row_est(ndistinct);
+	}
 
 	/*
 	 * Initial estimate of bucketsize fraction is 1/nbuckets as long as
@@ -642,7 +681,7 @@ __host__ __device__
 static float
 relation_byte_size(float tuples, int width)
 {
-	return tuples * (MAXALIGN(width) + MAXALIGN(SIZE_OF_HEAP_TUPLE_DATA));
+	return tuples * (MAXALIGN(width) + RELATION_OVERHEAD);
 }
 
 /*
@@ -664,5 +703,20 @@ cost_baserel(BaseRelation<BitmapsetN> &base_rel){
     return base_rel.cost;
 }
 
+static float 
+clamp_row_est(float nrows)
+{
+	/*
+	 * Force estimate to be at least one row, to make explain output look
+	 * better and to avoid possible divide-by-zero when interpolating costs.
+	 * Make it an integer, too.
+	 */
+	if (nrows <= 1.0)
+		nrows = 1.0;
+	else
+		nrows = rintf(nrows);
+
+	return nrows;
+}
 
 #endif

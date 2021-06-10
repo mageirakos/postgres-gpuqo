@@ -114,6 +114,7 @@ template<typename BitmapsetN>
 static void setParams(GpuqoPlannerInfo<BitmapsetN>* info) {
 		info->params.effective_cache_size = effective_cache_size;
 		info->params.random_page_cost = random_page_cost;
+		info->params.seq_page_cost = seq_page_cost;
 		info->params.cpu_tuple_cost = cpu_tuple_cost;
 		info->params.cpu_index_tuple_cost = cpu_index_tuple_cost;
 		info->params.cpu_operator_cost = cpu_operator_cost;
