@@ -18,6 +18,8 @@
 #include "gpuqo_debug.cuh"
 #include "gpuqo_postgres.cuh"
 
+#define BITMAPWORD_FULL ~((bitmapword)0)
+
 class BitmapsetDynamic{
 public: 
     Bitmapset *bms;
@@ -91,7 +93,7 @@ public:
                 out->words[i] = blsi(bms->words[i])-1;
                 break;
             } else {
-                out->words[i] = ~0;
+                out->words[i] = BITMAPWORD_FULL;
             }
         }
         i++;
