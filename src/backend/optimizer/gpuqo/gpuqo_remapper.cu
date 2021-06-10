@@ -184,6 +184,9 @@ void Remapper<BitmapsetIN,BitmapsetOUT>::remapEqClass(BitmapsetIN* eq_class_from
         fks_to[idx_l_to] = remapRelidNoComposite(fks_from[idx_l_from]);
         // TODO choose one at random... maybe this can be improved
         vars_to[idx_l_to] = vars_from[idx_l_from]; 
+        if (id_l_from.size() > 1) {
+            vars_to[idx_l_to].index.available = false;
+        }
     }
 }
 
