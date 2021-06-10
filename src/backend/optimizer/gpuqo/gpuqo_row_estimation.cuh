@@ -23,12 +23,15 @@
 #pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
-static float fkselc_of_ec(int off_fk, BitmapsetN ec_relids, 
-                    BitmapsetN outer_rels, BitmapsetN inner_rels, 
+static float fkselc_of_ec(int off_fk, 
+                    const BitmapsetN &ec_relids, 
+                    const BitmapsetN &outer_rels, 
+                    const BitmapsetN &inner_rels, 
                     GpuqoPlannerInfo<BitmapsetN>* info) 
 {
-    while(!outer_rels.empty()){
-        BitmapsetN out_id = outer_rels.lowest();
+    BitmapsetN tmp = outer_rels;
+    while(!tmp.empty()){
+        BitmapsetN out_id = tmp.lowest();
         int out_idx = (out_id.allLower() & ec_relids).size();
         BitmapsetN match = inner_rels & info->eq_classes.fks[off_fk+out_idx];
         if (!match.empty()){
@@ -36,28 +39,7 @@ static float fkselc_of_ec(int off_fk, BitmapsetN ec_relids,
             return 1.0 / max(1.0f, info->base_rels[in_idx].tuples);
         }
 
-        outer_rels ^= out_id;
-    }
-    return NANF;
-}
-
-template<>
-__host__ __device__
-float fkselc_of_ec<BitmapsetDynamic>(int off_fk, BitmapsetDynamic ec_relids, 
-                    BitmapsetDynamic outer_rels, BitmapsetDynamic inner_rels, 
-                    GpuqoPlannerInfo<BitmapsetDynamic>* info) 
-{
-    while(!outer_rels.empty()){
-        int out_pos = outer_rels.lowestPos();
-        BitmapsetDynamic out_id = BitmapsetDynamic::nth(out_pos);
-        int out_idx = (out_id.allLower() & ec_relids).size();
-        BitmapsetDynamic match = inner_rels & info->eq_classes.fks[off_fk+out_idx];
-        if (!match.empty()){
-            int in_idx = match.lowestPos()-1;
-            return 1.0 / max(1.0f, info->base_rels[in_idx].tuples);
-        }
-
-        outer_rels.unset(out_pos);
+        tmp -= out_id;
     }
     return NANF;
 }
@@ -66,8 +48,10 @@ float fkselc_of_ec<BitmapsetDynamic>(int off_fk, BitmapsetDynamic ec_relids,
 template<typename BitmapsetN>
 __host__ __device__
 static float 
-estimate_ec_selectivity(BitmapsetN ec_relids, int off_sels, int off_fks,
-                        BitmapsetN left_rel_id, BitmapsetN right_rel_id,
+estimate_ec_selectivity(const BitmapsetN &ec_relids, 
+                        int off_sels, int off_fks,
+                        const BitmapsetN &left_rel_id, 
+                        const BitmapsetN &right_rel_id,
                         GpuqoPlannerInfo<BitmapsetN>* info)
 {
     int size = ec_relids.size();
@@ -105,8 +89,9 @@ estimate_ec_selectivity(BitmapsetN ec_relids, int off_sels, int off_fks,
 template<typename BitmapsetN>
 __host__ __device__
 static float 
-estimate_join_selectivity(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
-    GpuqoPlannerInfo<BitmapsetN>* info)
+estimate_join_selectivity(const BitmapsetN &left_rel_id, 
+                          const BitmapsetN &right_rel_id,
+                          GpuqoPlannerInfo<BitmapsetN>* info)
 {
     float sel = 1.0;
 
@@ -117,15 +102,14 @@ estimate_join_selectivity(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
     int off_sels = 0;
     int off_fks = 0;
     for (int i=0; i<info->eq_classes.n; i++){
-        BitmapsetN ec_relids = info->eq_classes.relids[i];
+        BitmapsetN &ec_relids = info->eq_classes.relids[i];
         
-        sel *= estimate_ec_selectivity(
-            info->eq_classes.relids[i], off_sels, off_fks,
-            left_rel_id, right_rel_id, info
-        );
+        sel *= estimate_ec_selectivity(ec_relids, off_sels, off_fks,
+                                        left_rel_id, right_rel_id, info);
            
-        off_sels += eqClassNSels(ec_relids.size());
-        off_fks += ec_relids.size();
+        int s = ec_relids.size();
+        off_sels += eqClassNSels(s);
+        off_fks += s;
     }
     
     return sel;
