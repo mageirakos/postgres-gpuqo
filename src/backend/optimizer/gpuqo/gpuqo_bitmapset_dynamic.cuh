@@ -73,7 +73,7 @@ public:
             }
         }
         i++;
-        for (; i < bms->nwords; i++){
+        for (; i < out->nwords; i++){
             out->words[i] = 0;
         }
         return BitmapsetDynamic(out);
