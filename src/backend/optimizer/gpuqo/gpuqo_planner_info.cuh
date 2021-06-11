@@ -136,6 +136,8 @@ struct CostExtra {
 	bool inner_unique;
 	bool indexed_join_quals;
 	float joinrows;
+	float outer_match_frac;
+	float match_count;
 };
 
 template<typename BitmapsetN>

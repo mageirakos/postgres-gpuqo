@@ -72,10 +72,11 @@ calc_join_cost(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
     PathCost min_cost, tmp_cost;
     CostExtra extra;
 
-    // extra.inner_unique = false;
     extra.inner_unique = is_inner_unique(outer_rel_id, inner_rel_id, info);
     extra.indexed_join_quals = false;
     extra.joinrows = join_rel_rows;
+    extra.outer_match_frac = join_rel_rows / (outer_rel.rows * inner_rel.rows);
+    extra.match_count = inner_rel.rows;
 
     min_cost.total = NANF;
 

@@ -36,11 +36,6 @@ struct HashSkewBucketSkeleton
 	void*           tuples;
 };
 
-#define LOG2(x)  (logf(x) / 0.693147180559945f)
-#define LOG6(x)  (logf(x) / 1.79175946922805f)
-
-#define COST_FUNCTION_OVERHEAD 3000L
-
 struct QualCost{
     int n_quals;
     float startup;
@@ -144,7 +139,7 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 	 */
 	startup_cost += inner_rel.cost.startup + outer_rel.cost.startup;
 	run_cost += outer_rel.cost.total - outer_rel.cost.startup;
-	if (outer_path_rows > 1)
+	if (outer_path_rows > 1.0f)
 		run_cost += (outer_path_rows - 1.0f) * inner_rel.cost.startup;
 
 	inner_run_cost = inner_rel.cost.total - inner_rel.cost.startup;
@@ -159,9 +154,6 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 		float		outer_unmatched_rows;
 		float		inner_scan_frac;
 
-		float outer_match_frac = extra.joinrows / (inner_path_rows * outer_path_rows);
-		float match_count = inner_path_rows;
-
 		/*
 		 * For an outer-rel row that has at least one match, we can expect the
 		 * inner scan to stop after a fraction 1/(match_count+1) of the inner
@@ -171,9 +163,9 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 		 * clamp inner_scan_frac to at most 1.0; but since match_count is at
 		 * least 1, no such clamp is needed now.)
 		 */
-		outer_matched_rows = rintf(outer_path_rows * outer_match_frac);
+		outer_matched_rows = rintf(outer_path_rows * extra.outer_match_frac);
 		outer_unmatched_rows = outer_path_rows - outer_matched_rows;
-		inner_scan_frac = 2.0f / (match_count + 1.0f);
+		inner_scan_frac = 2.0f / (extra.match_count + 1.0f);
 
 		/*
 		 * Compute number of tuples processed (not number emitted!).  First,
@@ -207,8 +199,8 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 			 * inner_rescan_run_cost for additional ones.
 			 */
 			run_cost += inner_run_cost * inner_scan_frac;
-			if (outer_matched_rows > 1)
-				run_cost += (outer_matched_rows - 1) * inner_rescan_run_cost * inner_scan_frac;
+			if (outer_matched_rows > 1.0f)
+				run_cost += (outer_matched_rows - 1.0f) * inner_rescan_run_cost * inner_scan_frac;
 
 			/*
 			 * Add the cost of inner-scan executions for unmatched outer rows.
@@ -244,23 +236,23 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 
 			/* Now add the forced full scan, and decrement appropriate count */
 			run_cost += inner_run_cost;
-			if (outer_unmatched_rows >= 1)
-				outer_unmatched_rows -= 1;
+			if (outer_unmatched_rows >= 1.0f)
+				outer_unmatched_rows -= 1.0f;
 			else
-				outer_matched_rows -= 1;
+				outer_matched_rows -= 1.0f;
 
 			/* Add inner run cost for additional outer tuples having matches */
-			if (outer_matched_rows > 0)
+			if (outer_matched_rows > 0.0f)
 				run_cost += outer_matched_rows * inner_rescan_run_cost * inner_scan_frac;
 
 			/* Add inner run cost for additional unmatched outer tuples */
-			if (outer_unmatched_rows > 0)
+			if (outer_unmatched_rows > 0.0f)
 				run_cost += outer_unmatched_rows * inner_rescan_run_cost;
 		}
 	} else {
 		/* Normal case; we'll scan whole input rel for each outer row */
 		run_cost += inner_run_cost;
-		if (outer_path_rows > 1)
+		if (outer_path_rows > 1.0f)
 			run_cost += (outer_path_rows - 1.0f) * inner_rescan_run_cost;
 
 		/* Normal-case source costs were included in preliminary estimate */
@@ -395,9 +387,6 @@ cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 		float		outer_matched_rows;
 		float 		inner_scan_frac;
 
-		float outer_match_frac = extra.joinrows / (inner_path_rows * outer_path_rows);
-		float match_count = inner_path_rows;
-
 		/*
 		 * With a SEMI or ANTI join, or if the innerrel is known unique, the
 		 * executor will stop after the first match.
@@ -410,8 +399,8 @@ cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 		 * to clamp inner_scan_frac to at most 1.0; but since match_count is
 		 * at least 1, no such clamp is needed now.)
 		 */
-		outer_matched_rows = rintf(outer_path_rows * outer_match_frac);
-		inner_scan_frac = 2.0f / (match_count + 1.0f);
+		outer_matched_rows = rintf(outer_path_rows * extra.outer_match_frac);
+		inner_scan_frac = 2.0f / (extra.match_count + 1.0f);
 
 		startup_cost += hash_qual_cost.startup;
 		run_cost += hash_qual_cost.per_tuple * outer_matched_rows *
@@ -502,8 +491,8 @@ ExecChooseHashTableSize(float ntuples, int tupwidth, int work_mem)
 	res.numbatches = 1;
 
 	/* Force a plausible relation size if no info */
-	if (ntuples <= 0.0)
-		ntuples = 1000.0;
+	if (ntuples <= 0.0f)
+		ntuples = 1000.0f;
 
 	/*
 	 * Estimate tupsize based on footprint of tuple in hashtable... note this
@@ -582,7 +571,7 @@ ExecChooseHashTableSize(float ntuples, int tupwidth, int work_mem)
 	 * the required bucket headers, we will need multiple batches.
 	 */
 	bucket_bytes = sizeof(void*) * res.numbuckets ;
-	if (inner_rel_bytes + bucket_bytes > hash_table_bytes)
+	if (inner_rel_bytes + (float) bucket_bytes > (float) hash_table_bytes)
 	{
 		/* We'll need multiple batches */
 		long		lbuckets;
@@ -740,7 +729,7 @@ __estimate_hash_bucketsize(VarInfo &vars, BaseRelation<BitmapsetN> &baserel,
 	 * XXX Possibly better way, but much more expensive: multiply by
 	 * selectivity of rel's restriction clauses that mention the target Var.
 	 */
-	if (baserel.tuples > 0)
+	if (baserel.tuples > 0.0f)
 	{
 		ndistinct *= baserel.rows / baserel.tuples;
 		ndistinct = clamp_row_est(ndistinct);
@@ -800,7 +789,7 @@ cost_qual_eval(BitmapsetN left_rel_id, BitmapsetN right_rel_id,
 
     cost.startup = 0.0f;
     cost.per_tuple = 0.0f;
-    cost.n_quals = 0.0f;
+    cost.n_quals = 0;
 
     // for each ec that involves any baserel on the left and on the right,
     // count 1 cpu operation (we are assuming 'equals' operators only)
@@ -829,7 +818,7 @@ __host__ __device__
 static float
 relation_byte_size(float tuples, int width)
 {
-	return tuples * (MAXALIGN(width) + RELATION_OVERHEAD);
+	return tuples * (float)(MAXALIGN(width) + RELATION_OVERHEAD);
 }
 
 /*
@@ -841,7 +830,7 @@ __host__ __device__
 static float
 page_size(float tuples, int width)
 {
-	return ceil(relation_byte_size(tuples, width) / BLCKSZ);
+	return ceil(relation_byte_size(tuples, width) / (float) BLCKSZ);
 }
 
 template<typename BitmapsetN>
@@ -859,8 +848,8 @@ clamp_row_est(float nrows)
 	 * better and to avoid possible divide-by-zero when interpolating costs.
 	 * Make it an integer, too.
 	 */
-	if (nrows <= 1.0)
-		nrows = 1.0;
+	if (nrows <= 1.0f)
+		nrows = 1.0f;
 	else
 		nrows = rintf(nrows);
 
