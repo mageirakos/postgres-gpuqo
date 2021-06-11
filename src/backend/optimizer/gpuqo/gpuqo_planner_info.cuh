@@ -132,6 +132,12 @@ struct GpuqoPlannerInfo<BitmapsetDynamic>{
 	EqClasses<BitmapsetDynamic> eq_classes;
 };
 
+struct CostExtra {
+	bool inner_unique;
+	bool indexed_join_quals;
+	float joinrows;
+};
+
 template<typename BitmapsetN>
 static
 void initGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN>* info) { }

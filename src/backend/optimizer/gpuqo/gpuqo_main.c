@@ -464,6 +464,7 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                     foreach(lc_inner_path, rel_inner->pathlist){
                         Path* path = (Path*) lfirst(lc_inner_path);
                         IndexPath* ipath;
+                        IndexOptInfo* iinfo;
                         
                         if (path->pathtype != T_IndexScan)
                             continue;
@@ -474,29 +475,33 @@ void fillSelectivityInformation(PlannerInfo *root, List *initial_rels, GpuqoPlan
                             continue;
 
                         ipath = (IndexPath*) path;
+                        iinfo = ipath->indexinfo;
+
                         foreach(lc_iclause, ipath->indexclauses){
                             IndexClause *iclause = (IndexClause*) lfirst(lc_iclause);
-
+                            GpuqoIndexInfo *gpuqo_iinfo;
+                            
                             if (iclause->rinfo->parent_ec != ec->eclass) 
                                 continue;
 
                             if (ipath->indexinfo->rel == rel_inner) {
-                                if (ec->vars[idx_r].index.available)
-                                    continue;
-                                ec->vars[idx_r].index.available = true;
-                                ec->vars[idx_r].index.cost.total = path->total_cost;
-                                ec->vars[idx_r].index.cost.startup = path->startup_cost;
-                                ec->vars[idx_r].index.rows = path->rows;
+                                gpuqo_iinfo = &ec->vars[idx_r].index;
                             } else if (ipath->indexinfo->rel == rel_outer) {
-                                if (ec->vars[idx_l].index.available)
-                                    continue;
-                                ec->vars[idx_l].index.available = true;
-                                ec->vars[idx_l].index.cost.total = path->total_cost;
-                                ec->vars[idx_l].index.cost.startup = path->startup_cost;
-                                ec->vars[idx_l].index.rows = path->rows;
+                                gpuqo_iinfo = &ec->vars[idx_l].index;
                             } else {
                                 printf("WTF: Index matches no relation!\n");
                             }
+
+                            if (gpuqo_iinfo->available)
+                                    continue;
+
+                            gpuqo_iinfo->available = true;
+                            gpuqo_iinfo->cost.total = path->total_cost;
+                            gpuqo_iinfo->cost.startup = path->startup_cost;
+                            gpuqo_iinfo->rows = path->rows;
+                            // support uniqueness check only for single column
+                            // indices
+                            gpuqo_iinfo->unique = iinfo->unique && iinfo->nkeycolumns == 1;
                         }
                     }
                 }

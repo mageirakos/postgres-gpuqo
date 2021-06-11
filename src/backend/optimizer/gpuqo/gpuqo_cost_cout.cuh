@@ -42,7 +42,7 @@ __host__ __device__
 static struct PathCost
 cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
                 BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
-                float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
+                CostExtra extra, GpuqoPlannerInfo<BitmapsetN>* info)
 {
     return (struct PathCost) {
         .startup = 0.0f,
@@ -55,11 +55,11 @@ __host__ __device__
 static struct PathCost
 cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
                 BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
-                float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
+                CostExtra extra, GpuqoPlannerInfo<BitmapsetN>* info)
 {
     return (struct PathCost) {
         .startup = 0.0f,
-        .total = HASHJOIN_COEFF * join_rel_rows + inner_rel.cost.total + outer_rel.cost.total
+        .total = HASHJOIN_COEFF * extra.joinrows + inner_rel.cost.total + outer_rel.cost.total
     };
 }
 

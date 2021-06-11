@@ -117,12 +117,13 @@ __host__ __device__
 static struct PathCost
 cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
                 BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
-                float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
+                CostExtra &extra, GpuqoPlannerInfo<BitmapsetN>* info)
 {
 	float		startup_cost = 0.0f;
 	float		run_cost = 0.0f;
 	float		cpu_per_tuple;
-	float		inner_run_cost; // equal to inner_rescan_run_cost
+	float		inner_run_cost; 
+	float		inner_rescan_run_cost;
 	QualCost	restrict_qual_cost;
 	float		outer_path_rows = outer_rel.rows;
 	float		inner_path_rows = inner_rel.rows;
@@ -147,18 +148,126 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 		run_cost += (outer_path_rows - 1.0f) * inner_rel.cost.startup;
 
 	inner_run_cost = inner_rel.cost.total - inner_rel.cost.startup;
+	inner_rescan_run_cost = inner_run_cost;
 
-	// TODO: inner_unique
-	/* Normal case; we'll scan whole input rel for each outer row */
-	run_cost += inner_run_cost;
-	if (outer_path_rows > 1)
-		run_cost += (outer_path_rows - 1.0f) * inner_run_cost;
+	if (extra.inner_unique) {
+		/*
+		 * With a SEMI or ANTI join, or if the innerrel is known unique, the
+		 * executor will stop after the first match.
+		 */
+		float		outer_matched_rows;
+		float		outer_unmatched_rows;
+		float		inner_scan_frac;
 
-	// TODO: inner_unique
-	/* Normal-case source costs were included in preliminary estimate */
+		float outer_match_frac = extra.joinrows / (inner_path_rows * outer_path_rows);
+		float match_count = inner_path_rows;
 
-	/* Compute number of tuples processed (not number emitted!) */
-	ntuples = outer_path_rows * inner_path_rows;
+		/*
+		 * For an outer-rel row that has at least one match, we can expect the
+		 * inner scan to stop after a fraction 1/(match_count+1) of the inner
+		 * rows, if the matches are evenly distributed.  Since they probably
+		 * aren't quite evenly distributed, we apply a fuzz factor of 2.0 to
+		 * that fraction.  (If we used a larger fuzz factor, we'd have to
+		 * clamp inner_scan_frac to at most 1.0; but since match_count is at
+		 * least 1, no such clamp is needed now.)
+		 */
+		outer_matched_rows = rintf(outer_path_rows * outer_match_frac);
+		outer_unmatched_rows = outer_path_rows - outer_matched_rows;
+		inner_scan_frac = 2.0f / (match_count + 1.0f);
+
+		/*
+		 * Compute number of tuples processed (not number emitted!).  First,
+		 * account for successfully-matched outer rows.
+		 */
+		ntuples = outer_matched_rows * inner_path_rows * inner_scan_frac;
+
+		/*
+		 * Now we need to estimate the actual costs of scanning the inner
+		 * relation, which may be quite a bit less than N times inner_run_cost
+		 * due to early scan stops.  We consider two cases.  If the inner path
+		 * is an indexscan using all the joinquals as indexquals, then an
+		 * unmatched outer row results in an indexscan returning no rows,
+		 * which is probably quite cheap.  Otherwise, the executor will have
+		 * to scan the whole inner rel for an unmatched row; not so cheap.
+		 */
+		if (extra.indexed_join_quals)
+		{
+			/*
+			 * Successfully-matched outer rows will only require scanning
+			 * inner_scan_frac of the inner relation.  In this case, we don't
+			 * need to charge the full inner_run_cost even when that's more
+			 * than inner_rescan_run_cost, because we can assume that none of
+			 * the inner scans ever scan the whole inner relation.  So it's
+			 * okay to assume that all the inner scan executions can be
+			 * fractions of the full cost, even if materialization is reducing
+			 * the rescan cost.  At this writing, it's impossible to get here
+			 * for a materialized inner scan, so inner_run_cost and
+			 * inner_rescan_run_cost will be the same anyway; but just in
+			 * case, use inner_run_cost for the first matched tuple and
+			 * inner_rescan_run_cost for additional ones.
+			 */
+			run_cost += inner_run_cost * inner_scan_frac;
+			if (outer_matched_rows > 1)
+				run_cost += (outer_matched_rows - 1) * inner_rescan_run_cost * inner_scan_frac;
+
+			/*
+			 * Add the cost of inner-scan executions for unmatched outer rows.
+			 * We estimate this as the same cost as returning the first tuple
+			 * of a nonempty scan.  We consider that these are all rescans,
+			 * since we used inner_run_cost once already.
+			 */
+			run_cost += outer_unmatched_rows *
+				inner_rescan_run_cost / inner_path_rows;
+
+			/*
+			 * We won't be evaluating any quals at all for unmatched rows, so
+			 * don't add them to ntuples.
+			 */
+		}
+		else
+		{
+			/*
+			 * Here, a complicating factor is that rescans may be cheaper than
+			 * first scans.  If we never scan all the way to the end of the
+			 * inner rel, it might be (depending on the plan type) that we'd
+			 * never pay the whole inner first-scan run cost.  However it is
+			 * difficult to estimate whether that will happen (and it could
+			 * not happen if there are any unmatched outer rows!), so be
+			 * conservative and always charge the whole first-scan cost once.
+			 * We consider this charge to correspond to the first unmatched
+			 * outer row, unless there isn't one in our estimate, in which
+			 * case blame it on the first matched row.
+			 */
+
+			/* First, count all unmatched join tuples as being processed */
+			ntuples += outer_unmatched_rows * inner_path_rows;
+
+			/* Now add the forced full scan, and decrement appropriate count */
+			run_cost += inner_run_cost;
+			if (outer_unmatched_rows >= 1)
+				outer_unmatched_rows -= 1;
+			else
+				outer_matched_rows -= 1;
+
+			/* Add inner run cost for additional outer tuples having matches */
+			if (outer_matched_rows > 0)
+				run_cost += outer_matched_rows * inner_rescan_run_cost * inner_scan_frac;
+
+			/* Add inner run cost for additional unmatched outer tuples */
+			if (outer_unmatched_rows > 0)
+				run_cost += outer_unmatched_rows * inner_rescan_run_cost;
+		}
+	} else {
+		/* Normal case; we'll scan whole input rel for each outer row */
+		run_cost += inner_run_cost;
+		if (outer_path_rows > 1)
+			run_cost += (outer_path_rows - 1.0f) * inner_rescan_run_cost;
+
+		/* Normal-case source costs were included in preliminary estimate */
+
+		/* Compute number of tuples processed (not number emitted!) */
+		ntuples = outer_path_rows * inner_path_rows;
+	}
 
 	/* CPU costs */
 	restrict_qual_cost = cost_qual_eval(inner_rel_id, outer_rel_id, info);
@@ -187,7 +296,7 @@ __host__ __device__
 static struct PathCost 
 cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
                 BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
-                float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)
+                CostExtra extra, GpuqoPlannerInfo<BitmapsetN>* info)
 {
 	float		startup_cost = 0.0f;
 	float		run_cost = 0.0f;
@@ -281,27 +390,76 @@ cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 
 	/* CPU costs */
 
-	// TODO inner_unique
-	/*
-	* The number of tuple comparisons needed is the number of outer
-	* tuples times the typical number of tuples in a hash bucket, which
-	* is the inner relation size times its bucketsize fraction.  At each
-	* one, we need to evaluate the hashjoin quals.  But actually,
-	* charging the full qual eval cost at each tuple is pessimistic,
-	* since we don't evaluate the quals unless the hash values match
-	* exactly.  For lack of a better idea, halve the cost estimate to
-	* allow for that.
-	*/
-	startup_cost += hash_qual_cost.startup;
-	run_cost += hash_qual_cost.per_tuple * outer_path_rows *
-		clamp_row_est(inner_path_rows * bucket_stats.bucketsize) * 0.5f;
+	if (extra.inner_unique)
+	{
+		float		outer_matched_rows;
+		float 		inner_scan_frac;
 
-	/*
-	* Get approx # tuples passing the hashquals.  We use
-	* approx_tuple_count here because we need an estimate done with
-	* JOIN_INNER semantics.
-	*/
-	hashjointuples = join_rel_rows;
+		float outer_match_frac = extra.joinrows / (inner_path_rows * outer_path_rows);
+		float match_count = inner_path_rows;
+
+		/*
+		 * With a SEMI or ANTI join, or if the innerrel is known unique, the
+		 * executor will stop after the first match.
+		 *
+		 * For an outer-rel row that has at least one match, we can expect the
+		 * bucket scan to stop after a fraction 1/(match_count+1) of the
+		 * bucket's rows, if the matches are evenly distributed.  Since they
+		 * probably aren't quite evenly distributed, we apply a fuzz factor of
+		 * 2.0 to that fraction.  (If we used a larger fuzz factor, we'd have
+		 * to clamp inner_scan_frac to at most 1.0; but since match_count is
+		 * at least 1, no such clamp is needed now.)
+		 */
+		outer_matched_rows = rintf(outer_path_rows * outer_match_frac);
+		inner_scan_frac = 2.0f / (match_count + 1.0f);
+
+		startup_cost += hash_qual_cost.startup;
+		run_cost += hash_qual_cost.per_tuple * outer_matched_rows *
+			clamp_row_est(inner_path_rows * bucket_stats.bucketsize * inner_scan_frac) * 0.5f;
+
+		/*
+		 * For unmatched outer-rel rows, the picture is quite a lot different.
+		 * In the first place, there is no reason to assume that these rows
+		 * preferentially hit heavily-populated buckets; instead assume they
+		 * are uncorrelated with the inner distribution and so they see an
+		 * average bucket size of inner_path_rows / virtualbuckets.  In the
+		 * second place, it seems likely that they will have few if any exact
+		 * hash-code matches and so very few of the tuples in the bucket will
+		 * actually require eval of the hash quals.  We don't have any good
+		 * way to estimate how many will, but for the moment assume that the
+		 * effective cost per bucket entry is one-tenth what it is for
+		 * matchable tuples.
+		 */
+		run_cost += hash_qual_cost.per_tuple *
+			(outer_path_rows - outer_matched_rows) *
+			clamp_row_est(inner_path_rows / virtualbuckets) * 0.05f;
+
+		/* Get # of tuples that will pass the basic join */
+		hashjointuples = outer_matched_rows;
+	}
+	else
+	{
+		/*
+		* The number of tuple comparisons needed is the number of outer
+		* tuples times the typical number of tuples in a hash bucket, which
+		* is the inner relation size times its bucketsize fraction.  At each
+		* one, we need to evaluate the hashjoin quals.  But actually,
+		* charging the full qual eval cost at each tuple is pessimistic,
+		* since we don't evaluate the quals unless the hash values match
+		* exactly.  For lack of a better idea, halve the cost estimate to
+		* allow for that.
+		*/
+		startup_cost += hash_qual_cost.startup;
+		run_cost += hash_qual_cost.per_tuple * outer_path_rows *
+			clamp_row_est(inner_path_rows * bucket_stats.bucketsize) * 0.5f;
+
+		/*
+		* Get approx # tuples passing the hashquals.  We use
+		* approx_tuple_count here because we need an estimate done with
+		* JOIN_INNER semantics.
+		*/
+		hashjointuples = extra.joinrows;
+	}
 
 	/*
 	 * For each tuple that gets through the hashjoin proper, we charge

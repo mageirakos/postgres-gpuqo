@@ -87,6 +87,7 @@ typedef struct PathCost {
 
 typedef struct GpuqoIndexInfo {
 	bool available;
+	bool unique;
 	float rows;
 	PathCost cost;
 } GpuqoIndexInfo;
