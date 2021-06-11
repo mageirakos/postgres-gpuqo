@@ -45,11 +45,13 @@ calc_join_cost(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
     if (isnan(min_cost.total) || tmp_cost.total < min_cost.total)
         min_cost = tmp_cost;
 
-    tmp_cost = cost_hashjoin(outer_rel_id, outer_rel, inner_rel_id, inner_rel, join_rel_rows, info);
+    if (info->params.enable_hashjoin) {
+        tmp_cost = cost_hashjoin(outer_rel_id, outer_rel, inner_rel_id, inner_rel, join_rel_rows, info);
 
-    if (tmp_cost.total < min_cost.total)
+        if (tmp_cost.total < min_cost.total)
         min_cost = tmp_cost;
-
+    }
+    
     // if it is a base relation, check if I can use an index
     if (inner_rel_id.size() == 1) {
         BaseRelation<BitmapsetN>& baserel = info->base_rels[inner_rel_id.lowestPos()-1];
