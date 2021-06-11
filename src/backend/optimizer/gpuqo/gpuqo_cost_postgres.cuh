@@ -122,29 +122,14 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 	float		startup_cost = 0.0f;
 	float		run_cost = 0.0f;
 	float		cpu_per_tuple;
+	float		inner_run_cost; // equal to inner_rescan_run_cost
 	QualCost	restrict_qual_cost;
 	float		outer_path_rows = outer_rel.rows;
 	float		inner_path_rows = inner_rel.rows;
 	float		ntuples;
-	float       joininfactor;
 
 	if (!info->params.enable_nestloop)
 		startup_cost += info->params.disable_cost;
-
-	/*
-	 * If we're doing JOIN_IN then we will stop scanning inner tuples for
-	 * an outer tuple as soon as we have one match.  Account for the
-	 * effects of this by scaling down the cost estimates in proportion to
-	 * the expected output size.  (This assumes that all the quals
-	 * attached to the join are IN quals, which should be true.)
-	 *
-	 * Note: it's probably bogus to use the normal selectivity calculation
-	 * here when either the outer or inner path is a UniquePath.
-	 */
-    // TODO check if this is right
-    // in our case, all quals are in the join so the selectivity should be the 
-    // same    
-    joininfactor = 1.0f;
 
 	/* cost of source data */
 
@@ -158,17 +143,22 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 	 */
 	startup_cost += inner_rel.cost.startup + outer_rel.cost.startup;
 	run_cost += outer_rel.cost.total - outer_rel.cost.startup;
+	if (outer_path_rows > 1)
+		run_cost += (outer_path_rows - 1.0f) * inner_rel.cost.startup;
 
-    /*
-        * charge startup cost for each iteration of inner path, except we
-        * already charged the first startup_cost in our own startup
-    */
-    run_cost += (outer_path_rows - 1.0f) * inner_rel.cost.startup;
+	inner_run_cost = inner_rel.cost.total - inner_rel.cost.startup;
 
-	run_cost += outer_path_rows *
-		(inner_rel.cost.total - inner_rel.cost.startup) * joininfactor;
+	// TODO: inner_unique
+	/* Normal case; we'll scan whole input rel for each outer row */
+	run_cost += inner_run_cost;
+	if (outer_path_rows > 1)
+		run_cost += (outer_path_rows - 1.0f) * inner_run_cost;
 
-	ntuples = inner_path_rows * outer_path_rows;
+	// TODO: inner_unique
+	/* Normal-case source costs were included in preliminary estimate */
+
+	/* Compute number of tuples processed (not number emitted!) */
+	ntuples = outer_path_rows * inner_path_rows;
 
 	/* CPU costs */
 	restrict_qual_cost = cost_qual_eval(inner_rel_id, outer_rel_id, info);
