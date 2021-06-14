@@ -10,6 +10,7 @@
 #include <iostream>
 #include <cmath>
 #include <cstdint>
+#include <type_traits>
 
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
@@ -214,6 +215,76 @@ public:
     }
 };
 
+template<typename InputT, 
+         typename OutputT, 
+         typename UnaryFunction>
+__global__ void transform_shmem_kernel(InputT* first, InputT* last, 
+                                       OutputT* result, UnaryFunction op)
+{
+    extern __shared__ uint64_t dynshmem[];
+    OutputT* shmem_ptr = (OutputT*)dynshmem;
+
+    for (InputT* it = first + (blockIdx.x*blockDim.x + WARP_ID); 
+        &it[LANE_ID] < last; 
+        it += blockDim.x*gridDim.x) 
+    {
+        shmem_ptr[threadIdx.x] = op(it[LANE_ID]);
+        __syncwarp();
+
+        OutputT* warp_out = result + (it-first);
+        int n_active = __popc(__activemask());
+
+        for (int i = LANE_ID; 
+            i < sizeof(OutputT) * n_active / sizeof(uint64_t);
+            i += n_active)
+        {
+            ((uint64_t*)warp_out)[i] = ((uint64_t*)&shmem_ptr[WARP_ID])[i];
+        }
+        __syncwarp();
+    }
+}
+
+template<typename InputIterator, 
+         typename OutputIterator, 
+         typename UnaryFunction>
+void transform_shmem(InputIterator first, InputIterator last, 
+                     OutputIterator result, UnaryFunction op) 
+{
+    typedef typename UnaryFunction::argument_type InputT;
+    typedef typename UnaryFunction::result_type OutputT;
+
+    int blocksize = BLOCK_DIM;
+    int shmem_size = sizeof(OutputT) * blocksize;
+    int n = thrust::distance(first, last);
+    
+    int mingridsize;
+    int threadblocksize;
+    cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, 
+        transform_shmem_kernel<InputT, OutputT, UnaryFunction>, shmem_size, blocksize);
+
+    int gridsize = min(mingridsize, ceil_div(n, blocksize));
+        
+    transform_shmem_kernel<InputT, OutputT, UnaryFunction><<<gridsize, blocksize, shmem_size>>>(
+        first.base().get(), 
+        last.base().get(), 
+        result.base().get(),
+        op
+    );
+
+    cudaDeviceSynchronize();
+
+    cudaError_t err = cudaGetLastError();
+    if (err){
+        printf("CUDA ERROR! %s: %s\n", 
+            cudaGetErrorName(err),
+            cudaGetErrorString(err)
+        );
+        throw "CUDA ERROR";
+    }
+                
+
+}
+
 /* gpuqo_dpsize
  *
  *	 GPU query optimization using the DP size variant.
@@ -274,6 +345,7 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
     // scratchpad size is increased on demand, starting from a minimum capacity
     uninit_device_vector<BitmapsetN> gpu_scratchpad_keys(scratchpad_size);
     uninit_device_vector<uint2_t<BitmapsetN> > gpu_scratchpad_vals(scratchpad_size);
+    uninit_device_vector<JoinRelationDpsize<BitmapsetN>> gpu_scratchpad_joinrels(scratchpad_size);
 
     GpuqoPlannerInfo<BitmapsetN>* gpu_info = copyToDeviceGpuqoPlannerInfo<BitmapsetN>(info);
 
@@ -294,7 +366,8 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
         DECLARE_NV_TIMING(unrank);
         DECLARE_NV_TIMING(filter);
         DECLARE_NV_TIMING(sort);
-        DECLARE_NV_TIMING(compute_prune);
+        DECLARE_NV_TIMING(compute);
+        DECLARE_NV_TIMING(prune);
         DECLARE_NV_TIMING(update_offsets);
         DECLARE_NV_TIMING(iteration);
         DECLARE_NV_TIMING(build_qt);
@@ -480,27 +553,34 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
                 // give possibility to user to interrupt
                 CHECK_FOR_INTERRUPTS();
     
-                START_TIMING(compute_prune);
+                START_TIMING(compute);
     
+                transform_shmem(
+                    gpu_scratchpad_vals.begin(),
+                    gpu_scratchpad_vals.begin() + temp_size,
+                    gpu_scratchpad_joinrels.begin(),
+                    joinCost<BitmapsetN>(
+                        gpu_memo_keys.data(), 
+                        gpu_memo_vals.data(),
+                        gpu_info
+                    )
+                );
+
+                STOP_TIMING(compute);
+                START_TIMING(prune);
+
                 // calculate cost, prune and copy to table
                 auto out_iters = thrust::reduce_by_key(
                     gpu_scratchpad_keys.begin(),
                     gpu_scratchpad_keys.begin() + temp_size,
-                    thrust::make_transform_iterator(
-                        gpu_scratchpad_vals.begin(),
-                        joinCost<BitmapsetN>(
-                            gpu_memo_keys.data(), 
-                            gpu_memo_vals.data(),
-                            gpu_info
-                        )
-                    ),
+                    gpu_scratchpad_joinrels.begin(),
                     gpu_memo_keys.begin()+partition_offsets[i-1],
                     gpu_memo_vals.begin()+partition_offsets[i-1],
                     thrust::equal_to<BitmapsetN>(),
                     thrust::minimum<JoinRelationDpsize<BitmapsetN> >()
                 );
     
-                STOP_TIMING(compute_prune);
+                STOP_TIMING(prune);
     
                 LOG_DEBUG("After reduce_by_key\n");
                 DUMP_VECTOR(gpu_memo_keys.begin(), out_iters.first);
@@ -537,7 +617,8 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
             PRINT_CHECKPOINT_TIMING(unrank);
             PRINT_CHECKPOINT_TIMING(filter);
             PRINT_CHECKPOINT_TIMING(sort);
-            PRINT_CHECKPOINT_TIMING(compute_prune);
+            PRINT_CHECKPOINT_TIMING(compute);
+            PRINT_CHECKPOINT_TIMING(prune);
             PRINT_CHECKPOINT_TIMING(update_offsets);
             PRINT_TIMING(iteration);
         } // dpsize loop: for i = 2..n_rels
@@ -564,7 +645,8 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
         PRINT_TOTAL_TIMING(unrank);
         PRINT_TOTAL_TIMING(filter);
         PRINT_TOTAL_TIMING(sort);
-        PRINT_TOTAL_TIMING(compute_prune);
+        PRINT_TOTAL_TIMING(compute);
+        PRINT_TOTAL_TIMING(prune);
         PRINT_TOTAL_TIMING(update_offsets);
         PRINT_TOTAL_TIMING(build_qt);
 

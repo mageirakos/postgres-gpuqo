@@ -24,14 +24,6 @@
 
 #define PENDING_KEYS_SIZE(params) ((params).scratchpad_size*gpuqo_dpsub_filter_keys_overprovisioning)
 
-#define BLOCK_DIM 256
-#define WARP_SIZE 32
-#define WARP_MASK 0xFFFFFFFF
-#define LANE_ID (threadIdx.x & (WARP_SIZE-1))
-#define WARP_ID (threadIdx.x & (~(WARP_SIZE-1)))
-#define W_OFFSET WARP_ID
-#define LANE_MASK_LE (WARP_MASK >> (WARP_SIZE-1-LANE_ID))
-
 template <typename stack_elem_t>
 struct ccc_stack_t{
     volatile stack_elem_t* ctxStack;
@@ -177,6 +169,10 @@ void do_join(JoinRelation<BitmapsetN> &jr_out,
 
     Assert(!left_rel_id.empty());
     Assert(!right_rel_id.empty());
+
+#ifdef GPUQO_PRINT_N_JOINS
+    atomicAdd(&join_counter, 1ULL);
+#endif
 
     float jr_rows = estimate_join_rows(left_rel_id, left_rel, right_rel_id, right_rel, info);
     struct PathCost jr_cost = calc_join_cost(left_rel_id, left_rel, right_rel_id, right_rel, jr_rows, info);

@@ -45,6 +45,14 @@ do { \
 extern __device__ unsigned long long join_counter; 
 #endif
 
+#define BLOCK_DIM 256
+#define WARP_SIZE 32
+#define WARP_MASK 0xFFFFFFFF
+#define LANE_ID (threadIdx.x & (WARP_SIZE-1))
+#define WARP_ID (threadIdx.x & (~(WARP_SIZE-1)))
+#define W_OFFSET WARP_ID
+#define LANE_MASK_LE (WARP_MASK >> (WARP_SIZE-1-LANE_ID))
+
 template<typename T>
 using uninit_device_vector = thrust::device_vector<T, uninitialized_allocator<T> >;
 
