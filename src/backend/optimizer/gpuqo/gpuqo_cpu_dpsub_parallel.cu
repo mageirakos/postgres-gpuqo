@@ -252,7 +252,9 @@ QueryTree<BitmapsetN>* gpuqo_cpu_dpsub_generic_parallel(GpuqoPlannerInfo<Bitmaps
     
     parallel_enumerate(info, &memo, algorithm);
 
-    LOG_DEBUG("The algorithm did %d joins\n", algorithm->get_n_joins());
+#ifdef GPUQO_PRINT_N_JOINS
+    printf("The algorithm did %d joins\n", algorithm->get_n_joins());
+#endif 
 
     BitmapsetN final_joinrel_id = BitmapsetN(0);
     

@@ -52,6 +52,10 @@
 #define LOG_PROFILE(fmt, ...)
 #endif
 
+#ifdef USE_ASSERT_CHECKING
+#define GPUQO_PRINT_N_JOINS
+#endif
+
 __host__
 std::ostream & operator<<(std::ostream &os, const uint2& idxs);
 

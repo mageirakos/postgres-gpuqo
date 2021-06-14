@@ -41,6 +41,10 @@ do { \
 #define NANF std::numeric_limits<float>::quiet_NaN()
 #endif
 
+#ifdef GPUQO_PRINT_N_JOINS
+extern __device__ unsigned long long join_counter; 
+#endif
+
 template<typename T>
 using uninit_device_vector = thrust::device_vector<T, uninitialized_allocator<T> >;
 

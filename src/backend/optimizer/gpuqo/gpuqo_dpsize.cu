@@ -191,6 +191,9 @@ public:
         jr.cost = calc_join_cost(left_rel.id, left_rel, right_rel.id, right_rel, jr.rows, info);
         jr.width = get_join_width(left_rel.id, left_rel, right_rel.id, right_rel, info);
 
+#ifdef GPUQO_PRINT_N_JOINS
+        atomicAdd(&join_counter, 1ULL);
+#endif
         return jr;
     }
 };
@@ -273,6 +276,11 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
     uninit_device_vector<uint2_t<BitmapsetN> > gpu_scratchpad_vals(scratchpad_size);
 
     GpuqoPlannerInfo<BitmapsetN>* gpu_info = copyToDeviceGpuqoPlannerInfo<BitmapsetN>(info);
+
+#ifdef GPUQO_PRINT_N_JOINS
+    unsigned long long join_counter_h = 0;
+    cudaMemcpyToSymbol(join_counter, &join_counter_h, sizeof(join_counter_h));
+#endif
 
     STOP_TIMING(init);
 
@@ -559,6 +567,11 @@ QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info)
         PRINT_TOTAL_TIMING(compute_prune);
         PRINT_TOTAL_TIMING(update_offsets);
         PRINT_TOTAL_TIMING(build_qt);
+
+#ifdef GPUQO_PRINT_N_JOINS
+    cudaMemcpyFromSymbol(&join_counter_h, join_counter, sizeof(join_counter_h));
+    printf("The algorithm did %llu joins\n", join_counter_h);
+#endif
     } catch(thrust::system_error err){
         printf("Thrust %d: %s", err.code().value(), err.what());
     }

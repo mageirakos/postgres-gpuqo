@@ -263,6 +263,11 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
     params.gpu_reduced_keys = uninit_device_vector<BitmapsetN>(params.scratchpad_size);
     params.gpu_reduced_vals = uninit_device_vector<JoinRelation<BitmapsetN>>(params.scratchpad_size);
 
+#ifdef GPUQO_PRINT_N_JOINS
+    unsigned long long join_counter_h = 0;
+    cudaMemcpyToSymbol(join_counter, &join_counter_h, sizeof(join_counter_h));
+#endif
+
     STOP_TIMING(init);
 
     DUMP_VECTOR(params.gpu_binoms.begin(), params.gpu_binoms.end());    
@@ -349,6 +354,11 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
     PRINT_TIMING(gpuqo_dpsub);
     PRINT_TIMING(init);
     PRINT_TIMING(execute);
+
+#ifdef GPUQO_PRINT_N_JOINS
+    cudaMemcpyFromSymbol(&join_counter_h, join_counter, sizeof(join_counter_h));
+    printf("The algorithm did %llu joins\n", join_counter_h);
+#endif
 
     params.memo->free();
     delete params.memo;

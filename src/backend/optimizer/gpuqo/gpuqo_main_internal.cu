@@ -11,6 +11,10 @@
 #include "gpuqo.cuh"
 #include "gpuqo_query_tree.cuh"
 
+#ifdef GPUQO_PRINT_N_JOINS
+__device__ unsigned long long join_counter;
+#endif
+
 template<typename BitmapsetN>
 QueryTree<BitmapsetN> *gpuqo_run_switch(int gpuqo_algorithm, 
 										GpuqoPlannerInfo<BitmapsetN>* info)

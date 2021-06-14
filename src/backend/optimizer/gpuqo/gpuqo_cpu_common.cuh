@@ -86,7 +86,7 @@ public:
 		   JoinRelationCPU<BitmapsetN> &left_rel, 
 		   JoinRelationCPU<BitmapsetN> &right_rel) 
 	{
-#ifdef GPUQO_DEBUG
+#ifdef GPUQO_PRINT_N_JOINS
 		n_joins++;
 #endif
 	}
