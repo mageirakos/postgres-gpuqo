@@ -250,7 +250,7 @@ struct dpsubEnumerateBiCC {
             n_possible_joins += (((uint_t<BitmapsetN>)1) << blocks[i].size()) - 2;
         }
 
-        LOG_DEBUG("relid=%u: n_possible_joins=%u\n", relid.toUint(), n_possible_joins);
+        LOG_DEBUG("relid=%u: n_possible_joins=%lu\n", relid.toUint(), (uint64_t)n_possible_joins);
 
         uint_t<BitmapsetN> n_joins = ceil_div(n_possible_joins, n_splits);
         uint_t<BitmapsetN> from_i = cid*n_joins;
@@ -273,8 +273,8 @@ struct dpsubEnumerateBiCC {
                 BitmapsetN block_left_id = expandToMask(id, blocks[i_block]);
                 BitmapsetN block_right_id = blocks[i_block] - block_left_id;
 
-                LOG_DEBUG("relid=%u, i=%u: id=%u, block[%d]=%u, bl=%u, br=%u\n",
-                            relid.toUint(), i, id.toUint(), i_block, blocks[i_block].toUint(), 
+                LOG_DEBUG("relid=%u, i=%lu: id=%u, block[%d]=%u, bl=%u, br=%u\n",
+                            relid.toUint(), (uint64_t)i, id.toUint(), i_block, blocks[i_block].toUint(), 
                             block_left_id.toUint(), block_right_id.toUint());
 
                 l = grow(block_left_id.lowest(), 

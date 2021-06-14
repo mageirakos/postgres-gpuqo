@@ -66,9 +66,9 @@ void unrankFilteredDPSubKernel(int sq, int qss,
             if (!is_connected(relid, edge_table))
                 relid = BitmapsetN(0);
             
-            LOG_DEBUG("[%u,%u] tid=%u idx=%u s=%u relid=%u\n", 
+            LOG_DEBUG("[%u,%u] tid=%u idx=%lu s=%u relid=%u\n", 
                         blockIdx.x, threadIdx.x, 
-                        tid, idx++, s.toUint(), relid.toUint());
+                        tid, (uint64_t)idx++, s.toUint(), relid.toUint());
             out_relids[tid] = relid;
 
             s = dpsub_unrank_next(s);
@@ -237,7 +237,7 @@ void evaluateFilteredDPSubKernel(BitmapsetN* pending_keys, BitmapsetN* scratchpa
         if (threadIdx.x == shared_idxs[leader]){
             LOG_DEBUG("[%3d] write scratch[%d] = %u (l=%u, r=%u, cost=%.2f)\n",
                 threadIdx.x, tid/n_splits, relid.toUint(), 
-                jr_out.left_rel_id.toUint(), jr_out.right_rel_id.toUint(), jr_out.cost);
+                jr_out.left_rel_id.toUint(), jr_out.right_rel_id.toUint(), jr_out.cost.total);
             scratchpad_keys[tid/n_splits] = relid;
             scratchpad_vals[tid/n_splits] = jr_out;
         }

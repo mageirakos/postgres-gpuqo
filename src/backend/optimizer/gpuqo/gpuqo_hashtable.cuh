@@ -150,12 +150,12 @@ void HashTable<K,V>::insert(K key, V value){
     do {
         K prev = atomicCAS(&keys[slot], K(0), key);
         if (prev.empty() || prev == key){
-            LOG_DEBUG("%u: found %u (%u)\n", key.toUint(), slot, hash(key));
+            LOG_DEBUG("%u: found %lu (%lu)\n", key.toUint(), slot, hash(key));
             values[slot] = value;
             return;
         }
 
-        LOG_DEBUG("%u: inc %u (%u)\n", key.toUint(), slot, hash(key));
+        LOG_DEBUG("%u: inc %lu (%lu)\n", key.toUint(), slot, hash(key));
 
         slot = (slot + 1) & (capacity-1);
     } while (slot != first_slot);

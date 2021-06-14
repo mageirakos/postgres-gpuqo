@@ -90,8 +90,8 @@ public:
         uint_t<BitmapsetN> sid = real_id / n_splits;
         uint_t<BitmapsetN> cid = real_id % n_splits;
 
-        LOG_DEBUG("[%u] n_splits=%d, sid=%lu, cid=[%lu,%lu)\n", 
-                tid, n_splits, (uint64_t)sid, 
+        LOG_DEBUG("[%lu] n_splits=%d, sid=%lu, cid=[%lu,%lu)\n", 
+                (uint64_t)tid, n_splits, (uint64_t)sid, 
                 (uint64_t)cid, 
                 (uint64_t)(cid+ceil_div(((uint_t<BitmapsetN>)1)<<qss, 
                 n_splits))
@@ -100,7 +100,7 @@ public:
         BitmapsetN s = dpsub_unrank_sid<BitmapsetN>(sid, qss, sq, binoms.get());
         BitmapsetN relid = s<<1;
 
-        LOG_DEBUG("[%u] s=%u\n", tid, s.toUint());
+        LOG_DEBUG("[%lu] s=%u\n", (uint64_t)tid, s.toUint());
 
         JoinRelation<BitmapsetN> jr_out = enum_functor(relid, cid);
         return thrust::tuple<BitmapsetN, JoinRelation<BitmapsetN> >(relid, jr_out);
