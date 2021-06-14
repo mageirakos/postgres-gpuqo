@@ -195,6 +195,7 @@ public:
                 LOG_DEBUG("Grown: %u and %u\n", 
                             left_id.toUint(), right_id.toUint());
 
+                CPUAlgorithm<BitmapsetN, memo_t>::n_checks++;
                 if ((left_id|right_id) == set){
                     auto &memo = *CPUAlgorithm<BitmapsetN, memo_t>::memo;
                     auto left = memo.find(left_id);

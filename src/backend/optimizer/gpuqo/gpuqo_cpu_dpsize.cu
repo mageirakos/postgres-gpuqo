@@ -59,6 +59,7 @@ public:
                 int right_s = join_s-left_s;
                 for (auto &left_i : rels_per_level[left_s]){
                     for (auto &right_i : rels_per_level[right_s]){
+                        CPUAlgorithm<BitmapsetN, memo_t>::n_checks++;
                         (*CPUAlgorithm<BitmapsetN, memo_t>::join)(join_s, false, *left_i, *right_i);
                     }
                 } 

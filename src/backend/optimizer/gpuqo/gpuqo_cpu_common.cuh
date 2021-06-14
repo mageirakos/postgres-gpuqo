@@ -66,7 +66,10 @@ protected:
 	GpuqoPlannerInfo<BitmapsetN>* info;
 	memo_t* memo;
 	CPUJoinFunction<BitmapsetN, memo_t> *join;
+#ifdef GPUQO_PRINT_N_JOINS
 	std::atomic<uint_t<BitmapsetN> > n_joins;
+	std::atomic<uint_t<BitmapsetN> > n_checks;
+#endif
 public:
 	virtual void init(GpuqoPlannerInfo<BitmapsetN>* _info, 
 					memo_t* _memo,
@@ -75,7 +78,11 @@ public:
 		info = _info;
 		memo = _memo;
 		join = _join;
+
+#ifdef GPUQO_PRINT_N_JOINS
 		n_joins = 0;
+		n_checks = 0;
+#endif
 	}
 
 	virtual bool check_join(int level, JoinRelationCPU<BitmapsetN> &left_rel,
@@ -95,6 +102,10 @@ public:
 
 	uint_t<BitmapsetN> get_n_joins(){
 		return n_joins.load();
+	}
+
+	uint_t<BitmapsetN> get_n_checks(){
+		return n_checks.load();
 	}
 };
 

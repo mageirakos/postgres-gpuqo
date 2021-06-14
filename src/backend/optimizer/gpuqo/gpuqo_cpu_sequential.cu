@@ -91,8 +91,10 @@ QueryTree<BitmapsetN>* gpuqo_cpu_sequential(GpuqoPlannerInfo<BitmapsetN>* info,
     algorithm->enumerate();
 
 #ifdef GPUQO_PRINT_N_JOINS
-    printf("The algorithm did %d joins\n", algorithm->get_n_joins());
-#endif
+    printf("The algorithm did %u joins over %u checks (1:%.2f)\n", 
+            algorithm->get_n_joins(), algorithm->get_n_checks(),
+           (double) algorithm->get_n_checks() / algorithm->get_n_joins());
+#endif 
 
     BitmapsetN final_joinrel_id = BitmapsetN(0);
 

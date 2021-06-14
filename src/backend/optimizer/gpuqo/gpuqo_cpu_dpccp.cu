@@ -93,6 +93,7 @@ private:
             BitmapsetN joinset = left_id | right_id;
             int level = joinset.size();
 
+            CPUAlgorithm<BitmapsetN, memo_t>::n_checks++;
             (*CPUAlgorithm<BitmapsetN, memo_t>::join)(level, true, *right_rel, *left_rel);
 
         } else if (!left_id.empty()) {
