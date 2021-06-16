@@ -275,7 +275,7 @@ QueryTree<BitmapsetN>* gpuqo_cpu_dpsub_generic_parallel(GpuqoPlannerInfo<Bitmaps
     
     auto final_joinrel_pair = memo.find(final_joinrel_id);
     if (final_joinrel_pair != memo.end())
-        build_query_tree(final_joinrel_pair->second, memo, &out);
+        build_query_tree(final_joinrel_pair->second, &out);
 
     // delete all dynamically allocated memory
     for (int i = 1; i <= info->n_rels; i++){

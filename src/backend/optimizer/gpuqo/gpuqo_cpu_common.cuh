@@ -111,9 +111,8 @@ public:
 #endif
 };
 
-template<typename BitmapsetN, typename memo_t> 
-void build_query_tree(JoinRelationCPU<BitmapsetN> *jr, 
-                        memo_t &memo, QueryTree<BitmapsetN> **qt)
+template<typename BitmapsetN> 
+void build_query_tree(JoinRelationCPU<BitmapsetN> *jr, QueryTree<BitmapsetN> **qt)
 {
     if (jr == NULL){
         (*qt) = NULL;
@@ -128,8 +127,8 @@ void build_query_tree(JoinRelationCPU<BitmapsetN> *jr,
     (*qt)->cost = jr->cost;
     (*qt)->width = jr->width;
 
-    build_query_tree<BitmapsetN>(jr->left_rel_ptr, memo, &((*qt)->left));
-    build_query_tree<BitmapsetN>(jr->right_rel_ptr, memo, &((*qt)->right));
+    build_query_tree<BitmapsetN>(jr->left_rel_ptr, &((*qt)->left));
+    build_query_tree<BitmapsetN>(jr->right_rel_ptr, &((*qt)->right));
 }
 
 /* build_join_relation
@@ -208,6 +207,16 @@ bool do_join(int level, JR* &join_rel, JR &left_rel,
         memo.insert(std::make_pair(join_rel->id, join_rel));
         return true;
     }
+}
+
+template<typename BitmapsetN>
+void JoinRelationCPU__free(JoinRelationCPU<BitmapsetN> *jr) {
+	if (jr == NULL)
+		return;
+
+	JoinRelationCPU__free(jr->left_rel_ptr);
+	JoinRelationCPU__free(jr->right_rel_ptr);
+	delete jr;
 }
 
 #endif							/* GPUQO_CPU_COMMON_CUH */
