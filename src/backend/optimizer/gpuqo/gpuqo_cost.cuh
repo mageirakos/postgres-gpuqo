@@ -29,6 +29,7 @@
 
 #define COST_FUNCTION_OVERHEAD 3000L
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 static bool 
@@ -62,6 +63,7 @@ is_inner_unique(BitmapsetN outer_rel_id,
     return false;
 }
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 static struct PathCost 

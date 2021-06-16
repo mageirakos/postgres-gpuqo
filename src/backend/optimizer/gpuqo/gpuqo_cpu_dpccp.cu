@@ -74,7 +74,7 @@ private:
             BitmapsetN newX = X | (v.allLowerInc() & N);
             enumerate_csg_rec(v, newX, S);
             
-            temp ^= v;
+            temp -= v;
         }
     }
 

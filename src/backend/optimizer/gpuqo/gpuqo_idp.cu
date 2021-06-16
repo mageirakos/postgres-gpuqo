@@ -77,8 +77,17 @@ QueryTree<BitmapsetN> *gpuqo_run_idp1(int gpuqo_algorithm,
 	}
 }
 
+template<>
+QueryTree<BitmapsetDynamic> *gpuqo_run_idp1(int gpuqo_algorithm, 
+									GpuqoPlannerInfo<BitmapsetDynamic>* info)
+{
+	printf("CANNOT RUN IDP1 with Dynamic Bitmapset!\n");
+	return NULL;
+}
+
 template QueryTree<Bitmapset32> *gpuqo_run_idp1<Bitmapset32>(int,  GpuqoPlannerInfo<Bitmapset32>*);
 template QueryTree<Bitmapset64> *gpuqo_run_idp1<Bitmapset64>(int,  GpuqoPlannerInfo<Bitmapset64>*);
+template QueryTree<BitmapsetDynamic> *gpuqo_run_idp1<BitmapsetDynamic>(int,  GpuqoPlannerInfo<BitmapsetDynamic>*);
 
 template<typename BitmapsetOuter, typename BitmapsetInner>
 QueryTree<BitmapsetOuter> *gpuqo_run_idp2_next(int gpuqo_algorithm, 

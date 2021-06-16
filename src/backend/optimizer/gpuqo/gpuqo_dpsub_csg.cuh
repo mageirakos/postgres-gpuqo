@@ -191,7 +191,7 @@ static void enumerate_sub_csg(BitmapsetN T, BitmapsetN I, BitmapsetN E,
 
         Assert(loop_stack_size < STACK_SIZE);
 
-        temp ^= v;
+        temp -= v;
     }
 
     bool all_empty = false;

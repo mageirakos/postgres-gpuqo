@@ -107,6 +107,7 @@ inline int ceil_log2(long num) {
  *
  * 'path' is already filled in except for the cost fields
  */
+#pragma hd_warning_disable
 template <typename BitmapsetN>
 __host__ __device__
 static struct PathCost
@@ -283,6 +284,7 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
  *  - not parallel
  * 
  */
+#pragma hd_warning_disable
 template <typename BitmapsetN>
 __host__ __device__
 static struct PathCost 
@@ -615,6 +617,7 @@ ExecChooseHashTableSize(float ntuples, int tupwidth, int work_mem)
 	return res;
 }
 
+#pragma hd_warning_disable
 template <typename BitmapsetN>
 __host__ __device__
 static BucketStats 
@@ -657,7 +660,7 @@ estimate_hash_bucket_stats(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
             if (stats.mcvfreq > var.stats.mcvfreq)
                 stats.mcvfreq = var.stats.mcvfreq;
 
-            match_r ^= in_id;
+            match_r -= in_id;
         }
     }
     
@@ -695,6 +698,7 @@ estimate_hash_bucket_stats(BitmapsetN outer_rel_id, BitmapsetN inner_rel_id,
  * which is what we want.  We do not want to hash unless we know that the
  * inner rel is well-dispersed (or the alternatives seem much worse).
  */
+#pragma hd_warning_disable
 template <typename BitmapsetN>
 __host__ __device__
 static float
@@ -779,6 +783,7 @@ __estimate_hash_bucketsize(VarInfo &vars, BaseRelation<BitmapsetN> &baserel,
  *		The result includes both a one-time (startup) component,
  *		and a per-evaluation component.
  */
+#pragma hd_warning_disable
 template <typename BitmapsetN>
 __host__ __device__
 static struct QualCost 
@@ -833,6 +838,7 @@ page_size(float tuples, int width)
 	return ceil(relation_byte_size(tuples, width) / (float) BLCKSZ);
 }
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 static struct PathCost

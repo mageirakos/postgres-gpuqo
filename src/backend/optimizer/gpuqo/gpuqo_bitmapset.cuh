@@ -246,7 +246,7 @@ public:
         return bits > other.bits;
     }
 
-
+    #pragma hd_warning_disable // WTF
     __host__ __device__
     inline GpuqoBitmapset<T> &operator=(const GpuqoBitmapset<T> &other){
         bits = other.bits;
