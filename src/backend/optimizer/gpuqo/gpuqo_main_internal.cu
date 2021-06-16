@@ -57,6 +57,28 @@ QueryTree<BitmapsetN> *gpuqo_run_switch(int gpuqo_algorithm,
 	case GPUQO_CPU_GOO:
 		return gpuqo_cpu_goo(info);
 		break;
+	case GPUQO_CPU_IKKBZ:
+		return gpuqo_cpu_ikkbz(info);
+		break;
+	 default: 
+		// impossible branch but without it the compiler complains
+		return NULL;
+		break;
+	}
+}
+
+template<>
+QueryTree<BitmapsetDynamic> *gpuqo_run_switch(int gpuqo_algorithm, 
+										GpuqoPlannerInfo<BitmapsetDynamic>* info)
+{
+	switch (gpuqo_algorithm)
+	{
+	case GPUQO_CPU_GOO:
+		return gpuqo_cpu_goo(info);
+		break;
+	case GPUQO_CPU_IKKBZ:
+		return gpuqo_cpu_ikkbz(info);
+		break;
 	 default: 
 		// impossible branch but without it the compiler complains
 		return NULL;
@@ -132,6 +154,10 @@ extern "C" QueryTreeC *gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c)
 		return __gpuqo_run<Bitmapset32>(gpuqo_algorithm, info_c);
 	} else if (info_c->n_rels < 64){
 		return __gpuqo_run<Bitmapset64>(gpuqo_algorithm, info_c);
+	} else if (gpuqo_algorithm == GPUQO_CPU_GOO
+			|| gpuqo_algorithm == GPUQO_CPU_IKKBZ
+	){
+		return __gpuqo_run<BitmapsetDynamic>(gpuqo_algorithm, info_c);
 	} else {
 		if (gpuqo_idp_n_iters > 1 && gpuqo_idp_n_iters < 64 
 			&& gpuqo_idp_type == GPUQO_IDP2)
