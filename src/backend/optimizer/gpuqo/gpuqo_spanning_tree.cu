@@ -19,8 +19,8 @@ void minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info){
     BitmapsetN S = info->base_rels[0].id;
     BitmapsetN out_relid = BitmapsetN(0);
 
-    BitmapsetN out_edges[BitmapsetN::SIZE];
-    JoinRelationDetailed<BitmapsetN> base_joinrels[BitmapsetN::SIZE];
+    BitmapsetN *out_edges = new BitmapsetN[info->n_rels];
+    JoinRelationDetailed<BitmapsetN> *base_joinrels = new JoinRelationDetailed<BitmapsetN>[info->n_rels];
 
     for (int i=0; i < info->n_rels; i++){
         out_relid |= info->base_rels[i].id;
@@ -65,7 +65,9 @@ void minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info){
         out_edges[argmin_in].set(argmin_out+1);
         out_edges[argmin_out].set(argmin_in+1);
     }
-    memcpy(info->edge_table, out_edges, info->n_rels * sizeof(BitmapsetN));
+    std::copy(out_edges, out_edges + info->n_rels, info->edge_table);
+    delete[] out_edges;
+    delete[] base_joinrels;
 }
 
 template void minimumSpanningTree<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32> *info);

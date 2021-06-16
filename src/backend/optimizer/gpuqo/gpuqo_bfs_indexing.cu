@@ -13,7 +13,7 @@
 template<typename BitmapsetN>
 Remapper<BitmapsetN,BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN>* info)
 {
-    int bfs_queue[BitmapsetN::SIZE];
+    int *bfs_queue = new int[info->n_rels];
     int bfs_queue_front_idx = 0;
     int bfs_queue_back_idx = 0;
     list<remapper_transf_el_t<BitmapsetN>> remap_list;
@@ -48,6 +48,7 @@ Remapper<BitmapsetN,BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN
         seen |= info->edge_table[base_rel_idx];
     }
 
+    delete[] bfs_queue;
     return Remapper<BitmapsetN,BitmapsetN>(remap_list);
 }
 
