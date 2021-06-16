@@ -382,11 +382,11 @@ make_query(IKKBZNode<BitmapsetN>* chain,
  */
 template<typename BitmapsetN>
 QueryTree<BitmapsetN>*
-gpuqo_cpu_ikkbz(GpuqoPlannerInfo<BitmapsetN> *info)
+gpuqo_cpu_ikkbz(GpuqoPlannerInfo<BitmapsetN> *orig_info)
 {
     QueryTree<BitmapsetN> *best_qt = NULL;
 
-    minimumSpanningTree(info);
+    GpuqoPlannerInfo<BitmapsetN> *info = cloneGpuqoPlannerInfo(orig_info);
 
     for (int v_id = 0; v_id < info->n_rels; v_id++) {
         IKKBZNode<BitmapsetN> *v = IKKBZ_iter(v_id, info);
@@ -398,6 +398,8 @@ gpuqo_cpu_ikkbz(GpuqoPlannerInfo<BitmapsetN> *info)
             freeQueryTree(qt);
         }
     }
+
+    freeGpuqoPlannerInfo(info);
 
     return best_qt;
 

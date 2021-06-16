@@ -53,4 +53,7 @@ public:
     QueryTree<BitmapsetIN>* remapQueryTree(QueryTree<BitmapsetOUT>* qt);
 };
 
+template<typename BitmapsetN>
+GpuqoPlannerInfo<BitmapsetN> *cloneGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN>* info);
+
 #endif              // GPUQO_REMAPPER_CUH

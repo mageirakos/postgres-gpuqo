@@ -299,3 +299,23 @@ template class Remapper<Bitmapset64,Bitmapset32>;
 template class Remapper<BitmapsetDynamic,BitmapsetDynamic>;
 template class Remapper<BitmapsetDynamic,Bitmapset64>;
 template class Remapper<BitmapsetDynamic,Bitmapset32>;
+
+
+template<typename BitmapsetN>
+GpuqoPlannerInfo<BitmapsetN> *cloneGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN>* info) 
+{
+    list<remapper_transf_el_t<BitmapsetN> > remap_list;
+    for (int i = 0; i < info->n_rels; i++) {
+        remapper_transf_el_t<BitmapsetN> el;
+        el.from_relid = info->base_rels[i].id;
+        el.to_idx = i;
+        el.qt = NULL;
+        remap_list.push_back(el);
+    }
+    Remapper<BitmapsetN,BitmapsetN> remapper(remap_list);
+    return remapper.remapPlannerInfo(info);
+}
+
+template GpuqoPlannerInfo<Bitmapset32> *cloneGpuqoPlannerInfo(GpuqoPlannerInfo<Bitmapset32>* info);
+template GpuqoPlannerInfo<Bitmapset64> *cloneGpuqoPlannerInfo(GpuqoPlannerInfo<Bitmapset64>* info);
+template GpuqoPlannerInfo<BitmapsetDynamic> *cloneGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetDynamic>* info);

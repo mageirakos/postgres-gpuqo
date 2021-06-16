@@ -15,7 +15,9 @@
 bool gpuqo_spanning_tree_enable;
 
 template<typename BitmapsetN>
-void minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info){
+GpuqoPlannerInfo<BitmapsetN> *
+minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info)
+{
     BitmapsetN S = info->base_rels[0].id;
     BitmapsetN out_relid = BitmapsetN(0);
 
@@ -65,14 +67,17 @@ void minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info){
         out_edges[argmin_in].set(argmin_out+1);
         out_edges[argmin_out].set(argmin_in+1);
     }
-    std::copy(out_edges, out_edges + info->n_rels, info->edge_table);
+    GpuqoPlannerInfo<BitmapsetN> *clone_info = cloneGpuqoPlannerInfo(info);
+    std::copy(out_edges, out_edges + info->n_rels, clone_info->edge_table);
     delete[] out_edges;
     delete[] base_joinrels;
+
+    return clone_info;
 }
 
-template void minimumSpanningTree<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32> *info);
-template void minimumSpanningTree<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64> *info);
-template void minimumSpanningTree<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic> *info);
+template GpuqoPlannerInfo<Bitmapset32> *minimumSpanningTree<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32> *info);
+template GpuqoPlannerInfo<Bitmapset64> *minimumSpanningTree<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64> *info);
+template GpuqoPlannerInfo<BitmapsetDynamic> *minimumSpanningTree<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic> *info);
 
 
 template<typename BitmapsetN>

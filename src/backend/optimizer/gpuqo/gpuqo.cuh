@@ -112,7 +112,7 @@ template<typename BitmapsetN>
 extern Remapper<BitmapsetN,BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN>* info);
 
 template<typename BitmapsetN>
-extern void minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info);
+extern GpuqoPlannerInfo<BitmapsetN> *minimumSpanningTree(GpuqoPlannerInfo<BitmapsetN> *info);
 
 template<typename BitmapsetN>
 extern void buildSubTrees(BitmapsetN* subtrees, GpuqoPlannerInfo<BitmapsetN> *info);
