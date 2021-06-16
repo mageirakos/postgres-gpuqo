@@ -93,7 +93,9 @@ private:
             BitmapsetN joinset = left_id | right_id;
             int level = joinset.size();
 
+#ifdef GPUQO_PRINT_N_JOINS
             CPUAlgorithm<BitmapsetN, memo_t>::n_checks++;
+#endif
             (*CPUAlgorithm<BitmapsetN, memo_t>::join)(level, true, *right_rel, *left_rel);
 
         } else if (!left_id.empty()) {

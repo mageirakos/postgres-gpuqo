@@ -100,6 +100,7 @@ public:
 
 	virtual void enumerate() {}
 
+#ifdef GPUQO_PRINT_N_JOINS
 	uint_t<BitmapsetN> get_n_joins(){
 		return n_joins.load();
 	}
@@ -107,6 +108,7 @@ public:
 	uint_t<BitmapsetN> get_n_checks(){
 		return n_checks.load();
 	}
+#endif
 };
 
 template<typename BitmapsetN, typename memo_t> 

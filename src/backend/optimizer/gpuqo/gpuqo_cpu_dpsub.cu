@@ -43,7 +43,9 @@ public:
                 auto left = memo.find(left_id);
                 auto right = memo.find(right_id);
 
+#ifdef GPUQO_PRINT_N_JOINS
                 CPUAlgorithm<BitmapsetN, memo_t>::n_checks++;
+#endif
                 if (left != memo.end() && right != memo.end()){
                     JoinRelationCPU<BitmapsetN> *left_rel = left->second;
                     JoinRelationCPU<BitmapsetN> *right_rel = right->second;

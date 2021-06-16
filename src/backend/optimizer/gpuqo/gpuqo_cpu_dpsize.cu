@@ -59,7 +59,9 @@ public:
                 int right_s = join_s-left_s;
                 for (auto &left_i : rels_per_level[left_s]){
                     for (auto &right_i : rels_per_level[right_s]){
+#ifdef GPUQO_PRINT_N_JOINS
                         CPUAlgorithm<BitmapsetN, memo_t>::n_checks++;
+#endif
                         (*CPUAlgorithm<BitmapsetN, memo_t>::join)(join_s, false, *left_i, *right_i);
                     }
                 } 
