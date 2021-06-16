@@ -83,7 +83,7 @@ uint32_t dpsub_csg_evaluation(int iter,
                 params.gpu_info
             );
         } else {
-            if (gpuqo_dpsub_ccc_enable){
+            if (gpuqo_dpsub_ccc_enable && !CCC_DISABLED){
                 launchEvaluateFilteredDPSubKernel<BitmapsetN,dpsubEnumerateAllSubs<BitmapsetN,false> >(
                     thrust::raw_pointer_cast(params.gpu_pending_keys.data())+offset,
                     thrust::raw_pointer_cast(params.gpu_scratchpad_keys.data()),
