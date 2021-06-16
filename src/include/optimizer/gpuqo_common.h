@@ -23,7 +23,8 @@ typedef enum GpuqoAlgorithm {
 	GPUQO_DPE_DPSUB,
 	GPUQO_DPE_DPCCP,
 	GPUQO_CPU_GOO,
-	GPUQO_CPU_IKKBZ
+	GPUQO_CPU_IKKBZ,
+	GPUQO_CPU_LINEARIZED_DP
 } GpuqoAlgorithm;
 
 typedef enum GpuqoIDPType {

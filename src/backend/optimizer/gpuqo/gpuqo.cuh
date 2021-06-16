@@ -107,6 +107,9 @@ extern QueryTree<BitmapsetN>* gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info);
 template<typename BitmapsetN>
 extern QueryTree<BitmapsetN>* gpuqo_cpu_ikkbz(GpuqoPlannerInfo<BitmapsetN>* info);
 
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN>* gpuqo_cpu_linearized_dp(GpuqoPlannerInfo<BitmapsetN>* info);
+
 
 template<typename BitmapsetN>
 extern Remapper<BitmapsetN,BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN>* info);
