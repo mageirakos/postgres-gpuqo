@@ -83,7 +83,10 @@ static QueryTreeC *__gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c)
 	GpuqoPlannerInfo<BitmapsetN> *info = convertGpuqoPlannerInfo<BitmapsetN>(info_c);
 
 	if (gpuqo_spanning_tree_enable){
-		minimumSpanningTree(info);
+		GpuqoPlannerInfo<BitmapsetN> *new_info = minimumSpanningTree(info);
+		freeGpuqoPlannerInfo(info);
+		info = new_info;
+
 		buildSubTrees(info->subtrees, info);
 	}
 
