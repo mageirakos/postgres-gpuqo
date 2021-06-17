@@ -92,4 +92,4 @@ gpuqo_cpu_dplin(GpuqoPlannerInfo<BitmapsetN> *info)
 
 template QueryTree<Bitmapset32>* gpuqo_cpu_dplin<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
 template QueryTree<Bitmapset64>* gpuqo_cpu_dplin<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);
-// template QueryTree<BitmapsetDynamic>* gpuqo_cpu_dplin<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic>*); // TODO
+template QueryTree<BitmapsetDynamic>* gpuqo_cpu_dplin<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic>*);

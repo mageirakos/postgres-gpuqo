@@ -2278,7 +2278,7 @@ static struct config_int ConfigureNamesInt[] =
 			GUC_EXPLAIN
 		},
 		&gpuqo_dplin_threshold_lindp,
-		14, 0, INT_MAX,
+		14, 0, 64,
 		NULL, NULL, NULL
 	},
 	{

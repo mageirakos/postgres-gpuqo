@@ -142,8 +142,18 @@ gpuqo_cpu_dpccp(GpuqoPlannerInfo<BitmapsetN>* info)
     return gpuqo_cpu_sequential(info, &alg);
 }
 
+template<>
+QueryTree<BitmapsetDynamic>*
+gpuqo_cpu_dpccp(GpuqoPlannerInfo<BitmapsetDynamic>* info)
+{
+    printf("ERROR: calling dpccp with BitmapsetDynamic\n");
+    return NULL;
+}
+
+
 template QueryTree<Bitmapset32>* gpuqo_cpu_dpccp<Bitmapset32>(GpuqoPlannerInfo<Bitmapset32>*);
 template QueryTree<Bitmapset64>* gpuqo_cpu_dpccp<Bitmapset64>(GpuqoPlannerInfo<Bitmapset64>*);
+template QueryTree<BitmapsetDynamic>* gpuqo_cpu_dpccp<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic>*);
 
 /* gpuqo_dpe_dpccp
  *

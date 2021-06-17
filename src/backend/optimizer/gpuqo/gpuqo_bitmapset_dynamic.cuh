@@ -210,7 +210,25 @@ BitmapsetDynamic expandToMask(const BitmapsetDynamic &val, const BitmapsetDynami
     return out;
 }
 
-// TODO nextSubset
+inline BitmapsetDynamic nextSubset(const BitmapsetDynamic &subset, const BitmapsetDynamic &set){
+    BitmapsetDynamic out = subset;
+
+    for (int i = 0; i < set.nbits(); i++) {
+        if (!set.isSet(i)){
+            Assert(!subset.isSet(i));
+            continue;
+        }
+
+        if (i < subset.nbits() && subset.isSet(i)){
+            out.unset(i);
+        } else {
+            out.set(i);
+            break;
+        }
+    }
+
+    return out;
+}
 
 namespace std {
     template<>

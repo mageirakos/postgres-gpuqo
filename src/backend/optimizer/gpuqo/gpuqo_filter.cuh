@@ -89,6 +89,7 @@ bool are_valid_pair(BitmapsetN left_id, BitmapsetN right_id,
     return are_connected_ids(left_id, right_id, info) && is_disjoint(left_id, right_id);
 }
 
+#pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__
 __forceinline__

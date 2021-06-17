@@ -88,6 +88,9 @@ QueryTree<BitmapsetDynamic> *gpuqo_run_switch(int gpuqo_algorithm,
 	case GPUQO_CPU_LINEARIZED_DP:
 		return gpuqo_cpu_linearized_dp(info);
 		break;
+	case GPUQO_CPU_DPLIN:
+		return gpuqo_cpu_dplin(info);
+		break;
 	 default: 
 		// impossible branch but without it the compiler complains
 		return NULL;
@@ -169,6 +172,7 @@ extern "C" QueryTreeC *gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c)
 	} else if (gpuqo_algorithm == GPUQO_CPU_GOO
 			|| gpuqo_algorithm == GPUQO_CPU_IKKBZ
 			|| gpuqo_algorithm == GPUQO_CPU_LINEARIZED_DP
+			|| gpuqo_algorithm == GPUQO_CPU_DPLIN
 	){
 		return __gpuqo_run<BitmapsetDynamic>(gpuqo_algorithm, info_c);
 	} else {
