@@ -23,53 +23,37 @@ QueryTree<BitmapsetN> *gpuqo_run_switch(int gpuqo_algorithm,
 	{
 	case GPUQO_DPSIZE:
 		return gpuqo_dpsize(info);
-		break;
 	case GPUQO_DPSUB:
 		return gpuqo_dpsub(info);
-		break;
 	case GPUQO_CPU_DPSIZE:
 		return gpuqo_cpu_dpsize(info);
-		break;
 	case GPUQO_CPU_DPSUB:
 		return gpuqo_cpu_dpsub(info);
-		break;
 	case GPUQO_CPU_DPSUB_PARALLEL:
 		return gpuqo_cpu_dpsub_parallel(info);
-		break;
 	case GPUQO_CPU_DPSUB_BICC:
 		return gpuqo_cpu_dpsub_bicc(info);
-		break;
 	case GPUQO_CPU_DPSUB_BICC_PARALLEL:
 		return gpuqo_cpu_dpsub_bicc_parallel(info);
-		break;
 	case GPUQO_CPU_DPCCP:
 		return gpuqo_cpu_dpccp(info);
-		break;
 	case GPUQO_DPE_DPSIZE:
 		return gpuqo_dpe_dpsize(info);
-		break;
 	case GPUQO_DPE_DPSUB:
 		return gpuqo_dpe_dpsub(info);
-		break;
 	case GPUQO_DPE_DPCCP:
 		return gpuqo_dpe_dpccp(info);
-		break;
 	case GPUQO_CPU_GOO:
 		return gpuqo_cpu_goo(info);
-		break;
 	case GPUQO_CPU_IKKBZ:
 		return gpuqo_cpu_ikkbz(info);
-		break;
 	case GPUQO_CPU_LINEARIZED_DP:
 		return gpuqo_cpu_linearized_dp(info);
-		break;
 	case GPUQO_CPU_DPLIN:
 		return gpuqo_cpu_dplin(info);
-		break;
 	 default: 
 		// impossible branch but without it the compiler complains
 		return NULL;
-		break;
 	}
 }
 
@@ -81,20 +65,15 @@ QueryTree<BitmapsetDynamic> *gpuqo_run_switch(int gpuqo_algorithm,
 	{
 	case GPUQO_CPU_GOO:
 		return gpuqo_cpu_goo(info);
-		break;
 	case GPUQO_CPU_IKKBZ:
 		return gpuqo_cpu_ikkbz(info);
-		break;
 	case GPUQO_CPU_LINEARIZED_DP:
 		return gpuqo_cpu_linearized_dp(info);
-		break;
 	case GPUQO_CPU_DPLIN:
 		return gpuqo_cpu_dplin(info);
-		break;
 	 default: 
-		// impossible branch but without it the compiler complains
+		printf("ERROR: This algorithm is not supported with > 64 relations\n");
 		return NULL;
-		break;
 	}
 }
 
@@ -169,20 +148,7 @@ extern "C" QueryTreeC *gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c)
 		return __gpuqo_run<Bitmapset32>(gpuqo_algorithm, info_c);
 	} else if (info_c->n_rels < 64){
 		return __gpuqo_run<Bitmapset64>(gpuqo_algorithm, info_c);
-	} else if (gpuqo_algorithm == GPUQO_CPU_GOO
-			|| gpuqo_algorithm == GPUQO_CPU_IKKBZ
-			|| gpuqo_algorithm == GPUQO_CPU_LINEARIZED_DP
-			|| gpuqo_algorithm == GPUQO_CPU_DPLIN
-	){
-		return __gpuqo_run<BitmapsetDynamic>(gpuqo_algorithm, info_c);
 	} else {
-		if (gpuqo_idp_n_iters > 1 && gpuqo_idp_n_iters < 64 
-			&& gpuqo_idp_type == GPUQO_IDP2)
-		{
-			return __gpuqo_run_idp2<BitmapsetDynamic>(gpuqo_algorithm, info_c);
-		} else {
-			printf("ERROR: too many relations. Use IDP2.\n");
-			return NULL;	
-		}
+		return __gpuqo_run<BitmapsetDynamic>(gpuqo_algorithm, info_c);
 	}
 }
