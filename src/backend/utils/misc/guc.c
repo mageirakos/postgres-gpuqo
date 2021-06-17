@@ -473,6 +473,7 @@ const struct config_enum_entry gpuqo_algorithm_options[] = {
 	{"cpu_goo", GPUQO_CPU_GOO, false},
 	{"cpu_ikkbz", GPUQO_CPU_IKKBZ, false},
 	{"cpu_linearized_dp", GPUQO_CPU_LINEARIZED_DP, false},
+	{"cpu_dplin", GPUQO_CPU_DPLIN, false},
 	{NULL, 0, false}
 };
 
@@ -2258,6 +2259,36 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&gpuqo_idp_n_iters,
 		0, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dplin_csg_threshold_lindp", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of connected subgraphs needed to switch from ."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dplin_csg_threshold_lindp,
+		10000, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dplin_threshold_lindp", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of connected subgraphs needed to switch from ."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dplin_threshold_lindp,
+		14, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_dplin_threshold_idp", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of connected subgraphs needed to switch from ."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_dplin_threshold_idp,
+		100, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 #endif

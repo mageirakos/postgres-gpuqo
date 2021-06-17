@@ -210,6 +210,7 @@ BitmapsetDynamic expandToMask(const BitmapsetDynamic &val, const BitmapsetDynami
     return out;
 }
 
+// TODO nextSubset
 
 namespace std {
     template<>

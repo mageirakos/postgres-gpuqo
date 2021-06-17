@@ -63,6 +63,9 @@ QueryTree<BitmapsetN> *gpuqo_run_switch(int gpuqo_algorithm,
 	case GPUQO_CPU_LINEARIZED_DP:
 		return gpuqo_cpu_linearized_dp(info);
 		break;
+	case GPUQO_CPU_DPLIN:
+		return gpuqo_cpu_dplin(info);
+		break;
 	 default: 
 		// impossible branch but without it the compiler complains
 		return NULL;

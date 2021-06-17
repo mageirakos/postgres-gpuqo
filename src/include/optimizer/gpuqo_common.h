@@ -24,7 +24,8 @@ typedef enum GpuqoAlgorithm {
 	GPUQO_DPE_DPCCP,
 	GPUQO_CPU_GOO,
 	GPUQO_CPU_IKKBZ,
-	GPUQO_CPU_LINEARIZED_DP
+	GPUQO_CPU_LINEARIZED_DP,
+	GPUQO_CPU_DPLIN
 } GpuqoAlgorithm;
 
 typedef enum GpuqoIDPType {
@@ -52,6 +53,9 @@ extern bool gpuqo_dpsub_bicc_enable;
 extern bool gpuqo_spanning_tree_enable;
 extern int gpuqo_idp_n_iters;
 extern int gpuqo_idp_type;
+extern int gpuqo_dplin_csg_threshold_lindp;
+extern int gpuqo_dplin_threshold_lindp;
+extern int gpuqo_dplin_threshold_idp;
 
 #ifdef __CUDA_ARCH__
 __host__ __device__
