@@ -52,6 +52,11 @@ extern "C" bool bms_is_empty(const Bitmapset *a);
 
 extern "C" Bitmapset *bms_add_member(Bitmapset *a, int x);
 extern "C" Bitmapset *bms_del_member(Bitmapset *a, int x);
+extern "C" Bitmapset *bms_add_members(Bitmapset *a, const Bitmapset *b);
+extern "C" Bitmapset *bms_add_range(Bitmapset *a, int lower, int upper);
+extern "C" Bitmapset *bms_int_members(Bitmapset *a, const Bitmapset *b);
+extern "C" Bitmapset *bms_del_members(Bitmapset *a, const Bitmapset *b);
+extern "C" Bitmapset *bms_join(Bitmapset *a, Bitmapset *b);
 
 /* support for hashtables using Bitmapsets as keys: */
 extern "C" uint32 bms_hash_value(const Bitmapset *a);

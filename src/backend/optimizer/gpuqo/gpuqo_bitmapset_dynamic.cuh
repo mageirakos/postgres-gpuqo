@@ -30,9 +30,7 @@ public:
         return BitmapsetDynamic(bms_make_singleton(n));
     }
     
-    BitmapsetDynamic(){
-        bms = NULL;
-    }
+    BitmapsetDynamic() : bms(NULL) {}
     
     ~BitmapsetDynamic(){
         bms_free(bms);
@@ -42,9 +40,13 @@ public:
         bms = bms_copy(other.bms);
     }
     
-    BitmapsetDynamic(Bitmapset* _bms){
-        bms = _bms;
+    // move constructor
+    BitmapsetDynamic(BitmapsetDynamic &&other) noexcept {
+        bms = other.bms;
+        other.bms = NULL;
     }
+    
+    BitmapsetDynamic(Bitmapset* _bms) : bms(_bms) {}
     
     unsigned size() const{
         return bms_num_members(bms);
@@ -168,15 +170,18 @@ public:
     }
 
     BitmapsetDynamic &operator|=(const BitmapsetDynamic &other){
-        return *this = unionSet(other);
+        bms = bms_add_members(bms, other.bms);
+        return *this;
     }
 
     BitmapsetDynamic &operator&=(const BitmapsetDynamic &other){
-        return *this = intersectionSet(other);
+        bms = bms_int_members(bms, other.bms);
+        return *this;
     }
 
     BitmapsetDynamic &operator-=(const BitmapsetDynamic &other){
-        return *this = differenceSet(other);
+        bms = bms_del_members(bms, other.bms);
+        return *this;
     }
 
     bool operator==(const BitmapsetDynamic &other) const{
@@ -190,6 +195,13 @@ public:
     BitmapsetDynamic& operator=(const BitmapsetDynamic& other) {
         bms_free(bms);
         bms = bms_copy(other.bms);
+        return *this;
+    }
+
+    // move operator
+    BitmapsetDynamic& operator=(BitmapsetDynamic&& other) noexcept {
+        bms = other.bms;
+        other.bms = NULL;
         return *this;
     }
 };
