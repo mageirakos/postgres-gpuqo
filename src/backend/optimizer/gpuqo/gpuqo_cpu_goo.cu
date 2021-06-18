@@ -127,7 +127,7 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
 
         // insert smallest in relations
         relations.insert(smallest);
-    } while(smallest == NULL || smallest->id.size() < info->n_iters);
+    } while(smallest == NULL || smallest->id.size() < info->n_rels);
 
     // free all remaining pairs in the heap
     for (QueryTree<BitmapsetN>* qt:heap)

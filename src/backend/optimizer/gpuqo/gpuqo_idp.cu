@@ -130,6 +130,29 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp2_dp(int gpuqo_algorithm,
 }
 
 template<typename BitmapsetN>
+QueryTree<BitmapsetN> *find_most_expensive_subtree(QueryTree<BitmapsetN> *qt, int max_size)
+{
+	Assert(qt != NULL && !qt->id.empty());
+	Assert(max_size >= 1);
+
+	if (qt->id.size() <= max_size) {
+		return qt;
+	} else {
+		QueryTree<BitmapsetN> *lqt = find_most_expensive_subtree(qt->left, max_size);
+		QueryTree<BitmapsetN> *rqt = find_most_expensive_subtree(qt->right, max_size);
+		if (lqt->cost.total > rqt->cost.total) {
+			return lqt;
+		} else if (lqt->cost.total < rqt->cost.total) {
+			return rqt;
+		} else if (lqt->id.size() < rqt->id.size()) {
+			return lqt;
+		} else {
+			return rqt;
+		}
+	}
+}
+
+template<typename BitmapsetN>
 QueryTree<BitmapsetN> *gpuqo_run_idp2(int gpuqo_algorithm, 
 									GpuqoPlannerInfo<BitmapsetN>* info)
 {
@@ -146,19 +169,10 @@ QueryTree<BitmapsetN> *gpuqo_run_idp2(int gpuqo_algorithm,
 	} else {
 		QueryTree<BitmapsetN> *goo_qt = gpuqo_cpu_goo(info);
 
-		Assert(goo_qt->left != NULL && goo_qt->right != NULL);
-		
-		if (goo_qt->left != NULL 
-				&& (goo_qt->right != NULL 
-					|| goo_qt->left->id.size() < goo_qt->right->id.size()))
-		{
-			reopTables = goo_qt->left->id;
-		} else if (goo_qt->right != NULL) {
-			reopTables = goo_qt->right->id;
-		} else {
-			printf("FATAL ERROR\n");
-			abort();
-		}
+		Assert(goo_qt != NULL && goo_qt->left != NULL && goo_qt->right != NULL);
+
+		reopTables = find_most_expensive_subtree(goo_qt, info->n_iters)->id;
+
 		freeQueryTree(goo_qt);
 	}
 
