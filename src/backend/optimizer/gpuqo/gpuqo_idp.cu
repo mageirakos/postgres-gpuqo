@@ -140,15 +140,19 @@ QueryTree<BitmapsetN> *find_most_expensive_subtree(QueryTree<BitmapsetN> *qt, in
 	} else {
 		QueryTree<BitmapsetN> *lqt = find_most_expensive_subtree(qt->left, max_size);
 		QueryTree<BitmapsetN> *rqt = find_most_expensive_subtree(qt->right, max_size);
-		if (lqt->cost.total > rqt->cost.total) {
-			return lqt;
-		} else if (lqt->cost.total < rqt->cost.total) {
+		
+		if (lqt->id.size() == 1)
 			return rqt;
-		} else if (lqt->id.size() < rqt->id.size()) {
+		else if (rqt->id.size() == 1)
 			return lqt;
-		} else {
+		else if (lqt->cost.total > rqt->cost.total)
+			return lqt;
+		else if (lqt->cost.total < rqt->cost.total)
 			return rqt;
-		}
+		else if (lqt->id.size() < rqt->id.size())
+			return lqt;
+		else
+			return rqt;
 	}
 }
 
