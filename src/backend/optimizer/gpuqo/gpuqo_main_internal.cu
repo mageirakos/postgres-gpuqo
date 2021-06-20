@@ -10,6 +10,7 @@
 
 #include "gpuqo.cuh"
 #include "gpuqo_query_tree.cuh"
+#include "gpuqo_timing.cuh"
 
 #ifdef GPUQO_PRINT_N_JOINS
 __device__ unsigned long long join_counter;
@@ -80,6 +81,14 @@ QueryTree<BitmapsetDynamic> *gpuqo_run_switch(int gpuqo_algorithm,
 template<typename BitmapsetN>
 static QueryTreeC *__gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c)
 {
+
+    DECLARE_TIMING(gpuqo_run);
+    DECLARE_TIMING(gpuqo_run_setup);
+    DECLARE_TIMING(gpuqo_run_execute);
+    DECLARE_TIMING(gpuqo_run_fini);
+
+    START_TIMING(gpuqo_run);
+    START_TIMING(gpuqo_run_setup);
 	GpuqoPlannerInfo<BitmapsetN> *info = convertGpuqoPlannerInfo<BitmapsetN>(info_c);
 
 	if (gpuqo_spanning_tree_enable){
@@ -92,6 +101,9 @@ static QueryTreeC *__gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c)
 
 	Remapper<BitmapsetN,BitmapsetN> remapper = makeBFSIndexRemapper(info);
 	GpuqoPlannerInfo<BitmapsetN> *remap_info = remapper.remapPlannerInfo(info);
+
+	STOP_TIMING(gpuqo_run_setup);
+	START_TIMING(gpuqo_run_execute);
 
 	QueryTree<BitmapsetN> *query_tree;
 	if (gpuqo_idp_n_iters <= 1 || gpuqo_idp_n_iters >= info->n_rels)
@@ -109,13 +121,25 @@ static QueryTreeC *__gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c)
 		}
 	}
 
+	STOP_TIMING(gpuqo_run_execute);
+	START_TIMING(gpuqo_run_fini);
+
 	QueryTree<BitmapsetN> *new_qt = remapper.remapQueryTree(query_tree);
 	freeQueryTree(query_tree);
 
 	freeGpuqoPlannerInfo(remap_info);
 	freeGpuqoPlannerInfo(info);
 
-	return convertQueryTree(new_qt);
+	auto res = convertQueryTree(new_qt);
+
+	STOP_TIMING(gpuqo_run_fini);
+    STOP_TIMING(gpuqo_run);
+    PRINT_TIMING(gpuqo_run_setup);
+    PRINT_TIMING(gpuqo_run_execute);
+    PRINT_TIMING(gpuqo_run_fini);
+    PRINT_TIMING(gpuqo_run);
+
+	return res;
 }
 
 template<typename BitmapsetN>
