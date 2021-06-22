@@ -293,6 +293,26 @@ QueryTree<BitmapsetIN>* Remapper<BitmapsetIN,BitmapsetOUT>::remapQueryTree(Query
     return qt_out;
 }
 
+template<typename BitmapsetIN, typename BitmapsetOUT>
+QueryTree<BitmapsetOUT>* Remapper<BitmapsetIN,BitmapsetOUT>::remapQueryTreeFwd(QueryTree<BitmapsetIN>* qt){
+    if (qt == NULL)
+        return NULL;
+
+    QueryTree<BitmapsetOUT> *qt_out = new QueryTree<BitmapsetOUT>;
+    qt_out->id = remapRelid(qt->id);
+    if (qt_out->id.size() == 1){
+        qt_out->left = NULL;
+        qt_out->right = NULL;
+    } else {
+        qt_out->left = remapQueryTreeFwd(qt->left);
+        qt_out->right = remapQueryTreeFwd(qt->right);
+    }
+    qt_out->rows = qt->rows;
+    qt_out->cost = qt->cost;
+    qt_out->width = qt->width;
+    return qt_out;
+}
+
 template class Remapper<Bitmapset32,Bitmapset32>;
 template class Remapper<Bitmapset64,Bitmapset64>;
 template class Remapper<Bitmapset64,Bitmapset32>;

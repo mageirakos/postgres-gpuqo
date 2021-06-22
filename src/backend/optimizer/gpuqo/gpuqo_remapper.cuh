@@ -51,6 +51,7 @@ public:
     GpuqoPlannerInfo<BitmapsetOUT>* remapPlannerInfo(
                                             GpuqoPlannerInfo<BitmapsetIN>* info);
     QueryTree<BitmapsetIN>* remapQueryTree(QueryTree<BitmapsetOUT>* qt);
+    QueryTree<BitmapsetOUT>* remapQueryTreeFwd(QueryTree<BitmapsetIN>* qt);
 };
 
 template<typename BitmapsetN>
