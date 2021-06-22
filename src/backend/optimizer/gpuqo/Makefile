@@ -61,8 +61,13 @@ ifeq ($(simulate_complex_cost_function),yes)
 NVCCFLAGS += -DSIMULATE_COMPLEX_COST_FUNCTION
 endif
 
-ifeq ($(cost_function),cout)
-NVCCFLAGS += -DGPUQO_COST_FUNCTION_COUT
+
+ifeq ($(cost_function),postgres)
+    NVCCFLAGS += -DGPUQO_COST_FUNCTION=0
+else ifeq ($(cost_function),simple)
+    NVCCFLAGS += -DGPUQO_COST_FUNCTION=1
+else ifeq ($(cost_function),cout)
+    NVCCFLAGS += -DGPUQO_COST_FUNCTION=2
 endif
 
 GENCODE_FLAGS = $(foreach sm, $(with_cudasm), -gencode arch=compute_$(sm),code=sm_$(sm))

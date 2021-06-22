@@ -21,10 +21,20 @@
 #include "gpuqo_debug.cuh"
 #include "gpuqo_row_estimation.cuh"
 
-#ifdef GPUQO_COST_FUNCTION_COUT
-#include "gpuqo_cost_cout.cuh"
-#else
+#define GPUQO_COST_FUNCTION_POSTGRES    0
+#define GPUQO_COST_FUNCTION_SIMPLE      1
+#define GPUQO_COST_FUNCTION_COUT        2
+
+#ifndef GPUQO_COST_FUNCTION
+#define GPUQO_COST_FUNCTION GPUQO_COST_FUNCTION_POSTGRES
+#endif 
+
+#if GPUQO_COST_FUNCTION == GPUQO_COST_FUNCTION_POSTGRES
 #include "gpuqo_cost_postgres.cuh"
+#elif GPUQO_COST_FUNCTION == GPUQO_COST_FUNCTION_SIMPLE
+#include "gpuqo_cost_simple.cuh"
+#elif GPUQO_COST_FUNCTION == GPUQO_COST_FUNCTION_COUT
+#include "gpuqo_cost_cout.cuh"
 #endif
 
 #define COST_FUNCTION_OVERHEAD 3000L

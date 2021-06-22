@@ -1,15 +1,15 @@
 /*------------------------------------------------------------------------
  *
- * gpuqo_cost_cout.cuh
- *      definition of the C_out cost functions
+ * gpuqo_cost_simple.cuh
+ *      definition of a simplified cost function
  *
- * src/backend/optimizer/gpuqo/gpuqo_cost_cout.cuh
+ * src/backend/optimizer/gpuqo/gpuqo_cost_simple.cuh
  *
  *-------------------------------------------------------------------------
  */
 
-#ifndef GPUQO_COST_COUT_CUH
-#define GPUQO_COST_COUT_CUH
+#ifndef GPUQO_COST_SIMPLE_CUH
+#define GPUQO_COST_SIMPLE_CUH
 
 #include <cmath>
 #include <cstdint>
@@ -21,6 +21,10 @@
 #include "gpuqo_debug.cuh"
 #include "gpuqo_row_estimation.cuh"
 
+#define BASEREL_COEFF   0.2f
+#define HASHJOIN_COEFF  1.0f
+#define INDEXSCAN_COEFF 2.0f
+#define SORT_COEFF      2.0f
 
 template<typename BitmapsetN>
 __host__ __device__
@@ -28,7 +32,7 @@ static struct PathCost
 cost_baserel(BaseRelation<BitmapsetN> &base_rel){
     return (struct PathCost) {
         .startup = 0.0f,
-        .total = base_rel.composite ? base_rel.cost.total : 0.0f
+        .total = base_rel.composite ? base_rel.cost.total : BASEREL_COEFF * base_rel.tuples;
     };
 }
 
@@ -42,7 +46,7 @@ cost_nestloop(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 {
     return (struct PathCost) {
         .startup = 0.0f,
-        .total = INFF
+        .total = outer_rel.cost.total + outer_rel.rows * inner_rel.cost.total
     };
 }
 
@@ -55,7 +59,7 @@ cost_hashjoin(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
 {
     return (struct PathCost) {
         .startup = 0.0f,
-        .total = extra.joinrows + inner_rel.cost.total + outer_rel.cost.total
+        .total = HASHJOIN_COEFF * extra.joinrows + inner_rel.cost.total + outer_rel.cost.total
     };
 }
 
