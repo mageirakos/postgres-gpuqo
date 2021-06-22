@@ -154,7 +154,7 @@ void initGpuqoPlannerInfo<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic>* 
 template<typename BitmapsetN>
 static
 void freeGpuqoPlannerInfo(GpuqoPlannerInfo<BitmapsetN>* info) {
-	delete info;
+	delete[] info;
 }
 
 template<>
@@ -162,7 +162,7 @@ void freeGpuqoPlannerInfo<BitmapsetDynamic>(GpuqoPlannerInfo<BitmapsetDynamic>* 
 	delete[] info->base_rels;
 	delete[] info->edge_table;
 	delete[] info->subtrees;
-	delete info;
+	delete[] info;
 }
 
 __host__ __device__

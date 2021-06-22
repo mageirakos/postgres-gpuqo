@@ -20,7 +20,7 @@ void dpsize_buildQueryTree(uint_t<BitmapsetN> idx, Container &gpu_memo_vals, Que
 {
     JoinRelationDpsize<BitmapsetN> jr = gpu_memo_vals[idx];
 
-    (*qt) = (QueryTree<BitmapsetN>*) malloc(sizeof(QueryTree<BitmapsetN>));
+    (*qt) = new QueryTree<BitmapsetN>;
     (*qt)->id = jr.id;
     (*qt)->left = NULL;
     (*qt)->right = NULL;
@@ -48,7 +48,7 @@ void dpsub_buildQueryTree(BitmapsetN id, Container &gpu_memo_vals, QueryTree<Bit
 {
     JoinRelation<BitmapsetN> jr = gpu_memo_vals.get(id);
 
-    (*qt) = (QueryTree<BitmapsetN>*) malloc(sizeof(QueryTree<BitmapsetN>));
+    (*qt) = new QueryTree<BitmapsetN>;
     (*qt)->id = id;
     (*qt)->left = NULL;
     (*qt)->right = NULL;

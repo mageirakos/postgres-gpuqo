@@ -263,7 +263,7 @@ QueryTreeC* convertQueryTree(QueryTree<BitmapsetN>* qt){
 	result->cost = qt->cost;
 	result->rows = qt->rows;
 
-	free(qt);
+	delete qt;
 
 	return result;
 }
