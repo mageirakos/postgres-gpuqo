@@ -101,6 +101,7 @@ void Remapper<BitmapsetIN,BitmapsetOUT>::remapEdgeTable(BitmapsetIN* edge_table_
 
             temp.unset(from_idx+1);
         }
+        edge_table_to[e.to_idx].unset(e.to_idx+1);
     }
 }
 
