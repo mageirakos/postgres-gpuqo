@@ -243,7 +243,7 @@ IKKBZ_normalize(IKKBZNode<BitmapsetN> *root)
             Assert(!node->hasSiblings());
             if (prev->rank() > node->rank()) {
                 prev->merge(*node);
-                free(node);
+                delete node;
 
                 node = prev->getChild();
                 continue;
