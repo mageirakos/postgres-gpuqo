@@ -358,6 +358,7 @@ make_query(IKKBZNode<BitmapsetN>* chain,
             bjr->edges = info->edge_table[i];
 
             if (node && prev) {
+                Assert(are_valid_pair(jr->id, bjr->id, info));
                 jr = make_join_relation(*jr, *bjr, info);
             } else {
                 jr = bjr;

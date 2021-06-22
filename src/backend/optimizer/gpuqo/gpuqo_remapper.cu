@@ -161,6 +161,9 @@ void Remapper<BitmapsetIN,BitmapsetOUT>::remapEqClass(BitmapsetIN* eq_class_from
         BitmapsetIN id_l_from = remapRelidInv(id_l_to);
         int idx_l_from = (id_l_from.allLower() & *eq_class_from).size();
 
+        Assert(idx_l_from < s_from);
+        Assert(idx_l_to < s_to);
+
         for (int idx_r_to = idx_l_to+1; idx_r_to < s_to; idx_r_to++){
             BitmapsetOUT id_r_to = expandToMask(BitmapsetOUT::nth(idx_r_to), 
                                                 *eq_class_to); 
