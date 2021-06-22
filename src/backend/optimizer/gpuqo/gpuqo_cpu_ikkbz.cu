@@ -386,7 +386,7 @@ gpuqo_cpu_ikkbz(GpuqoPlannerInfo<BitmapsetN> *orig_info)
 {
     QueryTree<BitmapsetN> *best_qt = NULL;
 
-    GpuqoPlannerInfo<BitmapsetN> *info = cloneGpuqoPlannerInfo(orig_info);
+    GpuqoPlannerInfo<BitmapsetN> *info = minimumSpanningTree(orig_info);
 
     for (int v_id = 0; v_id < info->n_rels; v_id++) {
         IKKBZNode<BitmapsetN> *v = IKKBZ_iter(v_id, info);
