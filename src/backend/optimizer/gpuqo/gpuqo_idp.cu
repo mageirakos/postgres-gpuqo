@@ -72,8 +72,8 @@ QueryTree<BitmapsetN> *gpuqo_run_idp1(int gpuqo_algorithm,
 		return gpuqo_run_idp1_next<BitmapsetN, Bitmapset64>(
 										gpuqo_algorithm, info, remap_list);
 	} else {
-		printf("ERROR: too many relations\n");
-		return NULL;	
+		return gpuqo_run_idp1_next<BitmapsetN, BitmapsetDynamic>(
+										gpuqo_algorithm, info, remap_list);
 	}
 }
 
@@ -174,8 +174,8 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp2_rec(int gpuqo_algorithm,
 		reopt_qt = gpuqo_run_idp2_dp<BitmapsetInner, Bitmapset64>(
 								gpuqo_algorithm, new_info, reopt_remap_list);
 	} else {
-		printf("ERROR: too many relations\n");
-		return NULL;	
+		reopt_qt = gpuqo_run_idp2_dp<BitmapsetInner, BitmapsetDynamic>(
+								gpuqo_algorithm, new_info, reopt_remap_list);
 	}
 
 	QueryTree<BitmapsetInner> *res_qt;
