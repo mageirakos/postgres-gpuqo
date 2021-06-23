@@ -81,14 +81,19 @@ public:
         rels.push_back(rel);
     }
 
-    void merge(const IKKBZNode<BitmapsetN> &other)
+    void merge()
     {
-        C += T * other.C;
-        T *= other.T;
-        child = other.getChild();
+        Assert(hasOneChild());
 
-        for (auto r:other.getRels())
+        C += T * child->C;
+        T *= child->T;
+
+        for (auto r:child->rels)
             rels.push_back(r);
+
+        IKKBZNode<BitmapsetN> *tmp = child;
+        child = child->child;
+        delete tmp;
     }
     
     IKKBZNode<BitmapsetN> *getChild() const {
@@ -120,7 +125,7 @@ public:
     }
 
     float rank() const {
-        return (T-1)/C;
+        return C ? (T-1)/C : 0.0f;
     }
 
     int getBaseRelIdx() const {
@@ -156,21 +161,22 @@ public:
         
         return out;
     }
+
+    float getCost() const {
+        return C;
+    }
 };
 
 template<typename BitmapsetN>
 static
 IKKBZNode<BitmapsetN> *ikkbz_make_tree(int root_idx, 
+                                    vector<IKKBZRel<BitmapsetN>*> &rels,
                                     GpuqoPlannerInfo<BitmapsetN> *info)
 {
     typedef pair<IKKBZNode<BitmapsetN>*, IKKBZNode<BitmapsetN>*> stack_el_t;
 
-    vector<IKKBZRel<BitmapsetN>*> rels(info->n_rels);
-    for (int i = 0; i < info->n_rels; i++)
-        rels[i] = new IKKBZRel<BitmapsetN>(info->base_rels[i]);
-
     IKKBZNode<BitmapsetN> *root = new IKKBZNode<BitmapsetN>(
-        rels[root_idx], 0.0f, 0.0f
+        rels[root_idx], rels[root_idx]->getRows(), 0.0f
     );
 
     stack<stack_el_t> dfs_stack;
@@ -242,9 +248,7 @@ IKKBZ_normalize(IKKBZNode<BitmapsetN> *root)
         if (prev) {
             Assert(!node->hasSiblings());
             if (prev->rank() > node->rank()) {
-                prev->merge(*node);
-                delete node;
-
+                prev->merge();
                 node = prev->getChild();
                 continue;
             }
@@ -317,9 +321,10 @@ chain_to_idxlist(IKKBZNode<BitmapsetN>* chain, list<int> &idxs)
 
 template<typename BitmapsetN>
 static IKKBZNode<BitmapsetN>*
-IKKBZ_iter(int root_idx, GpuqoPlannerInfo<BitmapsetN> *info)
+IKKBZ_iter(int root_idx, vector<IKKBZRel<BitmapsetN>*> &rels,
+            GpuqoPlannerInfo<BitmapsetN> *info)
 {
-    IKKBZNode<BitmapsetN> *v_prime, *v = ikkbz_make_tree(root_idx, info);
+    IKKBZNode<BitmapsetN> *v_prime, *v = ikkbz_make_tree(root_idx, rels, info);
 
     while (v_prime = find_node_with_chain_children(v)){
         IKKBZNode<BitmapsetN> *node = v_prime->getChild();
@@ -339,8 +344,8 @@ static QueryTree<BitmapsetN>*
 make_query(IKKBZNode<BitmapsetN>* chain, 
             GpuqoPlannerInfo<BitmapsetN> *info)
 {
-    IKKBZNode<BitmapsetN> *node = chain, *prev = NULL;
-    JoinRelationCPU<BitmapsetN> *jr;
+    IKKBZNode<BitmapsetN> *node = chain;
+    JoinRelationCPU<BitmapsetN> *jr = NULL;
     QueryTree<BitmapsetN> *out;
 
     while (node) {
@@ -357,7 +362,7 @@ make_query(IKKBZNode<BitmapsetN>* chain,
             bjr->rows = info->base_rels[i].rows; 
             bjr->edges = info->edge_table[i];
 
-            if (node && prev) {
+            if (jr) {
                 Assert(are_valid_pair(jr->id, bjr->id, info));
                 jr = make_join_relation(*jr, *bjr, info);
             } else {
@@ -365,8 +370,6 @@ make_query(IKKBZNode<BitmapsetN>* chain,
             }
         }
         
-
-        prev = node;
         node = node->getChild();
     }
 
@@ -385,24 +388,41 @@ template<typename BitmapsetN>
 QueryTree<BitmapsetN>*
 gpuqo_cpu_ikkbz(GpuqoPlannerInfo<BitmapsetN> *orig_info)
 {
-    QueryTree<BitmapsetN> *best_qt = NULL;
+    IKKBZNode<BitmapsetN> *best = NULL; 
 
     GpuqoPlannerInfo<BitmapsetN> *info = minimumSpanningTree(orig_info);
 
+    vector<IKKBZRel<BitmapsetN>*> rels(info->n_rels);
+    for (int i = 0; i < info->n_rels; i++)
+        rels[i] = new IKKBZRel<BitmapsetN>(info->base_rels[i]);
+
     for (int v_id = 0; v_id < info->n_rels; v_id++) {
-        IKKBZNode<BitmapsetN> *v = IKKBZ_iter(v_id, info);
-        QueryTree<BitmapsetN> *qt = make_query(v, info);
-        if (!best_qt || qt->cost.total < best_qt->cost.total) {
-            freeQueryTree(best_qt);
-            best_qt = qt;
+        IKKBZNode<BitmapsetN> *v = IKKBZ_iter(v_id, rels, info);
+
+        while(v->hasChildren()){
+            v->merge();
+        }
+
+        LOG_DEBUG("root: %d, cost: %.2f\n", v_id, v->getCost());
+
+        if (!best || v->getCost() < best->getCost()) {
+            if (best)
+                delete best;
+            best = v;
         } else {
-            freeQueryTree(qt);
+            delete v;
         }
     }
 
+    QueryTree<BitmapsetN> *qt = make_query(best, info);
+
+    for (int i = 0; i < info->n_rels; i++)
+        delete rels[i];
+
+    delete best;
     freeGpuqoPlannerInfo(info);
 
-    return best_qt;
+    return qt;
 
 }
 
