@@ -86,7 +86,7 @@ gpuqo_cpu_dplin(GpuqoPlannerInfo<BitmapsetN> *info)
         return gpuqo_cpu_linearized_dp(info);
     } else {
         LOG_PROFILE("dplin: using goo-dp\n");
-        return gpuqo_run_idp2(GPUQO_CPU_LINEARIZED_DP, info);
+        return gpuqo_run_idp2(GPUQO_CPU_LINEARIZED_DP, info, gpuqo_dplin_threshold_idp);
     }
 }
 
