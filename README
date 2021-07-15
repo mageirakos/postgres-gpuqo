@@ -1,3 +1,66 @@
+PostgreSQL GPU Query Optimization
+=====================================
+
+This repository contains the implementation of the new join order optimization 
+algorithms described in the paper "Efficient Massively Parallel Join 
+Optimization for Large Queries".
+It contains:
+ - source code for the novel MPDP algorithm, both CPU and GPU
+ - source code for the CPU and GPU baseline algorithms (dpsize, dpsub, dpccp, 
+   dpe, gpu-dpsize, gpu-dpsub)
+ - source code of other experimental algorithms (e.g. dpsub-csg)
+ - scripts used for running the tests, creating the synthetic databases, 
+   generating the data to plot (inside the misc/ folder)
+
+Building with CUDA
+-----------------
+
+In order to build with CUDA, you need to specify the path to CUDA to the 
+configure scipt and the cuda version to target, e.g.
+```
+./configure.sh --enable-cuda=/usr/local/cuda --with-cudasm=61
+```
+In case CUDA is installed in /usr/local/cuda, and the GPU has compute 
+capability 6.1 (e.g. GTX 1080Ti).
+
+Then make and make install.
+
+
+Other build suggestions
+----------------------
+
+The bitmapset implementation can use the Intel bit operation extension, if 
+compiled using 
+```
+CFLAGS="-march=native -mtune=native" CPPFLAGS="-march=native -mtune=native"
+```
+
+Timing information can be printed to stdout for gpuqo algorithms setting 
+enable_gpuqo_profiling=yes in make:
+```
+make enable_gpuqo_profiling=yes
+```
+
+Other useful make variables:
+ - enable_debug=[yes/no]: enable debugging symbols generation
+ - cost_function=[cout/simple/postgres]: choose cost function used by gpuqo
+   algorithms: cout (C_out), simple (join-order-benchmark paper, with the 
+   addition of sort-merge joins), postgres (returns the same cost as 
+   Postgres but only supports a limited set of queries)
+ - simulate_complex_cost_function=[yes/no]: add overhead to the cost function
+ - disable_ccc=[yes/no]: globally disables CCC (warp divergence avoidance 
+   method). The gpuqo_dpsub algorithm can be run without ccc at runtime (no 
+   need to set this option).
+
+Structure
+--------
+
+All gpuqo algorithms are inside src/backend/optimizer/gpuqo/
+Miscellaneous scripts and files are inside misc/
+
+
+Below is the original README.
+
 PostgreSQL Database Management System
 =====================================
 
