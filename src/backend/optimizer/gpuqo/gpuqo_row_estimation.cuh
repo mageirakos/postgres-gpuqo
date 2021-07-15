@@ -152,7 +152,7 @@ static int
 get_join_width(BitmapsetN left_rel_id, JoinRelation<BitmapsetN> &left_rel,
                 BitmapsetN right_rel_id, JoinRelation<BitmapsetN> &right_rel,
                 GpuqoPlannerInfo<BitmapsetN>* info) {
-    // TODO
+    // this is a very simplistic assumption
     return left_rel.width + right_rel.width;
 }
 

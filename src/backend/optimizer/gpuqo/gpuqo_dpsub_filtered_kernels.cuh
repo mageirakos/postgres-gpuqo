@@ -283,7 +283,8 @@ static void __launchEvaluateFilteredDPSubKernel(BitmapsetN* pending_keys, Bitmap
 template<typename BitmapsetN, int n_splits, typename Function>
 static void _launchEvaluateFilteredDPSubKernel(BitmapsetN* pending_keys, BitmapsetN* scratchpad_keys, JoinRelation<BitmapsetN>* scratchpad_vals, uint32_t sq, uint32_t qss, uint32_t n_pending_sets, uint32_t n_sets, HashTableDpsub<BitmapsetN> &memo, GpuqoPlannerInfo<BitmapsetN> *info, GpuqoPlannerInfo<BitmapsetN> *gpu_info)
 {
-    if (info->size > 6000){ //TODO check with device capability
+    //TODO it would be cool to obtain this threshold from CUDA API
+    if (info->size > 6000){ 
         int shmem_size = sizeof(GpuqoPlannerInfo<BitmapsetN>);
         __launchEvaluateFilteredDPSubKernel<BitmapsetN, n_splits, Function, false>(pending_keys, scratchpad_keys, scratchpad_vals, sq, qss, n_pending_sets, n_sets, shmem_size, memo, gpu_info);
     } else {

@@ -68,7 +68,6 @@ struct dpsubEnumerateCsg{
                                     int n_splits, HashTableDpsub<BitmapsetN> &memo, 
                                     GpuqoPlannerInfo<BitmapsetN>* info)
     { 
-        // TODO check
         Assert(n_splits % WARP_SIZE == 0 && popc(n_splits) == 1);
 
         BitmapsetN cid = BitmapsetN(cid_bits);

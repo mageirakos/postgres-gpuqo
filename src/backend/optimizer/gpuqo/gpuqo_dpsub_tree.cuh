@@ -38,7 +38,6 @@ struct dpsubEnumerateTreeSimple{
 
         for (uint32_t i = cid; i < n_possible_joins; i += n_splits){
             BitmapsetN base_rel_id = expandToMask(BitmapsetN::nth(i), relid);
-            // TODO check if I can rely on this in general...
             BitmapsetN permitted = relid - base_rel_id.allLower();
 
             LOG_DEBUG("%d %d: %u (%u)\n", 
