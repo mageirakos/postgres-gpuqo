@@ -34,13 +34,20 @@ min_memo_size=${min_memo_size:-1}
 max_memo_size=${max_memo_size:-7000}
 n_parallel=${n_parallel:-40960}
 enable_spanning=${enable_spanning:-off}
+idp_n_iters=${idp_n_iters:-0}
+idp_type=${idp_type:-IDP2}
+
+common_opt='SET enable_seqscan TO on; SET enable_indexscan TO on; SET enable_indexonlyscan TO off; SET enable_tidscan TO off; SET enable_mergejoin TO off; SET enable_parallel_hash TO off; SET enable_bitmapscan TO off; SET enable_gathermerge TO off; SET enable_partitionwise_join TO off; SET enable_material TO off; SET enable_hashjoin TO on; SET enable_nestloop TO on'
+
+cpu_opt_pattern='SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_idp_type TO $idp_type; SET gpuqo_idp_n_iters TO $idp_n_iters'
 
 # dpsize
-dpsize_opt_pattern='SET gpuqo_scratchpad_size_mb TO $scratchpad_size; SET gpuqo_max_memo_size_mb TO $max_memo_size; SET gpuqo_n_parallel TO $n_parallel'
+dpsize_opt_pattern='SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpsize; SET gpuqo_scratchpad_size_mb TO $scratchpad_size; SET gpuqo_max_memo_size_mb TO $max_memo_size; SET gpuqo_n_parallel TO $n_parallel; SET gpuqo_idp_type TO $idp_type; SET gpuqo_idp_n_iters TO $idp_n_iters'
 
 # dpsub
 enable_filter=${enable_filter:-on}
 filter_threshold=${filter_threshold:-0}
+enable_ccc=${enable_ccc:-on}
 enable_csg=${enable_csg:-on}
 enable_tree=${enable_tree:-off}
 enable_bicc=${enable_bicc:-off}
@@ -48,12 +55,18 @@ csg_threshold=${csg_threshold:-32}
 filter_cpu_enum_threshold=${filter_cpu_enum_threshold:-1024}
 filter_keys_overprovisioning=${filter_keys_overprovisioning:-128}
 
-dpsub_opt_pattern='SET gpuqo_n_parallel TO $n_parallel; SET gpuqo_dpsub_filter TO $enable_filter; SET gpuqo_dpsub_filter_threshold TO $filter_threshold; SET gpuqo_dpsub_csg TO $enable_csg; SET gpuqo_dpsub_tree TO $enable_tree; SET gpuqo_dpsub_bicc TO $enable_bicc; SET gpuqo_dpsub_csg_threshold TO $csg_threshold; SET gpuqo_dpsub_filter_cpu_enum_threshold TO $filter_cpu_enum_threshold; SET gpuqo_dpsub_filter_keys_overprovisioning TO $filter_keys_overprovisioning; SET gpuqo_max_memo_size_mb TO $max_memo_size; SET gpuqo_min_memo_size_mb TO $min_memo_size'
+dpsub_opt_pattern='SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpsub; SET gpuqo_n_parallel TO $n_parallel; SET gpuqo_dpsub_filter TO $enable_filter; SET gpuqo_dpsub_filter_threshold TO $filter_threshold; SET gpuqo_dpsub_ccc TO $enable_ccc; SET gpuqo_dpsub_csg TO $enable_csg; SET gpuqo_dpsub_tree TO $enable_tree; SET gpuqo_dpsub_bicc TO $enable_bicc; SET gpuqo_dpsub_csg_threshold TO $csg_threshold; SET gpuqo_dpsub_filter_cpu_enum_threshold TO $filter_cpu_enum_threshold; SET gpuqo_dpsub_filter_keys_overprovisioning TO $filter_keys_overprovisioning; SET gpuqo_max_memo_size_mb TO $max_memo_size; SET gpuqo_min_memo_size_mb TO $min_memo_size; SET gpuqo_idp_type TO $idp_type; SET gpuqo_idp_n_iters TO $idp_n_iters'
 
 #dpe
-pairs_per_depbuf=${pairs_per_depbuf:-16384}
+pairs_per_depbuf=${pairs_per_depbuf:-65536}
 n_threads=${n_threads:-8}
+
+dpe_opt_pattern='SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_dpe_pairs_per_depbuf TO $pairs_per_depbuf; SET gpuqo_dpe_n_threads TO $n_threads; SET gpuqo_idp_type TO $idp_type; SET gpuqo_idp_n_iters TO $idp_n_iters'
+
+# parallel DPsub
 chunk_size=${chunk_size:-256}
+
+dpsub_parallel_opt_pattern='SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_dpe_n_threads TO $n_threads; SET gpuqo_cpu_dpsub_parallel_chunk_size TO $chunk_size; SET gpuqo_idp_type TO $idp_type; SET gpuqo_idp_n_iters TO $idp_n_iters'
 
 case $1 in
 base)
@@ -63,78 +76,104 @@ dp)
 	SETUP="SET gpuqo TO off; SET geqo TO off;"
 	;;
 gpuqo_dpsize) 	
-	dpsize_opt=$(eval "echo \"$dpsize_opt_pattern\"")
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpsize; $dpsize_opt;"
+	SETUP=$(eval "echo \"$dpsize_opt_pattern\"")
 	;;
 gpuqo_dpsub) 	
-	dpsub_opt=$(eval "echo \"$dpsub_opt_pattern\"")
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpsub; $dpsub_opt;"
+	SETUP=$(eval "echo \"$dpsub_opt_pattern\"")
 	;;
 gpuqo_unfiltered_dpsub) 	
 	enable_filter=off
 	enable_csg=off
 	enable_tree=off
-	dpsub_opt=$(eval "echo \"$dpsub_opt_pattern\"")
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpsub; $dpsub_opt;"
+	SETUP=$(eval "echo \"$dpsub_opt_pattern\"")
 	;;
 gpuqo_filtered_dpsub) 	
 	enable_filter=on
 	enable_csg=off
 	enable_tree=off
 	enable_bicc=off
-	dpsub_opt=$(eval "echo \"$dpsub_opt_pattern\"")
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpsub; $dpsub_opt;"
+	SETUP=$(eval "echo \"$dpsub_opt_pattern\"")
+	;;
+gpuqo_filtered_dpsub_no_ccc) 	
+	enable_filter=on
+	enable_ccc=off
+	enable_csg=off
+	enable_tree=off
+	enable_bicc=off
+	SETUP=$(eval "echo \"$dpsub_opt_pattern\"")
 	;;
 gpuqo_csg_dpsub) 
 	enable_filter=on
 	enable_csg=on
 	enable_tree=off
 	enable_bicc=off
-	dpsub_opt=$(eval "echo \"$dpsub_opt_pattern\"")
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpsub; $dpsub_opt;"
+	SETUP=$(eval "echo \"$dpsub_opt_pattern\"")
 	;;
 gpuqo_tree_dpsub) 
 	enable_filter=on
 	enable_csg=on
 	enable_tree=on
 	enable_bicc=off
-	dpsub_opt=$(eval "echo \"$dpsub_opt_pattern\"")
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpsub; $dpsub_opt;"
+	SETUP=$(eval "echo \"$dpsub_opt_pattern\"")
 	;;
 gpuqo_bicc_dpsub) 
 	enable_filter=on
 	enable_csg=on
 	enable_tree=off
 	enable_bicc=on
-	dpsub_opt=$(eval "echo \"$dpsub_opt_pattern\"")
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpsub; $dpsub_opt;"
+	SETUP=$(eval "echo \"$dpsub_opt_pattern\"")
 	;;
 gpuqo_cpu_dpsize)
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO cpu_dpsize;"
+	cpu_opt=$(eval "echo \"$cpu_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO cpu_dpsize; $cpu_opt;"
 	;;
 gpuqo_cpu_dpsub)
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO cpu_dpsub;"
+	cpu_opt=$(eval "echo \"$cpu_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO cpu_dpsub; $cpu_opt;"
 	;;
 gpuqo_cpu_dpsub_bicc)
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO cpu_dpsub_bicc;"
+	cpu_opt=$(eval "echo \"$cpu_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO cpu_dpsub_bicc; $cpu_opt;"
 	;;
 gpuqo_cpu_dpccp)
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO cpu_dpccp;"
+	cpu_opt=$(eval "echo \"$cpu_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO cpu_dpccp; $cpu_opt;"
+	;;
+gpuqo_cpu_linearized_dp)
+	cpu_opt=$(eval "echo \"$cpu_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO cpu_linearized_dp; $cpu_opt;"
+	;;
+gpuqo_cpu_dplin)
+	cpu_opt=$(eval "echo \"$cpu_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO cpu_dplin; $cpu_opt;"
+	;;
+gpuqo_cpu_goo)
+	cpu_opt=$(eval "echo \"$cpu_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO cpu_goo; $cpu_opt;"
+	;;
+gpuqo_cpu_ikkbz)
+	cpu_opt=$(eval "echo \"$cpu_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO cpu_ikkbz; $cpu_opt;"
 	;;
 gpuqo_cpu_dpsub_parallel)
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO parallel_cpu_dpsub; SET gpuqo_dpe_n_threads TO $n_threads; SET gpuqo_cpu_dpsub_parallel_chunk_size TO $chunk_size;"
+	dpsub_parallel_opt=$(eval "echo \"$dpsub_parallel_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO parallel_cpu_dpsub; $dpsub_parallel_opt; "
 	;;
 gpuqo_cpu_dpsub_bicc_parallel)
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO parallel_cpu_dpsub_bicc; SET gpuqo_dpe_n_threads TO $n_threads; SET gpuqo_cpu_dpsub_parallel_chunk_size TO $chunk_size;"
+	dpsub_parallel_opt=$(eval "echo \"$dpsub_parallel_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO parallel_cpu_dpsub_bicc; $dpsub_parallel_opt; "
 	;;
 gpuqo_dpe_dpsize)
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpe_dpsize;"
+	dpe_opt=$(eval "echo \"$dpe_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO dpe_dpsize; $dpe_opt;"
 	;;
 gpuqo_dpe_dpsub)
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpe_dpsub;"
+	dpe_opt=$(eval "echo \"$dpe_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO dpe_dpsub; $dpe_opt;"
 	;;
 gpuqo_dpe_dpccp)
-	SETUP="SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpe_dpccp; SET gpuqo_dpe_pairs_per_depbuf TO $pairs_per_depbuf; SET gpuqo_dpe_n_threads TO $n_threads;"
+	dpe_opt=$(eval "echo \"$dpe_opt_pattern\"")
+	SETUP="SET gpuqo_algorithm TO dpe_dpccp; $dpe_opt;"
 	;;
 geqo)	
 	SETUP="SET gpuqo TO off; SET geqo_threshold TO 2;"
@@ -144,6 +183,8 @@ geqo)
 	exit 1
 	;;
 esac
+
+SETUP="$common_opt; $SETUP"
 
 if [ $enable_spanning = 'on' ]; then
 	SETUP="$SETUP SET gpuqo_spanning_tree TO on;";
@@ -181,6 +222,10 @@ analyze-raw)
 summary-raw) 
 	CMD="EXPLAIN (SUMMARY)"
 	GREP="grep ''"
+	;;
+summary-full)
+	CMD="EXPLAIN (SUMMARY)"
+	GREP="python filter_summary.py"
 	;;
 run)	 
 	CMD=""
