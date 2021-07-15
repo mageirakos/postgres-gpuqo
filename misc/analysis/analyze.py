@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Chebyshev as T
 from scipy.stats.mstats import gmean
-from itertools import cycle
+from itertools import cycle, chain
 
 def format_func(value, tick_number):
     if value >= 1:
@@ -16,7 +16,9 @@ def format_func(value, tick_number):
         else:
             return "%.2f" % value
     else:
-        if abs(round(1/value) - 1/value) < 1e-10:
+        if value < 1e-10:
+            return "0"
+        elif abs(round(1/value) - 1/value) < 1e-10:
             return "1/%d" % (round(1/value))
         else:
             return "1/%.2f" % (1/value)
@@ -37,7 +39,7 @@ def read_query(filename):
         s = ' '.join(l.strip() for l in lines)
         return s
 
-def load_results(folder):
+def load_results(folder, timeout=np.nan):
     queries = {}
     for filename in os.listdir(folder):
         with open(os.path.join(folder, filename), 'r') as f:
@@ -46,25 +48,29 @@ def load_results(folder):
             exec_time = 0
             gpuqo_time = 0
             gpuqo_warmup_time = 0
-            for line in f.readlines():
+            for line in chain(f.readlines(), ['end.sql']):
                 if 'sql' in line:
                     if query:
-                        if plan_time or exec_time or gpuqo_time:
-                            # save if there was a query previously
-                            # create dict item if missing
-                            if query not in queries:
-                                queries[query] = {
-                                    'plan_time_raw': [],
-                                    'exec_time_raw': [],
-                                    'total_time_raw': [],
-                                    'gpuqo_time_raw': [],
-                                }
+                        if not (plan_time or exec_time or gpuqo_time):
+                            plan_time = timeout
+                            exec_time = timeout
+                            gpuqo_time = timeout
 
-                            # fill dict item
-                            queries[query]['plan_time_raw'].append(plan_time)
-                            queries[query]['exec_time_raw'].append(exec_time)
-                            queries[query]['total_time_raw'].append(plan_time + exec_time)
-                            queries[query]['gpuqo_time_raw'].append(gpuqo_time)
+                        # save if there was a query previously
+                        # create dict item if missing
+                        if query not in queries:
+                            queries[query] = {
+                                'plan_time_raw': [],
+                                'exec_time_raw': [],
+                                'total_time_raw': [],
+                                'gpuqo_time_raw': [],
+                            }
+
+                        # fill dict item
+                        queries[query]['plan_time_raw'].append(plan_time)
+                        queries[query]['exec_time_raw'].append(exec_time)
+                        queries[query]['total_time_raw'].append(plan_time + exec_time)
+                        queries[query]['gpuqo_time_raw'].append(gpuqo_time)
 
                         # reset values
                         plan_time = 0
@@ -74,6 +80,9 @@ def load_results(folder):
                     query = line[:-5].split('/')[-1]
                 elif 'Planning' in line:
                     plan_time = float(line.split(':')[1][:-3])
+                elif 'plan_time' in line:
+                    if len(line.split()) > 1:
+                        plan_time = float(line.split()[1])
                 elif 'Execution' in line:
                     exec_time = float(line.split(':')[1][:-3])
                 elif 'gpuqo' in line and 'took' in line:
@@ -87,23 +96,6 @@ def load_results(folder):
                         gpuqo_time = t
                 # else:
                 #     print(f"Unexpected line: {line.strip()}")
-
-            if query and (plan_time or exec_time or gpuqo_time):
-                # save last query if any
-                # create dict item if missing
-                if query not in queries:
-                    queries[query] = {
-                        'plan_time_raw': [],
-                        'exec_time_raw': [],
-                        'total_time_raw': [],
-                        'gpuqo_time_raw': [],
-                    }
-
-                # fill dict item
-                queries[query]['plan_time_raw'].append(plan_time)
-                queries[query]['exec_time_raw'].append(exec_time)
-                queries[query]['total_time_raw'].append(plan_time + exec_time)
-                queries[query]['gpuqo_time_raw'].append(gpuqo_time)
     
     for query, d in queries.items():
         for metric in ['plan', 'exec', 'total', 'gpuqo']:
@@ -114,18 +106,44 @@ def load_results(folder):
     return queries
 
 def add_table_count(queries, sql_folder):
+    remove_keys = set()
     for query, d in queries.items():
-        d['tables'] = count_tables(
-            read_query(
-                os.path.join(sql_folder, os.path.basename(query + '.sql'))
-                if sql_folder else query + '.sql'
-                )
-            )
+        path = (os.path.join(sql_folder, os.path.basename(query + '.sql'))
+                    if sql_folder else query + '.sql')
+        try:
+            d['tables'] = count_tables(read_query(path))
+        except FileNotFoundError:
+            s = query.split('/')[-1][:-2]
+            if s.isdigit():
+                d['tables'] = int(s)
+            else:
+                print("%s not found" % path)
+                remove_keys.add(query)
+    
+    for k in remove_keys:
+        del queries[k]
+
     return queries
+
+def remove_incomplete_runs(queries):
+    remove_tables = set()
+    for _query, d in queries.items():
+        if any(np.isnan(d[f"{metric}_time_avg"]) 
+                for metric in ['plan', 'exec', 'total', 'gpuqo']):
+            remove_tables.add(d['tables'])
+    
+    remove_keys = set()
+    for query, d in queries.items():
+        if d["tables"] in remove_tables:
+            remove_keys.add(query)
+        
+    for key in remove_keys:
+        del queries[key]
 
 def load_results_complete(result_folder, sql_folder):
     queries = load_results(result_folder)
     add_table_count(queries, sql_folder)
+    remove_incomplete_runs(queries)
     return queries
 
 def scatter_plot_count_time(queries, metric="plan", label=None, ratio=False, color=None, marker="o", shift=0, marker_size=100):
@@ -171,7 +189,7 @@ def line_plot_count_time(queries, metric="plan", label=None, ratio=False, color=
     else:
         plt.plot(x_line, y_line, label=label, color=color)
 
-def generic_plot(series, line=False, scatter=True, metric="plan", ratio_baseline=None, max_shift=0, minor_ticks=[]):
+def generic_plot(series, line=False, scatter=True, metric="plan", ratio_baseline=None, max_shift=0, minor_ticks=[], error_bar = False):
     markers = cycle(['+','x','1','2','3','4',])
     shifts = np.linspace(-max_shift, max_shift, len(series))
     for i, (s, queries) in enumerate(series.items()):
@@ -193,7 +211,7 @@ def generic_plot(series, line=False, scatter=True, metric="plan", ratio_baseline
                 label=s, 
                 ratio=ratio_baseline is not None,
                 color=f"C{i if not ratio_baseline else i+1}",
-                errorbar=(not scatter)
+                errorbar=(error_bar and not scatter)
             )
 
     # configure matplotlib

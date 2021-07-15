@@ -43,7 +43,7 @@ def plot(series, metric="plan", speedup_baseline=None, minor_ticks=[]):
 
     # configure matplotlib
     plt.ylabel("Time speedup (higher is better)")
-    plt.yscale("log")
+    plt.yscale("linear")
     vals = np.array(minor_ticks)
     ticks = []
     ticks += (1/vals[::-1]).tolist()
