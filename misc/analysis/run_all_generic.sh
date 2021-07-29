@@ -225,7 +225,7 @@ summary-raw)
 	;;
 summary-full)
 	CMD="EXPLAIN (SUMMARY)"
-	GREP="python filter_summary.py"
+	GREP="python3 filter_summary.py"
 	;;
 run)	 
 	CMD=""
