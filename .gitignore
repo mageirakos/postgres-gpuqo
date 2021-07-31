@@ -44,3 +44,5 @@ lib*.pc
 /tmp_install/
 deploy_key
 deploy_key.pub
+/opt
+/build_*
