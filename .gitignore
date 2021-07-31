@@ -45,4 +45,4 @@ lib*.pc
 deploy_key
 deploy_key.pub
 /opt
-/build_*
+/build*
