@@ -79,4 +79,10 @@ template<typename Type>
 __host__
 std::ostream & operator<<(std::ostream &os, const GpuqoBitmapset<Type>& bms);
 
+
+class BitmapsetDynamic;
+
+__host__
+std::ostream & operator<<(std::ostream &os, const BitmapsetDynamic& bms);
+
 #endif							/* GPUQO_DEBUG_CUH */

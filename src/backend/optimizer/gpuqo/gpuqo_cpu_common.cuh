@@ -175,7 +175,7 @@ JR* make_join_relation(JR &left_rel,
 	left_rel.referenced = true;
 	right_rel.referenced = true;
 #endif
-
+    // this is what I need
 	JR* join_rel = build_join_relation<JR>(left_rel, right_rel);
 	join_rel->rows = estimate_join_rows(left_rel.id, left_rel, right_rel.id, right_rel, info);
 	join_rel->cost = calc_join_cost(left_rel.id, left_rel, right_rel.id, right_rel, join_rel->rows, info);

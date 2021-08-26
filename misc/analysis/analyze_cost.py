@@ -13,7 +13,7 @@ from math import inf
 import csv
 
 def folder2series(folder, depth=1):
-    return '/'.join(folder.split('/')[-depth:])
+    return '/'.join(folder.split('/')[-depth:]) # remove final slash here or on command line 
 
 def ratio(v, ref):
     return v/ref
@@ -196,7 +196,9 @@ def export_csv_aggr(csv_file, series, metric):
         *(f"{s} ({t})" for s in sizes for t in ['avg', '95%'])
     )
     output = []
-
+    
+    float_formatter = "{:.2f}".format
+    # float_formatter = "{}".format
     for s, queries in series.items():
         out = [s]
         x = np.array([queries[k]['tables'] for k in queries])
@@ -207,13 +209,25 @@ def export_csv_aggr(csv_file, series, metric):
         for n in sizes:
             mask = (x == n) & (y > 0)
             if np.any(mask):
-                out.append(np.average(y[mask]))
-                out.append(np.percentile(y[mask], 95))
+                out.append(float_formatter(np.average(y[mask])))
+                # print(out," ")
+                out.append(float_formatter(np.percentile(y[mask], 95)))
             else:
                 out.append(None)
                 out.append(None)
             
         output.append(tuple(out))
+
+    # print(f" HERE is the output: {output}")
+    # print(f"type: {type(output)}")
+    # for val in enumerate(output):
+    #     for j, y in enumerate(x[1:]):
+    #         if y:
+    #             print(x[i][j])
+    #             x[i][j] = str(round(float(x[i][j]),3))
+                
+    # print(f"AFTER: {output}")
+    # output = map([for x in output[1:] if x)
     
     with open(csv_file, 'w', newline='') as myfile:
         wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
@@ -345,29 +359,29 @@ if __name__ == "__main__":
     if args.verbose:
         print(series)
 
-    if args.type == 'scatter':
-        scatter_plot(
-            series, 
-            metric=metric, 
-            max_shift=args.shift
-        )
-    elif args.type == 'line':
-        line_plot(
-            series, 
-            metric=metric, 
-            max_shift=args.shift
-        )
-    elif args.type == 'scatter_line':
-        scatter_line_plot(
-            series, 
-            metric=metric, 
-            max_shift=args.shift
-        )
-    elif args.type == 'hist':
-        if not args.show:
-            print("--show is required")
-            exit(1)
-        plt.hist([i[metric] for i in series[args.show].values()])
+    # if args.type == 'scatter':
+    #     scatter_plot(
+    #         series, 
+    #         metric=metric, 
+    #         max_shift=args.shift
+    #     )
+    # elif args.type == 'line':
+    #     line_plot(
+    #         series, 
+    #         metric=metric, 
+    #         max_shift=args.shift
+    #     )
+    # elif args.type == 'scatter_line':
+    #     scatter_line_plot(
+    #         series, 
+    #         metric=metric, 
+    #         max_shift=args.shift
+    #     )
+    # elif args.type == 'hist':
+    #     if not args.show:
+    #         print("--show is required")
+    #         exit(1)
+    #     plt.hist([i[metric] for i in series[args.show].values()])
 
     if args.csv:
         if args.raw:
@@ -375,7 +389,7 @@ if __name__ == "__main__":
         else:
             export_csv_aggr(args.csv, series, metric)
 
-    if args.save:
-        plt.savefig(args.save)
-    else:
-        plt.show()
+    # if args.save:
+    #     plt.savefig(args.save)
+    # else:
+    #     plt.show()

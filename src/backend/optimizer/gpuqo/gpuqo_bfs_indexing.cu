@@ -23,6 +23,7 @@ Remapper<BitmapsetN,BitmapsetN> makeBFSIndexRemapper(GpuqoPlannerInfo<BitmapsetN
     bfs_queue[bfs_queue_back_idx++] = 0;
 
     BitmapsetN seen = BitmapsetN::nth(1);
+    // Look at this to understand how to iterate through the graph (BFS through graph)
     while (bfs_queue_front_idx != bfs_queue_back_idx && bfs_idx < info->n_rels){
         int base_rel_idx = bfs_queue[bfs_queue_front_idx++];
         

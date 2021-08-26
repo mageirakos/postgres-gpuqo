@@ -205,6 +205,8 @@ GpuqoPlannerInfo<BitmapsetOUT> *Remapper<BitmapsetIN,BitmapsetOUT>::remapPlanner
     size_t size = plannerInfoSize<BitmapsetOUT>(n_eq_classes, n_eq_class_sels, 
                                             n_eq_class_fks, n_eq_class_vars);
 
+    // std::cout << "\nAAAAAA SIZE : "<< size << std::endl;
+    // std::cout << "\nAAAAAA NRELS : " << n_rels << std::endl;
 	char* p = new char[size];
     memset(p, 0, size);
 

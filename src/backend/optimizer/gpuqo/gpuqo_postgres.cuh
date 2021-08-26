@@ -26,6 +26,7 @@ typedef uint64 bitmapword;
 #define SIZEOF_VOID_P 8
 #define FLEXIBLE_ARRAY_MEMBER /**/
 
+// edw
 struct Bitmapset
 {
 	int			nwords;

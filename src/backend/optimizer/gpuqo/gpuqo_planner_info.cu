@@ -155,6 +155,7 @@ GpuqoPlannerInfo<BitmapsetN>* convertGpuqoPlannerInfo(GpuqoPlannerInfoC *info_c)
 	}
 
 	for (int i=0; i < info->n_rels; i++){
+		// check bitmapset here if its correct
 		info->base_rels[i].id = convertBitmapset<BitmapsetN>(info_c->base_rels[i].id);
 		info->base_rels[i].rows = info_c->base_rels[i].rows;
 		info->base_rels[i].tuples = info_c->base_rels[i].tuples;

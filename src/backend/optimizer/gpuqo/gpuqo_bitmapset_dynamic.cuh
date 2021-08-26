@@ -156,6 +156,16 @@ public:
         else 
             return 0;
     }
+    
+    // uncomment when I want to use this operator
+    // friend std::ostream& operator<<(std::ostream &os, const BitmapsetDynamic& bms);
+
+    unsigned long long toUlonglong() const{
+        if (bms != NULL)
+            return bms->words[0];
+        else 
+            return 0;
+    }
 
     BitmapsetDynamic operator|(const BitmapsetDynamic &other) const{
         return unionSet(other);

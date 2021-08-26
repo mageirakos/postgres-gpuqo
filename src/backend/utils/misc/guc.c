@@ -480,6 +480,10 @@ const struct config_enum_entry gpuqo_algorithm_options[] = {
 const struct config_enum_entry gpuqo_idp_type_options[] = {
 	{"IDP1", GPUQO_IDP1, false},
 	{"IDP2", GPUQO_IDP2, false},
+	{"IDPMAG", GPUQO_IDPMAG, false},
+	{"DPDP", GPUQO_DPDP, false},
+	{"UNION", GPUQO_UNION, false},
+	// add mine here and where else
 	{NULL, 0, false}
 };
 
@@ -2259,6 +2263,16 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&gpuqo_idp_n_iters,
 		0, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gpuqo_k_cut_edges", PGC_USERSET, QUERY_TUNING_GPUQO,
+			gettext_noop("Sets the number of k cut edges for IDPMAG (0 to disable)."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&gpuqo_k_cut_edges,
+		0, 0, INT_MAX, // default, min, max
 		NULL, NULL, NULL
 	},
 	{
@@ -4812,7 +4826,7 @@ static struct config_enum ConfigureNamesEnum[] =
 	},
 	{
 		{"gpuqo_idp_type", PGC_USERSET, QUERY_TUNING_GPUQO,
-			gettext_noop("Switch IDP mode (IDP1 or IDP2)"),
+			gettext_noop("Switch IDP mode (IDP1 or IDP2 or IDPMAG)"),
 			NULL
 		},
 		&gpuqo_idp_type,
