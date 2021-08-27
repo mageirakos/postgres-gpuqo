@@ -21,7 +21,7 @@ class DisjointSet
     std::unordered_map<BitmapsetN, BitmapsetN> csg;
 
 public:
-
+//TODO: Test if csgs are correct
     BitmapsetN getCsg(BitmapsetN vertex){
         return csg[Find(vertex)];
     }
@@ -165,6 +165,12 @@ struct SortEdges{
     }
 };
 
+
+//TODO: Change BFS to incorporate what I need for the UNION algorithm
+// (a) Assign edge weights
+// (b) Find leaves and initialize the LeafPriorityQueue
+// (c) Initialize EdegePriorityQueue (with all edges even leaf ones) - updates will be handled later
+// (d) 
 template<typename BitmapsetN>
 std::vector<GraphEdge<BitmapsetN>> find_k_cut_edges(GpuqoPlannerInfo<BitmapsetN>* info, int k)
 {
@@ -349,6 +355,47 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	// 	std::cout << "csg_" << subgraphs.size() << " : " << csg.toUlonglong() <<std::endl; 
 	// 	std::cout << subset_baserel_id << std::endl;
 	// }
+
+
+//TODO: 1) to call the BFS function
+// (a) which initializes LeafPriorityQueue and EdgePriorityQueue
+
+
+//TODO: 2) Create DisjointSet out of all the nodes in our graph
+DisjointSet ds = makeSet(GpuqoPlannerInfo<BitmapsetN>* info);
+std::priority_queue<pair, std::vector<pair>, decltype(comparator)> queue;
+
+int n = info->n_rels;
+int k = n/25;
+int eps = 0.1; // 10% variation allowed
+int avg_size = n/k;
+//TODO: Should upper threshold simply be n/k and we're done?
+int upper_threshold = avg_size + avg_size*eps;
+
+while(!queue.empty()){
+    UnionEdge edge = queue.top();
+    queue.pop();
+    if (ds.Find(edge.left) != ds.Find(edge.right) ){
+        if (  edge.total_size != ds.getSize(edge.left) + ds.getSize(edge.right)){
+            edge.left = ds.getSize(edge.left);
+            edge.right = ds.getSize(edge.right);
+            edge.total_size = edge.left + edge.right;
+            queue.push(edge); # kala borei na legetai alliws to push all okay
+        }
+        else{
+            if (edge.total_size < upper_threshold){
+				ds.union(edge.left, edge.right)
+			}
+        }
+    }
+}
+
+
+//TODO: 3) Create while loop over leaf priority queue for the first set of UNIONs
+//TODO: 4) Create while loop over edge priority queue for the rest of the UNIONs
+
+//TODO: 5) Get csgs from all the UNIONs (this will be the std::vector<BitmapsetInner> subgraphs;)
+//TODO: 6) Iterate over all subgraphs and optimize/composite node/next level of recursion 
 
 
 //TODO: Create the subgraphs (csgs) with Union Find dataset based on some starting/stopping logic around sizes
