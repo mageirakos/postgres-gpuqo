@@ -260,10 +260,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_mag_rec(int gpuqo_algo,
 	
 	printf("\nPRINTING SUBGRAPHS: \n");
 	std::vector<BitmapsetInner> subgraphs;
-// BUG - Won't scale after 64 bits .toUlonglong() This must be where FailedAssertion originates 
-// Need a way to have a while loop for BitmapsetDynamic
 	std::cout << " 3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
-	// while(subset_baserel_id.toUlonglong()!=0){
 	while(subset_baserel_id!=0){
 		BitmapsetInner csg = grow(subset_baserel_id.lowest(), subset_baserel_id, edge_table_copy);
 		// std::cout << "before: " << subset_baserel_id << " from csg: " << csg << std::endl; 		

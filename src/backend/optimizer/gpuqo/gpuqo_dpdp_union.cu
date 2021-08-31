@@ -1,40 +1,51 @@
+/*------------------------------------------------------------------------
+ *
+ * gpuqo_dpdp_union.cu
+ *      dp over dp and k-cut implementation
+ *
+ * src/backend/optimizer/gpuqo/gpuqo_dpdp_union.cu
+ *
+ *-------------------------------------------------------------------------
+ */
+
+#include "gpuqo.cuh" 
+#include "gpuqo_query_tree.cuh"
+// #include "gpuqo_filter.cuh" // grow
+#include "gpuqo_row_estimation.cuh" // estimate
+#include "gpuqo_debug.cuh" // print bms
+#include "gpuqo_bitmapset.cuh"
+#include "gpuqo_bitmapset_dynamic.cuh"
+
 #include <iostream>
 #include <vector>
-#include <unordered_map>
-#include "gpuqo.cuh"
-#include "gpuqo_query_tree.cuh"
+#include <string>
+#include <algorithm> // no idea if I'm using something here
+#include <queue> // priority queue
+#include <unordered_map> // used for disjoint sets
 
-// https://www.techiedelight.com/disjoint-set-data-structure-union-find-algorithm/
+static int level_of_dp = 0;
 
-
-// A class to represent a disjoint set
 template<typename BitmapsetN>
 class DisjointSet
 {
-//TODO: ama exw node.id BitmapsetN tou base_rel.id tote prepei edw na einai <BitmapsetN, BitmapsetN> kai sto size <BitmapsetN, int>
     std::unordered_map<BitmapsetN, BitmapsetN> parent;
-//TODO : borei na thelei na einai public depending sto implementation we'll see
     std::unordered_map<BitmapsetN, int> size;
-
-//TODO : borei na thelei na einai public depending sto implementation we'll see
-//TODO: thelw kapoia methods (private logika) wste otan ginetai to Union na ginetai updates kai to csg edw pera
+	//TODO: Test if csgs are correct
     std::unordered_map<BitmapsetN, BitmapsetN> csg;
 
 public:
-//TODO: Test if csgs are correct
+	//TODO: Test if csgs are correct
     BitmapsetN getCsg(BitmapsetN vertex){
         return csg[Find(vertex)];
     }
     
-//TODO: this can be csg.size() so I guess no prob or smt? We will see as I implement csg
-    int getSize(BitmapsetN vertex){
-        // return size of union in which vertex belongs in
+	int getSize(BitmapsetN vertex){
         return size[Find(vertex)];
     }
 
     void makeSet(GpuqoPlannerInfo<BitmapsetN>* info) 
     {
-        // create `n` disjoint sets (one for each item)
+        // create `n` disjoint sets (one for each node)
         for (int base_rel_idx=0; i < info->n_rels; base_rel_idx++){
             BitmapsetN node_id = info->base_rels[base_rel_idx].id;
             parent[node_id] = node_id;
@@ -65,22 +76,23 @@ public:
         if (size[x] > size[y]) {
             parent[y] = x;
             size[x] += size[y];
-//TODO: Test csg
+			//TODO: Test csg
             csg[x] |= csg[y]
             
         }
         else if (size[x] < size[y]) {
             parent[x] = y;
             size[y] += size[x];
-//TODO: Test csg
+			//TODO: Test csg
             csg[y] |= csg[x]
 
         }
         else {
             parent[x] = y;
-            size[x] *= 2;
-//TODO: Test csg
-            csg[x] |= csg[y]
+			// sizes were equal so it doubles
+            size[y] *= 2; 
+			//TODO: Test csg
+            csg[y] |= csg[x]
         }
     }
 };
@@ -94,90 +106,86 @@ void printSets(std::vector<int> const &universe, DisjointSet<BitmapsetN> &ds)
         std::cout << '(' << ds.getCsg(i) << ')' << '-';
     }
     std::cout << std::endl;
-}
- 
+};
 
-// int main()
-// {
+/// ------------------------------- END OF DISJOINT SET CLASS
 
-// //TODO: auto to universe prepei na einai ta nodes sto graph mou
-//     std::vector<int> universe = { 1, 2, 3, 4, 5 };
- 
-//     // initialize `DisjointSet` class
-// // TODO: edw to BitmapsetN den to exw orisei akoma alla tha to orisw otan einai gia to kanoniko compile na ginei
-//     DisjointSet<BitmapsetN> ds;
- 
-//     // create a singleton set for each element of the universe
-//     ds.makeSet(universe);
-//     printSets(universe, ds);
- 
-// //TODO: thelw ena logic behind pote kanw Unions (kai pote stamataw na kanw Unions (ena while{})
-//     ds.Union(4, 3);        // 4 and 3 are in the same set
-//     printSets(universe, ds);
- 
-//     ds.Union(2, 1);        // 1 and 2 are in the same set
-//     printSets(universe, ds);
- 
-//     ds.Union(1, 3);        // 1, 2, 3, 4 are in the same set
-//     printSets(universe, ds);
- 
-//     return 0;
-// }
-// #################################################################################################################################################################################
-
-/*------------------------------------------------------------------------
- *
- * gpuqo_dpdp_union.cu
- *      dp over dp and k-cut implementation
- *
- * src/backend/optimizer/gpuqo/gpuqo_dpdp_union.cu
- *
- *-------------------------------------------------------------------------
- */
-
-#include "gpuqo.cuh" 
-#include "gpuqo_query_tree.cuh"
-#include "gpuqo_filter.cuh" // grow
-#include "gpuqo_row_estimation.cuh" // estimate
-#include "gpuqo_debug.cuh" // print bms
-#include "gpuqo_bitmapset.cuh"
-#include "gpuqo_bitmapset_dynamic.cuh"
-
-#include <iostream>
-#include <vector>
-#include <string>
-#include <algorithm>
-
-static int level_of_dp = 0;
-
+//NOTE: This GraphEdge is different from the _dpdp and _mag implementations 
+// It is customized for the _dpdp_union algorithm
 template<typename BitmapsetN>
-struct GraphEdge{
+struct GraphEdge {
 	BitmapsetN left;
 	BitmapsetN right;
+	//TODO: create these on BFS
+	int left_size; // union size
+	int right_size; // union size
+	int total_size; // left + right
 	float rows;
 	float selectivity;
+	//TODO: create this ON BFS
+	float weight; // whatever combination I choose
+}
+
+template<typename BitmapsetN>
+struct CompareLeafEdges{
+	// > is mean heap because default is max heap (<)
+    bool operator()(const GraphEdge<BitmapsetN>& lhs, const GraphEdge<BitmapsetN>& rhs) {
+		return lhs.weight > rhs.weight;
+    }
 };
 
 template<typename BitmapsetN>
-struct SortEdges{
+struct CompareEdges{
+	// > is mean heap because default is max heap (<)
     bool operator()(const GraphEdge<BitmapsetN>& lhs, const GraphEdge<BitmapsetN>& rhs) {
-        return lhs.rows + lhs.selectivity > rhs.rows + rhs.selectivity;
+		return lhs.total_size > lhs.total_size || (lhs.total_size == lhs.total_size  && lhs.weight > rhs.weight);
     }
 };
+
+
+//TODO: Test if correct weight
+template<typename BitmapsetN>
+GraphEdge<BitmapsetN> createGraphEdge(int left_rel_idx, int right_rel_idx , GpuqoPlannerInfo<BitmapsetN>* info){
+
+	GraphEdge<BitmapsetN> edge_el;
+
+	edge_el.left = info->base_rels[left_rel_idx].id;
+	edge_el.right =  info->base_rels[right_rel_idx].id; 
+
+	float left_rel_rows = info->base_rels[left_rel_idx].rows;
+	float right_rel_rows = info->base_rels[right_rel_idx].rows;
+	
+	edge_el.selectivity = estimate_join_selectivity(edge_el.left, edge_el.right, info);
+	edge_el.rows = edge_el.selectivity * left_rel_rows * right_rel_rows;
+
+	//TODO: Improve weight (+ add cost)
+	edge_el.weight = edge_el.selectivity + edge_el.rows
+
+	// Disjoint sets not created when BFS/this function is run so just add left/right size = 1. 
+	edge_el.left_size = 1;
+	edge_el.right_size = 1;
+	edge_el.total_size = edge_el.left_size + edge_el.right_size;
+
+	return edge_el;
+}
 
 
 //TODO: Change BFS to incorporate what I need for the UNION algorithm
 // (a) Assign edge weights
 // (b) Find leaves and initialize the LeafPriorityQueue
 // (c) Initialize EdegePriorityQueue (with all edges even leaf ones) - updates will be handled later
-// (d) 
+//TODO: Make sure this function returns 2 priority queues
 template<typename BitmapsetN>
-std::vector<GraphEdge<BitmapsetN>> find_k_cut_edges(GpuqoPlannerInfo<BitmapsetN>* info, int k)
+//TODO: FIX PRIORITY QUEUE DECLARATIONS ON FUNCTION AND HOW TO DO WHAT I WANT
+void fillPriorityQueues(_KATI_ &LeafPriorityQueue, _KATI_ &EdgePriorityQueue, GpuqoPlannerInfo<BitmapsetN>* info)
 {
-	printf("\n f(x): find_k_cut_edges \n");
+	printf("\n f(x): fillPriorityQueues \n");
 	int *bfs_queue = new int[info->n_rels];
     int bfs_queue_left_idx = 0;
     int bfs_queue_right_idx = 0;
+
+
+	//TODO: leaf also takes graph edges ?
 
 	std::vector<GraphEdge<BitmapsetN>> edge_list;
 
@@ -187,7 +195,7 @@ std::vector<GraphEdge<BitmapsetN>> find_k_cut_edges(GpuqoPlannerInfo<BitmapsetN>
     BitmapsetN seen = BitmapsetN::nth(1);
 	while (bfs_queue_left_idx != bfs_queue_right_idx && bfs_idx < info->n_rels){
         int base_rel_idx = bfs_queue[bfs_queue_left_idx++]; 
-
+		// edges holds the edges to other nodes of the node we are currently traversing
         BitmapsetN edges = info->edge_table[base_rel_idx];
 
 		bfs_idx++;
@@ -196,25 +204,28 @@ std::vector<GraphEdge<BitmapsetN>> find_k_cut_edges(GpuqoPlannerInfo<BitmapsetN>
 			Assert(next > 0);
 			if(!seen.isSet(next)){
 				bfs_queue[bfs_queue_right_idx++] = next - 1;
-
-				GraphEdge<BitmapsetN> edge_el;
-				edge_el.left = info->base_rels[base_rel_idx].id;
-				float left_rel_rows = info->base_rels[base_rel_idx].rows;
-				edge_el.right =  info->base_rels[next-1].id; 
-				float right_rel_rows = info->base_rels[next-1].rows;
-				edge_el.selectivity = estimate_join_selectivity(edge_el.left, edge_el.right, info);
-				edge_el.rows = edge_el.selectivity * left_rel_rows * right_rel_rows;
-
+				// (a) 
+				GraphEdge<BitmapsetN> edge_el = createGraphEdge(base_rel_idx, next-1 , info);
+				// (b)
+				// edges is for the edge.left (so the leaf node is always edge.left)
+				if (edges.size() == 1) 
+				{
+					LeafPriorityQueue.push(edge_el);
+				}
+				// (c) 
+				EdgePriorityQueue.push(edge_el);
 				edge_list.push_back(edge_el);
 			}
 			edges.unset(next);
 		}
 		seen |= info->edge_table[base_rel_idx];
 	}
-	std::sort(edge_list.begin(), edge_list.end(), SortEdges<BitmapsetN>()); 
-	std::vector<GraphEdge<BitmapsetN>> resVec(edge_list.begin(), edge_list.begin() + k);
+
 	delete[] bfs_queue;
-	return  resVec;
+	//TODO: Test that this is returned correctly
+	//TODO: Do I need to return pointers or delete something etc?
+	// return  std::make_tuple(LeafPriorityQueue, EdgePriorityQueue);
+	return ;
 }
 
 template<typename BitmapsetOuter, typename BitmapsetInner>
@@ -287,163 +298,85 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	}
 
 
-
-	// std::cout << "BEFORE gpuqo_k_cut_edges = " << gpuqo_k_cut_edges << " new_info->n_rels= " << new_info->n_rels << std::endl;
-	// if (gpuqo_k_cut_edges >= new_info->n_rels-1){ // -1 because infinite loop since we won't decrease at all
-	// 	gpuqo_k_cut_edges = new_info->n_rels - 20; // -20 so that graph decreases by at least 10 node each time
-	// } 
-	// std::cout << "AFTER gpuqo_k_cut_edges = " << gpuqo_k_cut_edges << " new_info->n_rels= " << new_info->n_rels << std::endl;
+	//TODO: 1) to call the BFS function
+	// (a) which initializes LeafPriorityQueue and EdgePriorityQueue
+	//TODO: FIX THIS AND HOW TO CLAL THE BFS()
 
 
-// FIND EDGES TO CUT (NOT NEEDED)
+	std::priority_queue<GraphEdge<BitmapsetInner>, std::vector<GraphEdge<BitmapsetInner>>, decltype(CompareLeafEdges<BitmapsetInner>)> LeafPriorityQueue;
+	std::priority_queue<GraphEdge<BitmapsetInner>, std::vector<GraphEdge<BitmapsetInner>>, decltype(CompareEdges<BitmapsetInner>)> EdgePriorityQueue;
+	//TODO: Theloun ta <BitmapsetInner> etsi? afou to GraphEdge pou kratane exei <BitmapsetInner>?
+	fillPriorityQueues(LeafPriorityQueue<BitmapsetInner>, EdgePriorityQueue<BitmapsetInner>, new_info);
 
-	// std::vector<GraphEdge<BitmapsetInner>> cutEdges = find_k_cut_edges(new_info, gpuqo_k_cut_edges);
-	// printf("FOUND %zu cutEdges", cutEdges.size());
-	// printf("\tPRINTING  CUT EDGES\n, where 1st rel(2^1) = 1 (start counting from 1 in rel id)");
-	// for(int i=0; i<gpuqo_k_cut_edges; i++){
-	// 	std::cout << "edge_" << i << " : left= " << cutEdges[i].left.toUlonglong() << "\tright= " << cutEdges[i].right.toUlonglong() \
-	// 	<<  "\t(" << cutEdges[i].left.lowestPos() << "-" << cutEdges[i].right.lowestPos()-1 << ") " << std::endl;		
-	// }
+	//TODO: 2) Create DisjointSet out of all the nodes in our graph
+	DisjointSet ds;
+	ds.makeSet(new_info);
+	int total_disjoint_sets = new_info->n_rels;
 
-// CUT THE EDGES (NOT NEEDED)
-	// printf("\n f(x): gpuqo_run_dpdp_union_rec => after find_k_cut_edges ----- CHECK 2 ----- \n");
-	// BitmapsetInner edge_table_copy[BitmapsetInner::SIZE];
-	// printf("\n edge table BEFORE: \n");
-	// printf("\n BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
-	// std::cout << "                 3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
-	// for (int i=0; i < new_info->n_rels; i++){
-	// 	// std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i].toUlonglong() << std::endl;
-	// 	std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i] << std::endl;
-	// 	edge_table_copy[i] = new_info->edge_table[i];
-	// }
+	// -----------
+	//TODO: Improve upper_threshold
+	//TODO: Should we add lower_threshold or does it exist because of the algorithm
+	// int eps = 0.1; // 10% variation allowed
+	// int upper_threshold = 25 + 25*eps;
+	int upper_threshold = 25;
 
-	// for (int i=0; i < gpuqo_k_cut_edges; i++){  
-	// 	GraphEdge<BitmapsetInner> cut_edge = cutEdges[i];
-	// 	std::cout << "removing edge: " << cut_edge.left.lowestPos() << "--" << cut_edge.right.lowestPos() << " - 1st rel(2^1) = 1" << std::endl;
-	// 	edge_table_copy[cut_edge.left.lowestPos()-1].unset(cut_edge.right.lowestPos()); 
-	// 	edge_table_copy[cut_edge.right.lowestPos()-1].unset(cut_edge.left.lowestPos()); 
-	// }
-	
-	// Lopp only for printing edge_table AFTER
-	// printf("\n edge table AFTER: \n");
-	// printf("\n BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
-	// for (int i=0; i < new_info->n_rels; i++){
-	// 	std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i] << std::endl;
-	// }
-	
-	// printf("\nsubset_baserel_id BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
-	// BitmapsetInner subset_baserel_id = BitmapsetInner(0);
-	// for (int i = 0; i < new_info->n_rels; i++){
-	// 	std::cout << "iter: " << i << " new_info->base_rels[" << i << "].id = " << new_info->base_rels[i].id.toUlonglong() << std::endl;
-	// 	subset_baserel_id |= new_info->base_rels[i].id;
-	// }
-	// std::cout << "                  3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
-	// std::cout << "subset_baserel_id " << subset_baserel_id << std::endl;
-
-	
-
-// CREATE SUBGRAPHS (WHICH SHOULD BE DONE WITH THE UNION FIND NOT NEEDED AS IS HERE)
-	// printf("\nPRINTING SUBGRAPHS: \n");
-	// std::vector<BitmapsetInner> subgraphs;
-	// std::cout << " 3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
-	// while(subset_baserel_id!=0){
-	// 	BitmapsetInner csg = grow(subset_baserel_id.lowest(), subset_baserel_id, edge_table_copy);
-	// 	std::cout << "before : " << subset_baserel_id.toUlonglong() << " from csg: " << csg.toUlonglong() << std::endl; 
-	// 	subset_baserel_id = subset_baserel_id.differenceSet(csg);
-	// 	std::cout << "after : " << subset_baserel_id.toUlonglong() << " from csg: " << csg.toUlonglong() << std::endl; 
-	// 	subgraphs.push_back(csg);
-	// 	std::cout << "csg_" << subgraphs.size() << " : " << csg.toUlonglong() <<std::endl; 
-	// 	std::cout << subset_baserel_id << std::endl;
-	// }
+	// 3) Create while loop over leaf priority queue for the first set of UNIONs
+	// get lowest weight edge of leaf node (edge.left)
+	// union with edge.right if it fits on disjoint set
+	while(!LeafPriorityQueue.empty()){
+		GraphEdge<BitmapsetInner> edge = LeafPriorityQueue.top();
+		LeafPriorityQueue.pop();
+		if (ds.getSize(edge.right) + 1 < upper_threshold){
+			ds.union(edge.left, edge.right)
+			total_disjoint_sets--;
+		}
+	}
+	//TODO: I can delete LeafPriorityQueue here there is no further use for it
 
 
-//TODO: 1) to call the BFS function
-// (a) which initializes LeafPriorityQueue and EdgePriorityQueue
-
-
-//TODO: 2) Create DisjointSet out of all the nodes in our graph
-DisjointSet ds = makeSet(GpuqoPlannerInfo<BitmapsetN>* info);
-std::priority_queue<pair, std::vector<pair>, decltype(comparator)> queue;
-
-int n = info->n_rels;
-int k = n/25;
-int eps = 0.1; // 10% variation allowed
-int avg_size = n/k;
-//TODO: Should upper threshold simply be n/k and we're done?
-int upper_threshold = avg_size + avg_size*eps;
-
-while(!queue.empty()){
-    UnionEdge edge = queue.top();
-    queue.pop();
-    if (ds.Find(edge.left) != ds.Find(edge.right) ){
-        if (  edge.total_size != ds.getSize(edge.left) + ds.getSize(edge.right)){
-            edge.left = ds.getSize(edge.left);
-            edge.right = ds.getSize(edge.right);
-            edge.total_size = edge.left + edge.right;
-            queue.push(edge); # kala borei na legetai alliws to push all okay
-        }
-        else{
-            if (edge.total_size < upper_threshold){
-				ds.union(edge.left, edge.right)
+	//TODO: 4) Create while loop over edge priority queue for the rest of the UNIONs
+	while(!EdgePriorityQueue.empty()){
+		GraphEdge<BitmapsetInner> edge = EdgePriorityQueue.top();
+		EdgePriorityQueue.pop();
+		// if on different disjoint sets
+		if (ds.Find(edge.left) != ds.Find(edge.right) ){
+			// if total size of edge is outdated update and push back into queue
+			// happens if either one of the two nodes now belongs in a different disjoint set than when we pushed the edge
+			if (edge.total_size != (ds.getSize(edge.left) + ds.getSize(edge.right)) ){
+				edge.left = ds.getSize(edge.left);
+				edge.right = ds.getSize(edge.right);
+				edge.total_size = edge.left + edge.right;
+				// TODO: kapoio update sto weight an valoume improvement se weights kathws au3anetai to union
+				EdgePriorityQueue.push(edge); 
 			}
-        }
-    }
-}
+			else{
+				if (edge.total_size < upper_threshold)
+				{
+					ds.union(edge.left, edge.right)
+					total_disjoint_sets--;
+				}
+			}
+		}
+	}
+	//TODO: I can delete EdgePriorityQueue here there is no further use for it
 
-
-//TODO: 3) Create while loop over leaf priority queue for the first set of UNIONs
-//TODO: 4) Create while loop over edge priority queue for the rest of the UNIONs
-
-//TODO: 5) Get csgs from all the UNIONs (this will be the std::vector<BitmapsetInner> subgraphs;)
-//TODO: 6) Iterate over all subgraphs and optimize/composite node/next level of recursion 
-
-
-//TODO: Create the subgraphs (csgs) with Union Find dataset based on some starting/stopping logic around sizes
+	//TODO: 5) Get csgs from all the UNIONs (this will be the std::vector<BitmapsetInner> subgraphs;)
+	//TODO: Find better way to get csg instead of going through all the nodes again and checking if we've seen them
+	// 			- maybe from total_disjoint_sets idk
 	std::vector<BitmapsetInner> subgraphs;
+	BitmapsetInner seen = BitmapsetInner(0);
+	for(int i=0; i<new_info->n_rels; i++)
+	{
+		csg = ds.getCsg(new_info->base_rels[i].id) 
+		if (!seen.isSet(csg)){
+			subgraphs.push_back(csg);
+		}
+		seen |= csg;
+	}
+	Assert(subgraphs.size() == total_disjoint_sets)
+	
 
-// 1. BFS gia na kaneis assign weights kai na kaneis create tha LeafNodes kai initialize to LeafPriorityQueue
-
-// NOTE: To UnionPriorityQueue exei to union_id, node_id, size, edge_weight (opou edge weight) to minimum edge
-//?  apo ola ta edges tou node_id? 
-//? Pws kanw keep track of this thing?
-
-//? What if UnionQueue is priority queueu of the edges? ( theloume omws to minimum size na kanei grow prwta)
-// ara prepei 
-// NOMIZE ETSI PREPEI NA GINEI
-// ME KWDIKA OMWS PWS THA TO KANW
-
-template<typename BitmapsetN>
-struct UnionEdge{
-	BitmapsetN left;
-	BitmapsetN right;
-	int left_size; //TODO: This needs to be created with ds.getSize(node_id) of DisjointSet or else it will be wrong
-	int right_size;
-
-// What if priority queue of total_size and edge_weight??
-// Etsi gemizoume to queueu me OLA ta edges
-// kathe fora pou kanoume POP elegxoume an left + right sto idio UNION kai continue (pop again)
-// sorted by total size + spaei to equivilancy me edge_weight?    
-    int total_size = left_size + right_size; 
-    float edge_weight; // minimum weight apo ta edges tou node_id
-};
-
-
-// 1. Create Union our of all nodes 
-// 2. Start with leaf nodes and try to grow (union)
-    // - This should be done with some sort of BFS traversal?
-    // - So that as we traverse we do some check on if we should union and then union?
-    // - Stop growing union (csg) after size is around 20-25
-// 3. Go to another leaf and start growing from that?
-
-
-
-// ? An kanw to priority queue pou kanei rank kala starting points pou a3izei na kanoume twra grow from
-// tha prepei na kanw ena arxiko BFS, na dwsw weights, na vrw leaves, na krataw ranks twn nodes etc.
-// Episis kathws megalwnei to union twn nodes apo ta priority queue kapws na to 3anavazw sto priority queue?
-// i den xreiazetai?
-
-
-// THIS SHOULD BE THE SAME AFTER WE CREATE "SUBGRAPHS" WITH UNION-FIND
+	// 6) optimize/composite nodes recurse should be the same
 	printf("\n f(x): gpuqo_run_dpdp_union_rec => after subgraphs ----- CHECK 3 ----- \n");
 	// dp over subgraphs	
 	list<remapper_transf_el_t<BitmapsetInner> > next_remap_list;
