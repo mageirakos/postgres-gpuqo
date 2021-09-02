@@ -76,7 +76,13 @@ extern QueryTree<BitmapsetN> *gpuqo_run_mag(int gpuqo_algo,
 template<typename BitmapsetN>
 extern QueryTree<BitmapsetN> *gpuqo_run_dpdp(int gpuqo_algo, 
 										GpuqoPlannerInfo<BitmapsetN>* info,
-										int n_iters = 0);										
+										int n_iters = 0);			
+//TODO: Check if n_iters is useful for all 3 versions of the algorithm
+template<typename BitmapsetN>
+extern QueryTree<BitmapsetN> *gpuqo_run_dpdp_union(int gpuqo_algo, 
+										GpuqoPlannerInfo<BitmapsetN>* info,
+										int n_iters = 0);	
+
 template<typename BitmapsetN>
 extern QueryTree<BitmapsetN>* gpuqo_dpsize(GpuqoPlannerInfo<BitmapsetN>* info);
 

@@ -22,6 +22,7 @@
 #include <algorithm>
 
 static int level_of_dp = 0;
+int gpuqo_k_cut_edges;
 
 template<typename BitmapsetN>
 struct GraphEdge{

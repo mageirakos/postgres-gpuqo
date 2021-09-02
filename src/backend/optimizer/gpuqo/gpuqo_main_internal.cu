@@ -123,7 +123,8 @@ static QueryTreeC *__gpuqo_run(int gpuqo_algorithm, GpuqoPlannerInfoC* info_c)
 				query_tree = gpuqo_run_dpdp(gpuqo_algorithm, remap_info);
 				break;
 			case GPUQO_UNION:
-				query_tree = gpuqo_run_dpdp(gpuqo_algorithm, remap_info);
+				printf("\ncase GPUQO_UNION\n");
+				query_tree = gpuqo_run_dpdp_union(gpuqo_algorithm, remap_info);
 				break;
 			default:
 				printf("Unkonwn IDP type\n");

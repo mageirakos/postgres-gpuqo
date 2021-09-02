@@ -33,7 +33,7 @@ typedef enum GpuqoIDPType {
 	GPUQO_IDP2 = 2,
 	GPUQO_IDPMAG = 3,
 	GPUQO_DPDP=4,
-	GPUQO_UNION=5
+	GPUQO_UNION=5,
 	// do I need to change something here as well?
 } GpuqoIDPType;
 

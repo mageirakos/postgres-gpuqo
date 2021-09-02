@@ -121,6 +121,7 @@ public:
         return !intersectionSet(other).empty();
     }
 
+    //TODO: Is this the use case superset.isSubset(possible_subset)?
     __host__ __device__
     inline bool isSubset(const GpuqoBitmapset<T> &other) const{
         return intersectionSet(other) == *this;

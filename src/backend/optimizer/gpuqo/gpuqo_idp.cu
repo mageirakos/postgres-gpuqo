@@ -14,6 +14,7 @@
 int gpuqo_idp_n_iters;
 int gpuqo_idp_type;
 
+// LOL
 template<typename BitmapsetOuter, typename BitmapsetInner>
 QueryTree<BitmapsetOuter> *gpuqo_run_idp1_next(int gpuqo_algo, 
 						GpuqoPlannerInfo<BitmapsetOuter>* info,

@@ -48,7 +48,7 @@
 
 // int gpuqo_idp_n_iters;
 // int gpuqo_idp_type;
-int gpuqo_k_cut_edges;
+// int gpuqo_k_cut_edges;
 
 template<typename BitmapsetN>
 struct GraphEdge{
