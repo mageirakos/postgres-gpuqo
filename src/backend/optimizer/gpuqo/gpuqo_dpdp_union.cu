@@ -197,21 +197,7 @@ void fillPriorityQueues(std::vector<GraphEdge<BitmapsetN>*> &edge_pointers_list,
 	int *bfs_queue = new int[info->n_rels];
     int bfs_queue_left_idx = 0;
     int bfs_queue_right_idx = 0;
-
-	// get min and max from base_rels[rows]
-	// so I can normalize rows 
-	//TODO: get min/max for rows to try and normalize?
-	//print typical rows and typical selectitity
-	// float row;
-	// for(int i=0; i < info->n_rels; i++){
-	// 	row = info->base_rels[i].rows;
-	// 	std::cout << "rows_" << i << " = " << row << std::endl;
-
-	// }
 	
-
-
-
     int bfs_idx = 0;
     bfs_queue[bfs_queue_right_idx++] = 0;
 
@@ -232,11 +218,12 @@ void fillPriorityQueues(std::vector<GraphEdge<BitmapsetN>*> &edge_pointers_list,
 				GraphEdge<BitmapsetN> *edge_el = createGraphEdge(base_rel_idx, next-1 , info);
 				// (b)
 				// edges is for the edge.left (so the leaf node is always edge.left)
-				if (edges.size() == 1) 
-				{
-					LeafPriorityQueue.push(edge_el);
-					// std::cout << "(pushing) LeafQ size = " << LeafPriorityQueue.size() << std::endl;
-				}
+				//TODO TEST (f): Not using LeafPQ
+				// if (edges.size() == 1) 
+				// {
+				// 	LeafPriorityQueue.push(edge_el);
+				// 	// std::cout << "(pushing) LeafQ size = " << LeafPriorityQueue.size() << std::endl;
+				// }
 				// (c) 
 				EdgePriorityQueue.push(edge_el);
 				// std::cout << "(pushing) EdgeQ size = " << EdgePriorityQueue.size() << std::endl;
@@ -356,34 +343,38 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	// get lowest weight edge of leaf node (edge.left)
 	// union with edge.right if it fits on disjoint set
 	// printf("Starting LeafPriorityQueue while loop\n");
-	while(!LeafPriorityQueue.empty()){
-		//TODO: Giati mou gurnaei ena trelo LeafQ size auto edw?
-		// std::cout << "(before pop) LeafQ size = " << LeafPriorityQueue.size() << std::endl;
+
+	//TODO TEST (f): Commenting out the leafPQ while loop
+	int num_leaves= LeafPriorityQueue.size();
+	int worst_leaf_edges = (int)(num_leaves*0.01 + 0.5);
+	while(LeafPriorityQueue.size() > worst_leaf_edges){
+	// while(!LeafPriorityQueue.empty()){
 		const GraphEdge<BitmapsetInner>* edge = LeafPriorityQueue.top();
 		LeafPriorityQueue.pop();
-		// std::cout << "(after pop) LeafQ size = " << LeafPriorityQueue.size() << std::endl;
-		//TODO: Spaei se auto to pop gia kapoion logo giati omws?
-		// std::cout << "Leaf edge - "  << "left_id (leaf) = " << edge->left << "\tright_id= " << edge->right \
-		// << "\tright_size= " << ds.getSize(edge->right) << "\tthreshold = " << upper_threshold << std::endl;	
-		
 		if (ds.getSize(edge->right) + 1 < upper_threshold){
-			// printf("UNION edge.left - edge.right");
 			ds.Union(edge->left, edge->right);
-			// std::cout << "\tunion csg= " << ds.getCsg(edge->left) << std::endl;
 			total_disjoint_sets--;
 		}
 	}
-	//TODO: I can delete LeafPriorityQueue here there is no further use for it
 
 
-	//TODO: 4) Create while loop over edge priority queue for the rest of the UNIONs
-	
+
+	// 4) Create while loop over edge priority queue for the rest of the UNIONs
+
 	// printf("Starting EdgePriorityQueue while loop\n");
-	while(!EdgePriorityQueue.empty()){
+	//TODO TEST (f-e): This is what it was
+	// while(!EdgePriorityQueue.empty()){
+	//TODO TEST : Test if leaving the 20 "worst" edges improves optimailty at all
+	int worst_inner_edges = (int)((new_info->n_rels-num_leaves) *0.1 + 0.5);
+	while(EdgePriorityQueue.size() > worst_inner_edges){
 		GraphEdge<BitmapsetInner>* edge = EdgePriorityQueue.top();
 		EdgePriorityQueue.pop();
 		// if on different disjoint sets
 		if (ds.Find(edge->left) != ds.Find(edge->right) ){
+			//TODO TEST: Alternative version of not recalculating size:
+			// if(ds.getSize(edge->left) + ds.getSize(edge->right) <= upper_threshold){
+			// 	ds.Union(edge->left, edge->right);
+			// 	total_disjoint_sets--;
 			// if total size of edge is outdated update and push back into queue
 			// happens if either one of the two nodes now belongs in a different disjoint set than when we pushed the edge
 			if (edge->total_size != (ds.getSize(edge->left) + ds.getSize(edge->right)) ){
@@ -411,10 +402,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	// printf("\n\t\tPRINTING ALL DISJOINT SETS");
 	// printSets(new_info, ds);
 
-
-	//TODO: I can delete EdgePriorityQueue here there is no further use for it
-
-	//TODO: 5) Get csgs from all the UNIONs (this will be the std::vector<BitmapsetInner> subgraphs;)
+	//5) Get csgs from all the UNIONs (this will be the std::vector<BitmapsetInner> subgraphs;)
 	//TODO: Find better way to get csg instead of going through all the nodes again and checking if we've seen them
 	// 			- maybe from total_disjoint_sets idk
 	std::vector<BitmapsetInner> subgraphs;
@@ -424,8 +412,6 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	{
 		BitmapsetInner node_id = new_info->base_rels[i].id;
 		BitmapsetInner csg = ds.getCsg(node_id);
-		//TODO: .isSet() converts csg to unsigned does this break our logic?
-		//TODO: does .isSubet() work correctly? (does it cast anything do what I want)
 		if (!csg.isSubset(seen)){
 			subgraphs.push_back(csg);
 		}
