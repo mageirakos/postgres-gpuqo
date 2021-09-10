@@ -293,7 +293,8 @@ if __name__ == "__main__":
     series = {
         folder2series(folder, args.name_depth):
         {
-            query:content
+            # query:content
+            folder2series(query, args.name_depth):content
             for query, content in load_results_complete(folder, args.sql_folder, args.metric).items()
             if (content['tables'] >= args.min_tables 
                 and content['tables'] <= args.max_tables)
