@@ -39,49 +39,6 @@ struct SortEdges{
     }
 };
 
-// template<typename BitmapsetN>
-// int getNumberOfEdges(GpuqoPlannerInfo<BitmapsetN>* info){
-//     int number_of_edges = 0 ;
-//     for(int i=0; i < info->n_rels; i++){
-//         number_of_edges += info->edge_table[i].size();
-//     }
-//     assert(number_of_edges%2==0); // should be even because undirected graph
-//     return number_of_edges/2;
-// };
-
-
-// #include "kaHIP_interface.h"
-// static int test() {
-
-        // std::cout <<  "partitioning graph from the manual"  << std::endl;
-
-        // int n            = 5;
-        // int* xadj        = new int[6];
-        // xadj[0] = 0; xadj[1] = 2; xadj[2] = 5; xadj[3] = 7; xadj[4] = 9; xadj[5] = 12;
-
-        // int* adjncy      = new int[12];
-        // adjncy[0]  = 1; adjncy[1]  = 4; adjncy[2]  = 0; adjncy[3]  = 2; adjncy[4]  = 4; adjncy[5]  = 1; 
-        // adjncy[6]  = 3; adjncy[7]  = 2; adjncy[8]  = 4; adjncy[9]  = 0; adjncy[10] = 1; adjncy[11] = 3; 
-        
-        // double imbalance = 0.03;
-        // int* part        = new int[n];
-        // int edge_cut     = 0;
-        // int nparts       = 3;
-        // int* vwgt        = NULL;
-        // int* adjcwgt     = NULL;
-
-        // kaffpa(&n, vwgt, xadj, adjcwgt, adjncy, &nparts, &imbalance, false, 0, ECO, & edge_cut, part);
-
-        // std::cout <<  "edge cut " <<  edge_cut  << std::endl;
-		// for(int i=0; i < n; i++){
-		// 	std::cout << "blockID[" << i << "] = " << part[i] << std::endl;
-		// }
-		// printf("\nentering infinite loop;\n");
-		// while(1==1){
-			
-		// }
-// }
-
 
 template<typename BitmapsetN>
 std::vector<GraphEdge<BitmapsetN>> find_k_cut_edges(GpuqoPlannerInfo<BitmapsetN>* info, int k)
@@ -91,11 +48,6 @@ std::vector<GraphEdge<BitmapsetN>> find_k_cut_edges(GpuqoPlannerInfo<BitmapsetN>
     int bfs_queue_left_idx = 0;
     int bfs_queue_right_idx = 0;
 
-	// int number_of_edges = getNumberOfEdges(info); // m (only count once, don't count duplicate edges)
-	// printf("%d", number_of_edges);
-	// std::cout << "number of edges: " << number_of_edges << std::endl;
-	// while(1){}
-	// test();
 	std::vector<GraphEdge<BitmapsetN>> edge_list;
 
     int bfs_idx = 0;
@@ -204,75 +156,79 @@ QueryTree<BitmapsetOuter> *gpuqo_run_mag_rec(int gpuqo_algo,
 		return out_qt;
 	}
 
-
+// START OF K CUT RECURSION TO FIND SUBGRAPHS
+// ------------------------------------------------------------
 	// FIX: This probably needs to change as we expand to normal graphs (other than trees)
 	// in trees, edges are at most 1 less than number of nodes, so when I use a large k we should be careful 
 	// This FIX does not seem to work ????
-	std::cout << "BEFORE gpuqo_k_cut_edges = " << gpuqo_k_cut_edges << " new_info->n_rels= " << new_info->n_rels << std::endl;
+	// std::cout << "BEFORE gpuqo_k_cut_edges = " << gpuqo_k_cut_edges << " new_info->n_rels= " << new_info->n_rels << std::endl;
 	if (gpuqo_k_cut_edges >= new_info->n_rels-1){ // -1 because infinite loop since we won't decrease at all
 		gpuqo_k_cut_edges = new_info->n_rels - 20; // -20 so that graph decreases by at least 10 node each time
 	} 
-	std::cout << "AFTER gpuqo_k_cut_edges = " << gpuqo_k_cut_edges << " new_info->n_rels= " << new_info->n_rels << std::endl;
-
+	// std::cout << "AFTER gpuqo_k_cut_edges = " << gpuqo_k_cut_edges << " new_info->n_rels= " << new_info->n_rels << std::endl;
 
 
 	std::vector<GraphEdge<BitmapsetInner>> cutEdges = find_k_cut_edges(new_info, gpuqo_k_cut_edges);
-	printf("FOUND %zu cutEdges", cutEdges.size());
-	printf("\tPRINTING  CUT EDGES\n, where 1st rel(2^1) = 1 (start counting from 1 in rel id)");
-	for(int i=0; i<gpuqo_k_cut_edges; i++){
-		std::cout << "edge_" << i << " : left= " << cutEdges[i].left.toUlonglong() << "\tright= " << cutEdges[i].right.toUlonglong() \
-		<<  "\t(" << cutEdges[i].left.lowestPos() << "-" << cutEdges[i].right.lowestPos()-1 << ") " << std::endl;		
-	}
+	// printf("FOUND %zu cutEdges", cutEdges.size());
+	// printf("\tPRINTING  CUT EDGES\n, where 1st rel(2^1) = 1 (start counting from 1 in rel id)");
+	// for(int i=0; i<gpuqo_k_cut_edges; i++){
+	// 	std::cout << "edge_" << i << " : left= " << cutEdges[i].left.toUlonglong() << "\tright= " << cutEdges[i].right.toUlonglong() \
+	// 	<<  "\t(" << cutEdges[i].left.lowestPos() << "-" << cutEdges[i].right.lowestPos()-1 << ") " << std::endl;		
+	// }
 
 	printf("\n f(x): gpuqo_run_mag_rec => after find_k_cut_edges ----- CHECK 2 ----- \n");
 	BitmapsetInner edge_table_copy[BitmapsetInner::SIZE];
-	printf("\n edge table BEFORE: \n");
-	printf("\n BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
-	std::cout << "                 3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
+	// printf("\n edge table BEFORE: \n");
+	// printf("\n BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
+	// std::cout << "                 3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
 	for (int i=0; i < new_info->n_rels; i++){
 		// std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i].toUlonglong() << std::endl;
-		std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i] << std::endl;
+		// std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i] << std::endl;
 		edge_table_copy[i] = new_info->edge_table[i];
 	}
 
 	for (int i=0; i < gpuqo_k_cut_edges; i++){  
 		GraphEdge<BitmapsetInner> cut_edge = cutEdges[i];
-		std::cout << "removing edge: " << cut_edge.left.lowestPos() << "--" << cut_edge.right.lowestPos() << " - 1st rel(2^1) = 1" << std::endl;
+		// std::cout << "removing edge: " << cut_edge.left.lowestPos() << "--" << cut_edge.right.lowestPos() << " - 1st rel(2^1) = 1" << std::endl;
 		edge_table_copy[cut_edge.left.lowestPos()-1].unset(cut_edge.right.lowestPos()); 
 		edge_table_copy[cut_edge.right.lowestPos()-1].unset(cut_edge.left.lowestPos()); 
 	}
 	
 	// Lopp only for printing edge_table AFTER
-	printf("\n edge table AFTER: \n");
-	printf("\n BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
-	for (int i=0; i < new_info->n_rels; i++){
-		std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i] << std::endl;
-	}
+	// printf("\n edge table AFTER: \n");
+	// printf("\n BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
+	// for (int i=0; i < new_info->n_rels; i++){
+	// 	std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i] << std::endl;
+	// }
 	
-	printf("\nsubset_baserel_id BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
+	// printf("\nsubset_baserel_id BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
 	BitmapsetInner subset_baserel_id = BitmapsetInner(0);
 	for (int i = 0; i < new_info->n_rels; i++){
-		std::cout << "iter: " << i << " new_info->base_rels[" << i << "].id = " << new_info->base_rels[i].id.toUlonglong() << std::endl;
+		// std::cout << "iter: " << i << " new_info->base_rels[" << i << "].id = " << new_info->base_rels[i].id.toUlonglong() << std::endl;
 		subset_baserel_id |= new_info->base_rels[i].id;
 	}
-	std::cout << "                  3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
-	std::cout << "subset_baserel_id " << subset_baserel_id << std::endl;
+	// std::cout << "                  3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
+	// std::cout << "subset_baserel_id " << subset_baserel_id << std::endl;
 
 	
-	printf("\nPRINTING SUBGRAPHS: \n");
+	// printf("\nPRINTING SUBGRAPHS: \n");
 	std::vector<BitmapsetInner> subgraphs;
-	std::cout << " 3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
+	// std::cout << " 3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
 	while(subset_baserel_id!=0){
 		BitmapsetInner csg = grow(subset_baserel_id.lowest(), subset_baserel_id, edge_table_copy);
 		// std::cout << "before: " << subset_baserel_id << " from csg: " << csg << std::endl; 		
-		std::cout << "before : " << subset_baserel_id.toUlonglong() << " from csg: " << csg.toUlonglong() << std::endl; 
+		// std::cout << "before : " << subset_baserel_id.toUlonglong() << " from csg: " << csg.toUlonglong() << std::endl; 
+// HERE CHECK IF csg.size() > upper threshold and keep it on the side to cut again ??? (have a while loop on this block)
 		subset_baserel_id = subset_baserel_id.differenceSet(csg);
-		std::cout << "after : " << subset_baserel_id.toUlonglong() << " from csg: " << csg.toUlonglong() << std::endl; 
+		// std::cout << "after : " << subset_baserel_id.toUlonglong() << " from csg: " << csg.toUlonglong() << std::endl; 
 		// std::cout << "after bms: " << subset_baserel_id << " from csg: " << csg<< std::endl; 		
 		subgraphs.push_back(csg);
-		std::cout << "csg_" << subgraphs.size() << " : " << csg.toUlonglong() <<std::endl; 
+		// std::cout << "csg_" << subgraphs.size() << " : " << csg.toUlonglong() <<std::endl; 
 		std::cout << subset_baserel_id << std::endl;
 	}
+// ------------------------------------------------------------
+// END OF K CUT RECURSION TO FIND SUBGRAPHS
+
 
 	printf("\n f(x): gpuqo_run_mag_rec => after subgraphs ----- CHECK 3 ----- \n");
 	// dp over subgraphs	

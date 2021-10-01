@@ -152,17 +152,14 @@ struct CompareLeafEdges{
 template<typename BitmapsetN>
 struct CompareEdges{
     bool operator()(const GraphEdge<BitmapsetN>* lhs, const GraphEdge<BitmapsetN>* rhs) {
-		if (lhs->total_size == rhs->total_size) {
-			return lhs->weight > rhs->weight;			
-		}
-		return lhs->total_size > rhs->total_size;
+		return lhs->total_size > lhs->total_size || (lhs->total_size == lhs->total_size  && lhs->weight > rhs->weight);
     }
 };
 
 template<typename BitmapsetN>
 using LeafQ = std::priority_queue<GraphEdge<BitmapsetN>*, std::vector<GraphEdge<BitmapsetN>*>, CompareLeafEdges<BitmapsetN>>;
 template<typename BitmapsetN>
-using EdgeQ = std::priority_queue<GraphEdge<BitmapsetN>*, std::vector<GraphEdge<BitmapsetN>*>, CompareEdges<BitmapsetN>>;
+using EdgeQ = std::priority_queue<GraphEdge<BitmapsetN>*, std::vector<GraphEdge<BitmapsetN>*>, CompareLeafEdges<BitmapsetN>>;
 
 
 template<typename BitmapsetN>
@@ -361,7 +358,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	// -----------
 	int upper_threshold = 16;
 
-	// // // printf("Starting LeafPriorityQueue while loop\n");
+	// // printf("Starting LeafPriorityQueue while loop\n");
 	while(!LeafPriorityQueue.empty()){
 		// std::cout << "(before pop) LeafQ size = " << LeafPriorityQueue.size() << std::endl;
 		GraphEdge<BitmapsetInner>* edge = LeafPriorityQueue.top();
@@ -385,32 +382,15 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 		EdgePriorityQueue.pop();
 
 		//TODO: Testing this instead of the full size update
-		// if (ds.Find(edge->left) != ds.Find(edge->right) ){
-				
-		// 	if( ds.getSize(edge->left) + ds.getSize(edge->right) < upper_threshold) {
-		// 		ds.Union(edge);
-		// 		total_disjoint_sets--;
-		// 	}
-		// }
-
 		if (ds.Find(edge->left) != ds.Find(edge->right) ){
-			if (edge->total_size != (ds.getSize(edge->left) + ds.getSize(edge->right)) ){
-				edge->left_size = ds.getSize(edge->left);
-				edge->right_size = ds.getSize(edge->right);
-				edge->total_size = edge->left_size + edge->right_size;
-				EdgePriorityQueue.push(edge); 
-			}
-			else{
-				if (edge->total_size < upper_threshold)
-				{
-					ds.Union(edge);
-					// ds.Union(edge->left, edge->right);
-					total_disjoint_sets--;
-				}
+				
+			if( ds.getSize(edge->left) + ds.getSize(edge->right) < upper_threshold) {
+				ds.Union(edge);
+				total_disjoint_sets--;
 			}
 		}
 	}
-	
+
 	for (int i=0; i < edge_pointers_list.size(); i++){
 		delete edge_pointers_list[i];
 	}
@@ -440,7 +420,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	
 	// std::cout << "Sum of NOT OPTIMIZED Disjoint Set Cost: " << total_unoptimized_union_cost << std::endl;
 	// std::cout << "Sum of CUT EDGES Cost: " << sum_of_all_edge_costs - total_unoptimized_union_cost << std::endl;
-	// printf("\n");
+	printf("\n");
 	// double sum_subgraph_costs = 0;
 	// for(int i=0; i < subgraphs.size(); i++){
 		

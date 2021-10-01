@@ -77,7 +77,7 @@ is_inner_unique(BitmapsetN outer_rel_id,
 template<typename BitmapsetN>
 __host__ __device__
 static struct PathCost 
-//  USE THIS ONE
+//  USE THIS FOR COST ESTIMATE
 calc_join_cost(BitmapsetN outer_rel_id, JoinRelation<BitmapsetN> &outer_rel,
                 BitmapsetN inner_rel_id, JoinRelation<BitmapsetN> &inner_rel,
                 float join_rel_rows, GpuqoPlannerInfo<BitmapsetN>* info)

@@ -17,6 +17,8 @@
 
 // structure representing join of two relations used by CUDA and CPU code 
 // of GPUQO
+
+// blah
 template<typename BitmapsetN>
 struct JoinRelation{
 	BitmapsetN left_rel_id;
