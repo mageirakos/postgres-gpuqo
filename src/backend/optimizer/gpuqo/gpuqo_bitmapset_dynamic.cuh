@@ -189,7 +189,7 @@ public:
     }
 
     bool operator!=(const BitmapsetDynamic &other) const{
-        return !(*this == other);
+        return !bms_equal(bms, other.bms);
     }
 
     BitmapsetDynamic& operator=(const BitmapsetDynamic& other) {
