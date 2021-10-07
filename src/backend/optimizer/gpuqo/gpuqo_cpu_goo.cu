@@ -63,6 +63,7 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
     map<BitmapsetN, QueryTree<BitmapsetN>* > relations;
     CompareQueryTree<BitmapsetN> compare;
 
+    LOG_DEBUG("EDGES:\n");
     for (int i = 0; i < info->n_rels; i++) {
         QueryTree<BitmapsetN>* qt = new QueryTree<BitmapsetN>;
         qt->id = info->base_rels[i].id;
@@ -73,10 +74,13 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
         qt->right = NULL;
         qt->width = info->base_rels[i].width;
         relations.insert(make_pair(qt->id, qt));
+        LOG_DEBUG("%d: %u\n", i+1, info->edge_table[i].toUint());
     }
 
     for (auto i = relations.begin(); i != relations.end(); i++) {
             for (auto j = i; j != relations.end(); j++) {
+                LOG_DEBUG("Check %u %u\n", 
+                            i->first.toUint(), j->first.toUint());
                 if (are_valid_pair(i->first, j->first, info)) {
                     QueryTree<BitmapsetN>* qt = join(*i->second, *j->second, info);
                     heap.push_back(qt);
