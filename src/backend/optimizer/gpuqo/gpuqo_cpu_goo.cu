@@ -10,7 +10,7 @@
 
 #include <queue>
 #include <vector>
-#include <unordered_set>
+#include <map>
 #include <iostream>
 #include <cmath>
 #include <cstdint>
@@ -60,7 +60,7 @@ QueryTree<BitmapsetN>*
 gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
 {
     vector<QueryTree<BitmapsetN>* > heap;
-    unordered_set<QueryTree<BitmapsetN>* > relations;
+    map<BitmapsetN, QueryTree<BitmapsetN>* > relations;
     CompareQueryTree<BitmapsetN> compare;
 
     for (int i = 0; i < info->n_rels; i++) {
@@ -72,13 +72,13 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
         qt->left = NULL;
         qt->right = NULL;
         qt->width = info->base_rels[i].width;
-        relations.insert(qt);
+        relations.insert(make_pair(qt->id, qt));
     }
 
     for (auto i = relations.begin(); i != relations.end(); i++) {
             for (auto j = i; j != relations.end(); j++) {
-                if (are_valid_pair((*i)->id, (*j)->id, info)) {
-                    QueryTree<BitmapsetN>* qt = join(**i, **j, info);
+                if (are_valid_pair(i->first, j->first, info)) {
+                    QueryTree<BitmapsetN>* qt = join(*i->second, *j->second, info);
                     heap.push_back(qt);
                     push_heap(heap.begin(), heap.end(), compare);
                     LOG_DEBUG("Pushed %u (%.0f) in heap\n", 
@@ -99,8 +99,8 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
 
         // check that smallest is still valid
         // ie, that its left and right children are still in the relations set
-        auto left_pos = relations.find(smallest->left);
-        auto right_pos = relations.find(smallest->right);
+        auto left_pos = relations.find(smallest->left->id);
+        auto right_pos = relations.find(smallest->right->id);
         if (left_pos == relations.end() || right_pos == relations.end()) {
             LOG_DEBUG("discarded\n"); 
             delete smallest;
@@ -116,8 +116,8 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
 
         // add all its combinations with other relations to the heap
         for (auto j = relations.begin(); j != relations.end(); j++) {
-            if (are_valid_pair(smallest->id, (*j)->id, info)) {
-                QueryTree<BitmapsetN>* qt = join(*smallest, **j, info);
+            if (are_valid_pair(smallest->id, j->first, info)) {
+                QueryTree<BitmapsetN>* qt = join(*smallest, *j->second, info);
                 heap.push_back(qt);
                 push_heap(heap.begin(), heap.end(), compare);
                 LOG_DEBUG("Pushed %u (%.0f) in heap\n", 
@@ -126,7 +126,7 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
         }
 
         // insert smallest in relations
-        relations.insert(smallest);
+        relations.insert(make_pair(smallest->id, smallest));
     } while(smallest == NULL || smallest->id.size() < info->n_rels);
 
     // free all remaining pairs in the heap
@@ -135,9 +135,9 @@ gpuqo_cpu_goo(GpuqoPlannerInfo<BitmapsetN>* info)
 
     // free all remaining pairs in relations, except smallest, which will be
     // returned
-    for (QueryTree<BitmapsetN>* qt:relations)
-        if (qt != smallest)
-            delete qt;
+    for (auto i = relations.begin(); i != relations.end(); i++)
+        if (i->second != smallest)
+            delete i->second;
 
     return smallest;
 }
