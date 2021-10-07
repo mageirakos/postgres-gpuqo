@@ -34,6 +34,7 @@ struct Bitmapset
 
 extern "C" Bitmapset *bms_copy(const Bitmapset *a);
 extern "C" bool bms_equal(const Bitmapset *a, const Bitmapset *b);
+extern "C" int bms_compare(const Bitmapset *a, const Bitmapset *b);
 extern "C" Bitmapset *bms_make_singleton(int x);
 extern "C" void bms_free(Bitmapset *a);
 

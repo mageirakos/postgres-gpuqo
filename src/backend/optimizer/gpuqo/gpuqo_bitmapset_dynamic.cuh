@@ -204,6 +204,22 @@ public:
         other.bms = NULL;
         return *this;
     }
+
+    bool operator<(const BitmapsetDynamic &other) const{
+        return bms_compare(bms, other.bms) < 0;
+    }
+
+    bool operator<=(const BitmapsetDynamic &other) const{
+        return bms_compare(bms, other.bms) <= 0;
+    }
+
+    bool operator>(const BitmapsetDynamic &other) const{
+        return bms_compare(bms, other.bms) > 0;
+    }
+
+    bool operator>=(const BitmapsetDynamic &other) const{
+        return bms_compare(bms, other.bms) >= 0;
+    }
 };
 
 
