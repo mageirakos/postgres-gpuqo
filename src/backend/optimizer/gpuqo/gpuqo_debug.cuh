@@ -79,4 +79,17 @@ template<typename Type>
 __host__
 std::ostream & operator<<(std::ostream &os, const GpuqoBitmapset<Type>& bms);
 
+// forward declare to prevent import loop
+template<typename BitmapsetN>
+struct QueryTree;
+
+template<typename BitmapsetN>
+void printQueryTree(QueryTree<BitmapsetN>* qt, int indent);
+
+template<typename BitmapsetN>
+inline void printQueryTree(QueryTree<BitmapsetN>* qt){
+    printQueryTree(qt, 2);
+}
+
+
 #endif							/* GPUQO_DEBUG_CUH */
