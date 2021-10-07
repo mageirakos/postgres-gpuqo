@@ -218,6 +218,7 @@ GpuqoPlannerInfo<BitmapsetN>* copyToDeviceGpuqoPlannerInfo(GpuqoPlannerInfo<Bitm
 	char* p;
 	
 	cudaMalloc(&p, info->size);
+	cudaMemset(p, 0, info->size);
 	
 	GpuqoPlannerInfo<BitmapsetN> *info_gpu = (GpuqoPlannerInfo<BitmapsetN>*) p;
 	p += plannerInfoBaseSize<BitmapsetN>();
