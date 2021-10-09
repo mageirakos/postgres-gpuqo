@@ -142,7 +142,7 @@ class SnowflakeSchema:
             yield from self.__make_insert_into_rec(new_id, child_sizes, 
                                                 min(size//10, min_size), size)
 
-    def write_insert_into(self, f, min_size=1000, max_size=100000):
+    def write_insert_into(self, f, min_size=10_000, max_size=1_000_000):
         for out in self.__make_insert_into_rec(tuple(), [max_size], min_size, max_size):
             f.write(out)
             f.write('\n\n')
@@ -193,7 +193,7 @@ if __name__ == "__main__":
         f.write('\n')
 
     with open("fill_tables.sql", 'w') as f:
-        schema.write_insert_into(f, 1000, 100000)
+        schema.write_insert_into(f, 10_000, 1_000_000)
 
     try:
         os.mkdir("queries")

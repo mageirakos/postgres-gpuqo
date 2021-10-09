@@ -25,7 +25,8 @@ function run(){
 			<(echo ";") \
 		| tr '\n' ' '; \
 		echo; \
-	) | tee /dev/stderr | timeout -s SIGINT -k 10 "$6" postgres --single $1
+	# DO NOT USE STD:ERR 
+	) | tee >(cat 1>&2) | timeout -s SIGINT -k 10 "$6" postgres --single $1
 }
 
 # common

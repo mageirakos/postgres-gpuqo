@@ -362,6 +362,7 @@ if __name__ == "__main__":
     }
 
     ratio_baseline = None
+    metric=args.metric
     if args.ratio:
         baseline = folder2series(args.result_folders[args.baseline], args.name_depth)
         new_series = {}
@@ -376,7 +377,7 @@ if __name__ == "__main__":
                         queries[query][f"{metric}_time_avg"], 
                         series[baseline][query][f"{metric}_time_avg"]
                     ) if query in series[baseline] else np.nan
-                    for metric in ['plan', 'exec', 'total', 'gpuqo']
+                    # for metric in ['plan', 'exec', 'total', 'gpuqo']
                 }
                 new_series[new_label][query]['tables'] =queries[query]['tables']
 
