@@ -10,6 +10,7 @@
 #ifndef GPUQO_DPSUB_CUH
 #define GPUQO_DPSUB_CUH
 
+#include <thrust/host_vector.h>
 #include <thrust/tabulate.h>
 
 #include "gpuqo.cuh"
