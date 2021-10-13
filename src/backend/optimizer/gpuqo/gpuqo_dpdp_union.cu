@@ -361,23 +361,23 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	// -----------
 	int upper_threshold = 16;
 
-	// // // printf("Starting LeafPriorityQueue while loop\n");
-	while(!LeafPriorityQueue.empty()){
-		// std::cout << "(before pop) LeafQ size = " << LeafPriorityQueue.size() << std::endl;
-		GraphEdge<BitmapsetInner>* edge = LeafPriorityQueue.top();
-		LeafPriorityQueue.pop();
-		// std::cout << "(after pop) LeafQ size = " << LeafPriorityQueue.size() << std::endl;
-		// std::cout << "Leaf edge - "  << "left_id (leaf) = " << edge->left << "\tright_id= " << edge->right \
-		// << "\tright_size= " << ds.getSize(edge->right) << "\tthreshold = " << upper_threshold << std::endl;	
+	// // // // printf("Starting LeafPriorityQueue while loop\n");
+	// while(!LeafPriorityQueue.empty()){
+	// 	// std::cout << "(before pop) LeafQ size = " << LeafPriorityQueue.size() << std::endl;
+	// 	GraphEdge<BitmapsetInner>* edge = LeafPriorityQueue.top();
+	// 	LeafPriorityQueue.pop();
+	// 	// std::cout << "(after pop) LeafQ size = " << LeafPriorityQueue.size() << std::endl;
+	// 	// std::cout << "Leaf edge - "  << "left_id (leaf) = " << edge->left << "\tright_id= " << edge->right \
+	// 	// << "\tright_size= " << ds.getSize(edge->right) << "\tthreshold = " << upper_threshold << std::endl;	
 		
-		if (ds.getSize(edge->right) + 1 < upper_threshold){
-			// printf("UNION edge.left - edge.right");
-			// ds.Union(edge->left, edge->right);
-			ds.Union(edge);
-			// std::cout << "\tunion csg= " << ds.getCsg(edge->left) << std::endl;
-			total_disjoint_sets--;
-		}
-	}
+	// 	if (ds.getSize(edge->right) + 1 < upper_threshold){
+	// 		// printf("UNION edge.left - edge.right");
+	// 		// ds.Union(edge->left, edge->right);
+	// 		ds.Union(edge);
+	// 		// std::cout << "\tunion csg= " << ds.getCsg(edge->left) << std::endl;
+	// 		total_disjoint_sets--;
+	// 	}
+	// }
 
 	// printf("Starting EdgePriorityQueue while loop\n");
 	while(!EdgePriorityQueue.empty()){
