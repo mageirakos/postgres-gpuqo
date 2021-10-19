@@ -204,7 +204,7 @@ void try_join(BitmapsetN jr, JoinRelation<BitmapsetN> &jr_out,
     p = additional_predicate && 
             check_join<BitmapsetN, CHECK_LEFT, CHECK_RIGHT>(l, r, info);
 
-    Assert(__activemask() == WARP_MASK);
+    Assert(__activemask_sync() == WARP_MASK);
 
     if (NO_CCC){
         if (p){
