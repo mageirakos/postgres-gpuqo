@@ -32,7 +32,7 @@ class SnowflakeSchema:
         # select 25% of tables from qs
         
         # TEST 1: (queries_2) 25% of tables have predicate, randint from 20 to 80% selective
-        # TEST 2: (queries_3) 100% of tables have predicate, randint 20 to 80 % selective
+        # TEST 2: (queries_3) 25% of tables have predicate, randint 1 to 99 % selective
         for t in qs:
             if len(t) == 1:
                 continue
@@ -40,13 +40,13 @@ class SnowflakeSchema:
             where_clauses.append("T_{0}.t_{1} = T_{1}.pk".format(
                                 id_to_str(t[:-1]), id_to_str(t)))
             # ADD HERE PREDICATE
-        # for t in sample(qs, int(0.25*len(qs))):
-        #     if len(t) == 1:
-        #         continue
-            sel = randint(20,80)
+        for t in sample(qs, int(0.25*len(qs))):
+            if len(t) == 1:
+                continue
+            sel = randint(1,99)
             rows = card[f"t_{id_to_str(t)}"]
             fk = int(np.percentile(np.array(range(rows)), sel))
-            # print(f"{rows}\t{sel}\tt_{id_to_str(t)}")
+            # print(f"{rows}\t[{sel}\tt_{id_to_str(t)}")
             # print(f"{t} {sel} {rows} T_{id_to_str(t)}.pk > {fk}")
             # random choice 250 tables?
             where_clauses.append(f"T_{id_to_str(t)}.pk > {fk}") # fk_random is some random selectivity
