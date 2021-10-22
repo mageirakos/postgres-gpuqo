@@ -30,24 +30,23 @@ class SnowflakeSchema:
         where_clauses = []
         # for t in qs, ara select sugkekrimena t
         # select 25% of tables from qs
-
-
+        
+        # TEST 1: (queries_2) 25% of tables have predicate, randint from 20 to 80% selective
+        # TEST 2: (queries_3) 100% of tables have predicate, randint 20 to 80 % selective
         for t in qs:
             if len(t) == 1:
                 continue
-
             # T {0} is the parent
             where_clauses.append("T_{0}.t_{1} = T_{1}.pk".format(
                                 id_to_str(t[:-1]), id_to_str(t)))
             # ADD HERE PREDICATE
-        # TEST 1: 25% of tables have predicate, randing from 10 to 90% selective
-        for t in sample(qs, int(0.25*len(qs))):
-            if len(t) == 1:
-                continue
+        # for t in sample(qs, int(0.25*len(qs))):
+        #     if len(t) == 1:
+        #         continue
             sel = randint(20,80)
             rows = card[f"t_{id_to_str(t)}"]
             fk = int(np.percentile(np.array(range(rows)), sel))
-            print(f"{rows}\t{sel}\tt_{id_to_str(t)}")
+            # print(f"{rows}\t{sel}\tt_{id_to_str(t)}")
             # print(f"{t} {sel} {rows} T_{id_to_str(t)}.pk > {fk}")
             # random choice 250 tables?
             where_clauses.append(f"T_{id_to_str(t)}.pk > {fk}") # fk_random is some random selectivity
@@ -94,7 +93,7 @@ if __name__ == "__main__":
 
     labels = [f"{a}{b}" for a in string.ascii_lowercase for b in string.ascii_lowercase]
     try:
-        os.mkdir("queries_2")
+        os.mkdir("queries_3")
     except FileExistsError:
         # directory already exists
         pass
@@ -103,13 +102,13 @@ if __name__ == "__main__":
     # 10 to 100 step of 10
     for n in tqdm(range(10,101,10)):
         for i in range(104): # 104 because multiple of 26 (letters to name the queries)
-            with open(f"queries_2/{n:04d}{labels[i]}.sql", 'w') as f:
+            with open(f"queries_3/{n:04d}{labels[i]}.sql", 'w') as f:
                 f.write(schema.make_query(n))
                 f.write("\n")
 
     # 100 to 1000 step of 100
     for n in tqdm(range(100,1001,100)):
         for i in range(104):
-            with open(f"queries_2/{n:04d}{labels[i]}.sql", 'w') as f:
+            with open(f"queries_3/{n:04d}{labels[i]}.sql", 'w') as f:
                 f.write(schema.make_query(n))
                 f.write("\n")
