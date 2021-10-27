@@ -199,7 +199,7 @@ public:
     }
 
     bool operator!=(const BitmapsetDynamic &other) const{
-        return !(*this == other);
+        return !bms_equal(bms, other.bms);
     }
 
     BitmapsetDynamic& operator=(const BitmapsetDynamic& other) {
@@ -213,6 +213,22 @@ public:
         bms = other.bms;
         other.bms = NULL;
         return *this;
+    }
+
+    bool operator<(const BitmapsetDynamic &other) const{
+        return bms_compare(bms, other.bms) < 0;
+    }
+
+    bool operator<=(const BitmapsetDynamic &other) const{
+        return bms_compare(bms, other.bms) <= 0;
+    }
+
+    bool operator>(const BitmapsetDynamic &other) const{
+        return bms_compare(bms, other.bms) > 0;
+    }
+
+    bool operator>=(const BitmapsetDynamic &other) const{
+        return bms_compare(bms, other.bms) >= 0;
     }
 };
 

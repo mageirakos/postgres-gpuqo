@@ -52,6 +52,7 @@ extern __device__ unsigned long long join_counter;
 #define WARP_ID (threadIdx.x & (~(WARP_SIZE-1)))
 #define W_OFFSET WARP_ID
 #define LANE_MASK_LE (WARP_MASK >> (WARP_SIZE-1-LANE_ID))
+#define __activemask_sync() __ballot_sync(WARP_MASK, 1)
 
 template<typename T>
 using uninit_device_vector = thrust::device_vector<T, uninitialized_allocator<T> >;

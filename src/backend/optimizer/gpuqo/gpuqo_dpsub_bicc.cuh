@@ -84,7 +84,7 @@ static bfs_bicc_bfs_lv_ret<BitmapsetN> bfs_bicc_bfs_lv(const uint32_t* L,
 
 template<typename BitmapsetN>
 __device__ 
-static void bfs_bicc_bfs(BitmapsetN relid, const BitmapsetN* edges,
+static void qbfs_bicc_bfs(BitmapsetN relid, const BitmapsetN* edges,
                             volatile uint32_t* P, volatile uint32_t* L, 
                             volatile BitmapsetN* LQ)
 {
@@ -107,9 +107,11 @@ static void bfs_bicc_bfs(BitmapsetN relid, const BitmapsetN* edges,
     for (int i=0; i<relid.size(); i++){
         BitmapsetN lq = LQ[i];
         for (int x=LANE_ID; x < BitmapsetN::SIZE; x += WARP_SIZE){
+            int pos = lq.isSet(x) ? x-1 : 0;
+            BitmapsetN e = edges[pos] - (BitmapsetN)*visited;
+            __syncwarp(); // protect read on *visited
+
             if (lq.isSet(x)){
-                BitmapsetN e = edges[x-1] - (BitmapsetN)*visited;
-                __syncwarp();
                 atomicOr((BitmapsetN*)&LQ[i+1], e);
                 atomicOr((BitmapsetN*)visited, e);
 
@@ -124,6 +126,8 @@ static void bfs_bicc_bfs(BitmapsetN relid, const BitmapsetN* edges,
 
                     e.unset(w);
                 }
+            } else {
+                __syncwarp(); //balance syncs
             }
             __syncwarp();
         }

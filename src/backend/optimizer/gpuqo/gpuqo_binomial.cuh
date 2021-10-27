@@ -10,6 +10,7 @@
 #ifndef GPUQO_BINOMIAL_CUH
 #define GPUQO_BINOMIAL_CUH
 
+#include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 
 template<typename uint_t>
