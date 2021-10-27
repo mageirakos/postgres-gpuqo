@@ -458,6 +458,8 @@ const struct config_enum_entry ssl_protocol_versions_info[] = {
 	{NULL, 0, false}
 };
 
+#ifdef ENABLE_GPUQO
+
 const struct config_enum_entry gpuqo_algorithm_options[] = {
 	{"dpsize", GPUQO_DPSIZE, false},
 	{"dpsub", GPUQO_DPSUB, false},
@@ -482,6 +484,8 @@ const struct config_enum_entry gpuqo_idp_type_options[] = {
 	{"IDP2", GPUQO_IDP2, false},
 	{NULL, 0, false}
 };
+
+#endif
 
 static struct config_enum_entry shared_memory_options[] = {
 #ifndef WIN32
@@ -4800,7 +4804,7 @@ static struct config_enum ConfigureNamesEnum[] =
 		ssl_protocol_versions_info,
 		NULL, NULL, NULL
 	},
-
+#ifdef ENABLE_GPUQO
 	{
 		{"gpuqo_algorithm", PGC_USERSET, QUERY_TUNING_GPUQO,
 			gettext_noop("Use the selected algorithm in GPUQO module"),
@@ -4819,7 +4823,7 @@ static struct config_enum ConfigureNamesEnum[] =
 		GPUQO_IDP2, gpuqo_idp_type_options,
 		NULL, NULL, NULL
 	},
-
+#endif
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, 0, NULL, NULL, NULL, NULL

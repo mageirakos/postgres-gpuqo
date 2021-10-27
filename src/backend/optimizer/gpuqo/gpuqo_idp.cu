@@ -150,9 +150,14 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp2_rec(int gpuqo_algo,
 	GpuqoPlannerInfo<BitmapsetInner> *new_info =remapper.remapPlannerInfo(info);
 	QueryTree<BitmapsetInner> *new_goo_qt =remapper.remapQueryTreeFwd(goo_qt);
 
+	LOG_DEBUG("--- optimizing query tree ---\n");
+	printQueryTree(new_goo_qt);
+
 	new_info->n_iters = min(new_info->n_rels, n_iters);
 
 	BitmapsetInner reopTables = find_most_expensive_subtree(new_goo_qt, new_info->n_iters)->id;
+
+	LOG_DEBUG("Reoptimizing subtree %u\n", reopTables.toUint());
 
 	list<remapper_transf_el_t<BitmapsetInner> > reopt_remap_list;
 	int i = 0;
@@ -178,6 +183,9 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp2_rec(int gpuqo_algo,
 		reopt_qt = gpuqo_run_idp2_dp<BitmapsetInner, BitmapsetDynamic>(
 								gpuqo_algo, new_info, reopt_remap_list);
 	}
+
+	LOG_DEBUG("--- reopt query tree ---\n");
+	printQueryTree(reopt_qt);
 
 	QueryTree<BitmapsetInner> *res_qt;
 	if (new_info->n_iters == new_info->n_rels){
@@ -237,9 +245,15 @@ QueryTree<BitmapsetN> *gpuqo_run_idp2(int gpuqo_algo,
 		remap_list.push_back(list_el);
 	}
 
+	LOG_DEBUG("--- GOO query tree ---\n");
+	printQueryTree(goo_qt);
+
 	QueryTree<BitmapsetN> *out_qt = gpuqo_run_idp2_rec<BitmapsetN,BitmapsetN>(
 						gpuqo_algo, goo_qt, info, remap_list, 
 						n_iters > 0 ? n_iters : gpuqo_idp_n_iters);
+
+	LOG_DEBUG("--- final query tree ---\n");
+	printQueryTree(out_qt);
 
 	freeQueryTree(goo_qt);
 

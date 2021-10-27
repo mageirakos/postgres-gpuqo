@@ -38,7 +38,7 @@ void unrankFilteredDPSubKernel(int sq, int qss,
     uint32_t threadid = blockIdx.x*blockDim.x + threadIdx.x;
     uint32_t n_threads = blockDim.x * gridDim.x;
 
-    int n_active = __popc(__activemask());
+    int n_active = __popc(__activemask_sync());
     __shared__ BitmapsetN edge_table[BitmapsetN::SIZE];
     for (int i = threadIdx.x; i < sq; i+=n_active){
         edge_table[i] = info->edge_table[i];
@@ -46,16 +46,11 @@ void unrankFilteredDPSubKernel(int sq, int qss,
     __syncthreads();
     
     if (threadid < n_tab_sets){
-        uint_t<BitmapsetN> sets_per_thread = ceil_div(n_tab_sets, n_threads);
+        uint_t<BitmapsetN> sets_per_thread = n_tab_sets / n_threads;
         uint_t<BitmapsetN> n_excess = n_tab_sets % n_threads;
-        uint_t<BitmapsetN> idx;
-        if (threadid < n_excess){
-            idx = threadid * sets_per_thread + offset;
-        } else {
-            idx = n_excess * sets_per_thread 
-                    + (threadid - n_excess) * (sets_per_thread-1) 
-                    + offset;
-        }
+        uint_t<BitmapsetN> idx = threadid * sets_per_thread 
+                                + (threadid < n_excess ? threadid : n_excess)
+                                + offset;
         
         
         BitmapsetN s = dpsub_unrank_sid<BitmapsetN>(idx, qss, sq, binoms);

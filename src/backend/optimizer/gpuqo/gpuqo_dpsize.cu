@@ -72,7 +72,7 @@ public:
         thrust::tuple<BitmapsetN, uint2_t<BitmapsetN> > operator()(uint64_t cid) 
         {
             __shared__ uint64_t offsets[BitmapsetN::SIZE];
-            int n_active = __popc(__activemask());
+            int n_active = __popc(__activemask_sync());
 
             for (int i = threadIdx.x; i <= iid-2; i += n_active){
                 offsets[i] = ((uint64_t)partition_sizes[i]) * partition_sizes[iid-2-i];
@@ -232,7 +232,7 @@ __global__ void transform_shmem_kernel(InputT* first, InputT* last,
         __syncwarp();
 
         OutputT* warp_out = result + (it-first);
-        int n_active = __popc(__activemask());
+        int n_active = __popc(__activemask_sync());
 
         for (int i = LANE_ID; 
             i < sizeof(OutputT) * n_active / sizeof(uint64_t);
