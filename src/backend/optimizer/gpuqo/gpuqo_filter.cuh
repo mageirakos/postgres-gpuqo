@@ -113,6 +113,9 @@ BitmapsetN get_neighbours(BitmapsetN set, BitmapsetN* edge_table){
 template<typename BitmapsetN>
 __host__ __device__
 __forceinline__
+// from : the subgraph we start from ( in our case base_rel or composite_rel)
+// subset : the restriction set ( can be the whole graph if I remove the edges creating disjoint sets)
+// edge_table :  full graph (in our case)
 BitmapsetN grow(BitmapsetN from, BitmapsetN subset, BitmapsetN* edge_table)
 {
     BitmapsetN V = BitmapsetN(0);

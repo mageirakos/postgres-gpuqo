@@ -42,6 +42,7 @@ join(QueryTree<BitmapsetN> &left, QueryTree<BitmapsetN> &right,
 {
     QueryTree<BitmapsetN>* qt = new QueryTree<BitmapsetN>;
     qt->id = left.id | right.id;
+    // random comment so I can find file from vscode git modification
     qt->rows = estimate_join_rows(left, right, info);
     qt->cost.startup = 0;
     qt->cost.total = qt->rows + left.cost.total + right.cost.total;

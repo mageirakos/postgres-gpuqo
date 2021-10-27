@@ -175,11 +175,12 @@ JR* make_join_relation(JR &left_rel,
 	left_rel.referenced = true;
 	right_rel.referenced = true;
 #endif
-
 	JR* join_rel = build_join_relation<JR>(left_rel, right_rel);
+    // this is what I need for cost estimation
 	join_rel->rows = estimate_join_rows(left_rel.id, left_rel, right_rel.id, right_rel, info);
 	join_rel->cost = calc_join_cost(left_rel.id, left_rel, right_rel.id, right_rel, join_rel->rows, info);
 	join_rel->width = get_join_width(left_rel.id, left_rel, right_rel.id, right_rel, info);
+	// I need these 3 (width as well becaue its used in the JoinRelation)
 
 	return join_rel;
 }

@@ -85,6 +85,7 @@ estimate_ec_selectivity(const BitmapsetN &ec_relids,
     return info->eq_classes.sels[off_sels+idx];
 }
 
+// can probably use this as is, this comment is just so modification shows in VSCODE and I can find file easier
 #pragma hd_warning_disable
 template<typename BitmapsetN>
 __host__ __device__

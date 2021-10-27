@@ -7,12 +7,14 @@
  *
  *-------------------------------------------------------------------------
  */
-
+// comment to show up as edited file
 #include "gpuqo.cuh"
 #include "gpuqo_query_tree.cuh"
 
 int gpuqo_idp_n_iters;
 int gpuqo_idp_type;
+
+static int level_of_rec = 0;
 
 template<typename BitmapsetOuter, typename BitmapsetInner>
 QueryTree<BitmapsetOuter> *gpuqo_run_idp1_next(int gpuqo_algo, 
@@ -145,19 +147,38 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp2_rec(int gpuqo_algo,
 					list<remapper_transf_el_t<BitmapsetOuter> > &remap_list,
 					int n_iters) 
 {
+	
+	level_of_rec++;
+	std::cout << "\n\t LEVEL OF REC: " << level_of_rec << std::endl;
+	
+
 	Remapper<BitmapsetOuter, BitmapsetInner> remapper(remap_list);
 
 	GpuqoPlannerInfo<BitmapsetInner> *new_info =remapper.remapPlannerInfo(info);
 	QueryTree<BitmapsetInner> *new_goo_qt =remapper.remapQueryTreeFwd(goo_qt);
 
+
 	LOG_DEBUG("--- optimizing query tree ---\n");
 	printQueryTree(new_goo_qt);
 
+
+	// TODO: Get postgres cost of the full Join Tree as recursion starts
+	std::cout << "Full Join Tree Cost: " << new_goo_qt->cost.total << std::endl;
+		
+
 	new_info->n_iters = min(new_info->n_rels, n_iters);
 
-	BitmapsetInner reopTables = find_most_expensive_subtree(new_goo_qt, new_info->n_iters)->id;
+	QueryTree<BitmapsetInner>* maximal_QT = find_most_expensive_subtree(new_goo_qt, new_info->n_iters);
+	BitmapsetInner reopTables = maximal_QT->id;
+	// TODO: Get postgrecost of most_expensive_subtree before optimization
+	std::cout << "Maximal NOT OPTIMIZED Subtree Cost: " << maximal_QT->cost.total << std::endl;
+
 
 	LOG_DEBUG("Reoptimizing subtree %u\n", reopTables.toUint());
+
+
+
+	
 
 	list<remapper_transf_el_t<BitmapsetInner> > reopt_remap_list;
 	int i = 0;
@@ -184,8 +205,13 @@ QueryTree<BitmapsetOuter> *gpuqo_run_idp2_rec(int gpuqo_algo,
 								gpuqo_algo, new_info, reopt_remap_list);
 	}
 
+
 	LOG_DEBUG("--- reopt query tree ---\n");
 	printQueryTree(reopt_qt);
+
+	// TODO: Get it after optimization
+	std::cout << "Maximal OPTIMIZED Subtree Cost: " << reopt_qt->cost.total << std::endl;
+
 
 	QueryTree<BitmapsetInner> *res_qt;
 	if (new_info->n_iters == new_info->n_rels){
@@ -235,6 +261,7 @@ QueryTree<BitmapsetN> *gpuqo_run_idp2(int gpuqo_algo,
 									GpuqoPlannerInfo<BitmapsetN>* info,
 									int n_iters)
 {
+	printf("\n\tSTART\n\n");
 	QueryTree<BitmapsetN> *goo_qt = gpuqo_cpu_goo(info);
 	list<remapper_transf_el_t<BitmapsetN> > remap_list;
 	for (int i=0; i<info->n_rels; i++){
@@ -245,8 +272,14 @@ QueryTree<BitmapsetN> *gpuqo_run_idp2(int gpuqo_algo,
 		remap_list.push_back(list_el);
 	}
 
+
 	LOG_DEBUG("--- GOO query tree ---\n");
 	printQueryTree(goo_qt);
+
+=======
+	// TODO: Get INITIAL GOO QT cost
+	std::cout << "GOO Initial Join Tree Cost: " << goo_qt->cost.total << std::endl;
+		
 
 	QueryTree<BitmapsetN> *out_qt = gpuqo_run_idp2_rec<BitmapsetN,BitmapsetN>(
 						gpuqo_algo, goo_qt, info, remap_list, 
@@ -256,7 +289,11 @@ QueryTree<BitmapsetN> *gpuqo_run_idp2(int gpuqo_algo,
 	printQueryTree(out_qt);
 
 	freeQueryTree(goo_qt);
-
+	printf("\tOUT OF RECURSION\n");
+	// TODO: Get FINAL QT Cost
+	std::cout << "FINAL IDP2 Join Tree Cost: " << out_qt->cost.total << std::endl;
+	printf("\n\tEND\n\n");
+	level_of_rec = 0;
 	return out_qt;
 }
 
