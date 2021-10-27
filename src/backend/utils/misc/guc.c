@@ -482,7 +482,7 @@ const struct config_enum_entry gpuqo_idp_type_options[] = {
 	{"IDP2", GPUQO_IDP2, false},
 	{"IDPMAG", GPUQO_IDPMAG, false},
 	{"DPDP", GPUQO_DPDP, false},
-	{"UNION_DPDP", GPUQO_UNION, false},
+	{"UNIONDP", GPUQO_UNION, false},
 	// add mine here and where else
 	{NULL, 0, false}
 };
@@ -4826,7 +4826,7 @@ static struct config_enum ConfigureNamesEnum[] =
 	},
 	{
 		{"gpuqo_idp_type", PGC_USERSET, QUERY_TUNING_GPUQO,
-			gettext_noop("Switch IDP mode (IDP1 or IDP2 or IDPMAG or DPDP or UNION_DPDP)"),
+			gettext_noop("Switch IDP mode (IDP1 or IDP2 or IDPMAG or DPDP or UNION_DP)"),
 			NULL
 		},
 		&gpuqo_idp_type,
