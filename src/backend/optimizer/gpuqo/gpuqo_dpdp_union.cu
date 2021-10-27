@@ -220,6 +220,7 @@ GraphEdge<BitmapsetN>* createGraphEdge(int left_rel_idx, int right_rel_idx , Gpu
 	// std::cout << " COST = " <<  edge_el->cost.total << std::endl;
 
 	edge_el->weight = edge_el->cost.total;
+	// edge_el->weight = edge_el->selectivity + edge_el->rows;
 
 	return edge_el;
 }
@@ -309,36 +310,42 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	//TODO: This n_iters should be my upper threshold for Union
 	new_info->n_iters = min(new_info->n_rels, n_iters);
 
-	if (new_info->n_rels == new_info->n_iters){ // its going to be equal because of the above min()
-		// printf("\n f(x): gpuqo_run_dpdp_union_rec => -----INSIDE TERMINATION CHECK ----- LEVEL %d \n", level_of_dp);
-		// std::cout << "new_info->n_iters: " << new_info->n_iters << "  n_iters: " << n_iters << "  new_info->n_rels: " << new_info->n_rels << std::endl;		
-		list<remapper_transf_el_t<BitmapsetInner> > remap_list_2;
+	// if (new_info->n_rels == new_info->n_iters){ // its going to be equal because of the above min()
+	// 	// printf("\n f(x): gpuqo_run_dpdp_union_rec => -----INSIDE TERMINATION CHECK ----- LEVEL %d \n", level_of_dp);
+	// 	// std::cout << "new_info->n_iters: " << new_info->n_iters << "  n_iters: " << n_iters << "  new_info->n_rels: " << new_info->n_rels << std::endl;		
+	// 	list<remapper_transf_el_t<BitmapsetInner> > remap_list_2;
 		
-		for (int i=0; i<new_info->n_rels; i++){
-			remapper_transf_el_t<BitmapsetInner> list_el;
-			list_el.from_relid = new_info->base_rels[i].id;
-			list_el.to_idx = i;
-			list_el.qt = NULL;
-			remap_list_2.push_back(list_el);
-		}
+	// 	for (int i=0; i<new_info->n_rels; i++){
+	// 		remapper_transf_el_t<BitmapsetInner> list_el;
+	// 		list_el.from_relid = new_info->base_rels[i].id;
+	// 		list_el.to_idx = i;
+	// 		list_el.qt = NULL;
+	// 		remap_list_2.push_back(list_el);
+	// 	}
 
-		QueryTree<BitmapsetInner> *reopt_qt;
-		if (BitmapsetInner::SIZE == 32 || remap_list_2.size() < 32) {
-			reopt_qt = gpuqo_run_dpdp_union_dp<BitmapsetInner, Bitmapset32>(
-									gpuqo_algo, new_info, remap_list_2);
-		} else if (BitmapsetInner::SIZE == 64 || remap_list_2.size() < 64) {
-			reopt_qt = gpuqo_run_dpdp_union_dp<BitmapsetInner, Bitmapset64>(
-									gpuqo_algo, new_info, remap_list_2);
-		} else {
-			reopt_qt = gpuqo_run_dpdp_union_dp<BitmapsetInner, BitmapsetDynamic>(
-									gpuqo_algo, new_info, remap_list_2);
-		}
-		QueryTree<BitmapsetOuter> *out_qt = remapper.remapQueryTree(reopt_qt);
+	// 	QueryTree<BitmapsetInner> *reopt_qt;
+	// 	if (BitmapsetInner::SIZE == 32 || remap_list_2.size() < 32) {
+	// 		reopt_qt = gpuqo_run_dpdp_union_dp<BitmapsetInner, Bitmapset32>(
+	// 								gpuqo_algo, new_info, remap_list_2);
+	// 	} else if (BitmapsetInner::SIZE == 64 || remap_list_2.size() < 64) {
+	// 		reopt_qt = gpuqo_run_dpdp_union_dp<BitmapsetInner, Bitmapset64>(
+	// 								gpuqo_algo, new_info, remap_list_2);
+	// 	} else {
+	// 		reopt_qt = gpuqo_run_dpdp_union_dp<BitmapsetInner, BitmapsetDynamic>(
+	// 								gpuqo_algo, new_info, remap_list_2);
+	// 	}
+	// 	QueryTree<BitmapsetOuter> *out_qt = remapper.remapQueryTree(reopt_qt);
+	// 	freeGpuqoPlannerInfo(new_info);
+	// 	freeQueryTree(reopt_qt);
+	// 	// printf("\n f(x): gpuqo_run_dpdp_union_rec => returning -----INSIDE TERMINATION CHECK -----\n");
+	// 	return out_qt;
+	// }
+	if (new_info->n_rels == new_info->n_iters){
+		printf("\n f(x): gpuqo_run_dpdp_union_rec => -----INSIDE TERMINATION CHECK ----- LEVEL %d \n", level_of_dp);
+		QueryTree<BitmapsetOuter> *out_qt = gpuqo_run_dpdp_union_dp<BitmapsetOuter, BitmapsetInner>(gpuqo_algo, info, remap_list);
 		freeGpuqoPlannerInfo(new_info);
-		freeQueryTree(reopt_qt);
-		// printf("\n f(x): gpuqo_run_dpdp_union_rec => returning -----INSIDE TERMINATION CHECK -----\n");
-		return out_qt;
-	}
+        return out_qt;
+    }
 
 
 	LeafQ<BitmapsetInner> LeafPriorityQueue;
@@ -450,14 +457,15 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 
 	// printf("\n f(x): gpuqo_run_dpdp_union_rec => after subgraphs ----- CHECK 3 ----- \n");
 
-	//TODO: AFTER OPTIMIZATION
 	// double total_optimized_cost = 0;
 	list<remapper_transf_el_t<BitmapsetInner> > next_remap_list;
 	for (int i=0; i < subgraphs.size(); i++){
 		list<remapper_transf_el_t<BitmapsetInner> > reopt_remap_list;
 		int j = 0;
 		BitmapsetInner reopTables = subgraphs[i];
+		//TODO: IF reopTables > 1 only then run union_dp (MPDP)
 		// std::cout << "For Disjoint Set = " << reopTables << " ";
+		// std::cout << "SIZE = " << reopTables.size() << " ";
 		while (!reopTables.empty()) {
 			remapper_transf_el_t<BitmapsetInner> list_el;
 			list_el.from_relid = reopTables.lowest();
