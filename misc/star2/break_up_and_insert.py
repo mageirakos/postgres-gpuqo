@@ -4,7 +4,7 @@ import subprocess
 
 
 if __name__ == "__main__":
-    # STAR 2
+    # STAR
     print("Reading fill_tables.sql...")
     with open("fill_tables.sql", 'r') as f:
         data = f.read()
@@ -22,7 +22,7 @@ if __name__ == "__main__":
         os.makedirs("./inserts")
     
     # star table
-    offset = 50_000
+    offset = 50_000 # maximum cardinality per insert (adjustable but make sure every param is correct)
     iters = (1_000_000) // offset # start and end done alone thats why -2
 
     print("Breaking up INSERT INTO statements...")
@@ -40,13 +40,13 @@ if __name__ == "__main__":
     # star
     for i in tqdm(range(iters)):
         subprocess.run(
-            f"psql -f inserts/insert_0_{i}.sql star2",
+            f"psql -f inserts/insert_0_{i}.sql star", # assuming 'star' is the name of the db you use
             shell=True,
         )
     # dimensions
     num_dimension_tables = 1000
     for i in tqdm(range(1,num_dimension_tables)):
         subprocess.run(
-            f"psql -f inserts/insert_{i}.sql star2",
+            f"psql -f inserts/insert_{i}.sql star",
             shell=True,
         )
