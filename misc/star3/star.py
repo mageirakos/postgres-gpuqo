@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 
 TABLE_PATTERN="""CREATE TABLE T_{0:s} (
-    pk INT PRIMARY KEY{1:s}
+    pk SERIAL PRIMARY KEY{1:s}
 );
 """
 
