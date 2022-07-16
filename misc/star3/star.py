@@ -183,8 +183,21 @@ class SnowflakeSchema:
         return f"SELECT * FROM {from_clause} WHERE {where_clause}; -- {query_size}"
 
 
+card = {}
+def readCardinalities():
+    global card
+    with open(f"cardinalities.txt", 'r') as f:
+        for l in f.readlines():
+            # print(l)
+            # print(" NEXT ")
+            temp = [x.strip() for i,x in enumerate(l.split("|")) if i in (0,2)]
+            for table_name, cardinality  in zip(temp, temp[1:]):
+                if cardinality != "reltuples":
+                    card[table_name] = int(cardinality)
+    return
+
 if __name__ == "__main__":
-    # STAR 2
+    # STAR
 
     # labels for query graph
     labels = [f"{a}{b}" for a in string.ascii_lowercase for b in string.ascii_lowercase]
@@ -199,11 +212,10 @@ if __name__ == "__main__":
     #                          (0,  8, 4, 4, 0))
 
     # you need to 0,0 in the last level to know when to stop
-    # star schema with 1000 dimension tables and 1 fact table
-
-
-    # POSTGRES UPPER LIMIT TO 1600 COLUMNS PER TABLE
-    # SO FACT TABLE CAN ONLY HAVE 1 pk and 1599 fk for the dimension tables
+    
+    # star schema with 1600 dimension tables and 1 fact table
+    # POSTGRES upper limit to 1600 columns per table (can change)
+    # Fact table will have 1 pk and 1599 fk columns for the dimension tables
     schema = SnowflakeSchema((1, 1599, 0),
                              (0, 1599, 0))
     
@@ -224,7 +236,7 @@ if __name__ == "__main__":
         schema.write_insert_into(f, 10_000, 1_000_000)
     
     try:
-        os.mkdir("queries")
+        os.mkdir("queries_with_pred")
     except FileExistsError:
         # directory already exists
         pass
@@ -233,13 +245,13 @@ if __name__ == "__main__":
     # 10 to 100 step of 10
     for n in tqdm(range(10,101,10)):
         for i in range(104): # 104 because multiple of 26 (letters to name the queries)
-            with open(f"queries/{n:04d}{labels[i]}.sql", 'w') as f:
+            with open(f"queries_with_pred/{n:04d}{labels[i]}.sql", 'w') as f:
                 f.write(schema.make_query(n))
                 f.write("\n")
 
     # 100 to 1000 step of 100
     for n in tqdm(range(100,1001,100)):
         for i in range(104):
-            with open(f"queries/{n:04d}{labels[i]}.sql", 'w') as f:
+            with open(f"queries_with_pred/{n:04d}{labels[i]}.sql", 'w') as f:
                 f.write(schema.make_query(n))
                 f.write("\n")
