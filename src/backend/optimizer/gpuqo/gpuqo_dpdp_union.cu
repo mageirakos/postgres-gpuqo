@@ -120,7 +120,7 @@ void printSets(GpuqoPlannerInfo<BitmapsetN>* info, DisjointSet<BitmapsetN> &ds)
 		BitmapsetN node_id = info->base_rels[i].id;
 		printf("\n");
         std::cout << ds.Find(node_id) << ' ';
-        std::cout << 'size: ( ' << ds.getSize(node_id) << ' )' << '-';
+        // std::cout << 'size: ( ' << ds.getSize(node_id) << ' )' << '-';
         std::cout << 'csg: ( ' << ds.getCsg(node_id) << ' )' << '-';
     }
     std::cout << std::endl;
@@ -219,8 +219,9 @@ GraphEdge<BitmapsetN>* createGraphEdge(int left_rel_idx, int right_rel_idx , Gpu
 
 	// std::cout << " COST = " <<  edge_el->cost.total << std::endl;
 
-	edge_el->weight = edge_el->cost.total;
+	// edge_el->weight = edge_el->cost.total;
 	// edge_el->weight = edge_el->selectivity + edge_el->rows;
+	edge_el->weight = edge_el->rows;
 
 	return edge_el;
 }
@@ -229,47 +230,65 @@ GraphEdge<BitmapsetN>* createGraphEdge(int left_rel_idx, int right_rel_idx , Gpu
 template<typename BitmapsetN>
 double fillPriorityQueues(std::vector<GraphEdge<BitmapsetN>*> &edge_pointers_list, LeafQ<BitmapsetN> &LeafPriorityQueue, EdgeQ<BitmapsetN> &EdgePriorityQueue, GpuqoPlannerInfo<BitmapsetN>* info)
 {
-	int *bfs_queue = new int[info->n_rels];
-    int bfs_queue_left_idx = 0;
-    int bfs_queue_right_idx = 0;
+	// int *bfs_queue = new int[info->n_rels];
+	std::queue<int> bfs_queue;
+    // int bfs_queue_left_idx = 0;
+    // int bfs_queue_right_idx = 0;
 
 	double sum_of_all_edge_costs = 0;
 
-
-
     int bfs_idx = 0;
-    bfs_queue[bfs_queue_right_idx++] = 0;
+    // bfs_queue[bfs_queue_right_idx++] = 0;
+	bfs_queue.push(0);
+	// bfs_queue_right_idx++;
 
     BitmapsetN seen = BitmapsetN::nth(1);
-	while (bfs_queue_left_idx != bfs_queue_right_idx && bfs_idx < info->n_rels){
-        int base_rel_idx = bfs_queue[bfs_queue_left_idx++]; 
-        BitmapsetN edges = info->edge_table[base_rel_idx];
+    BitmapsetN seen_2 = BitmapsetN::nth(1);
+	while(!bfs_queue.empty() && bfs_idx < info->n_rels){
+	// while (bfs_queue_left_idx != bfs_queue_right_idx && bfs_idx < info->n_rels){ // gia ola ta rels?
+        // int base_rel_idx = bfs_queue[bfs_queue_left_idx++]; // pame sto 1o rel
+       
+		int base_rel_idx  = bfs_queue.front();
+		bfs_queue.pop();
+		BitmapsetN edges = info->edge_table[base_rel_idx]; // pare ta edges tou prwtou rel
 
+		// std::cout << std::endl << "EDGES : " << edges << std::endl;
 		bfs_idx++;
-		while(!edges.empty()){
-			int next = edges.lowestPos(); 
+		while(!edges.empty()){ // oso exei edges
+			int next = edges.lowestPos();  // pare to epomeno rel
 			Assert(next > 0);
 			// even though it is casting to unsigned, it is not a problem because next is (int) not (bms)
-			if(!seen.isSet(next)){
-				bfs_queue[bfs_queue_right_idx++] = next - 1;
-				GraphEdge<BitmapsetN> *edge_el = createGraphEdge(base_rel_idx, next-1 , info);
+			// if(!seen.isSet(next)){ // an den exeis 3anapaei se auto to epomeno rel
+			if(!seen_2.isSet(next)){ 
+				// bfs_queue[bfs_queue_right_idx++] = next - 1; // valto sto queue gia episkepsi 
+				bfs_queue.push(next - 1);
+
+				GraphEdge<BitmapsetN> *edge_el = createGraphEdge(base_rel_idx, next-1 , info); // kai dimiourgise ena edge meta3u tou prwtou kai tou epomenou
 				// std::cout << "AFTER COST = " <<  edge_el->cost.total << std::endl;
-				if (edges.size() == 1) 
+				if (edges.size() == 1)  
 				{
 					LeafPriorityQueue.push(edge_el);
 				}
-				EdgePriorityQueue.push(edge_el);
+				std::cout << "Pushing edge_el " << edge_el << " to EdgePriorityQueue" << std::endl;
+				EdgePriorityQueue.push(edge_el); // auto to edge sprw3to sto priority queue
 				edge_pointers_list.push_back(edge_el);
 
 				sum_of_all_edge_costs += edge_el->cost.total;
 			}
-			edges.unset(next);
+			edges.unset(next); // vgale auto to epomeno rel apo ta connections tou prwtou
 		}
-		seen |= info->edge_table[base_rel_idx];
+		// std::cout << "before" << std::endl;
+		// std::cout << "seen = " << seen << " " << std::endl;
+		// std::cout << "seen_2 = " << seen_2 << " " << std::endl;
+		// seen |= info->edge_table[base_rel_idx];
+		seen_2 |= BitmapsetN::nth(base_rel_idx+1);
+		// std::cout << "after" << std::endl;
+		// std::cout << "seen = " << seen << " " << std::endl;
+		// std::cout << "seen_2 = " << seen_2 << " " << std::endl;
 	}
 
 
-	delete[] bfs_queue;
+	// delete[] bfs_queue;
 	return sum_of_all_edge_costs;
 }
 
@@ -302,8 +321,8 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 					int n_iters) 
 {
 	level_of_dp++;
-	// std::cout << "\n\t LEVEL OF DP: " << level_of_dp << std::endl;
-	// printf("\n f(x): gpuqo_run_dpdp_union_rec ----- FIRST CHECK ----- LEVEL %d \n", level_of_dp);
+	std::cout << "\n\t LEVEL OF DP: " << level_of_dp << std::endl;
+	printf("\n f(x): gpuqo_run_dpdp_union_rec ----- FIRST CHECK ----- LEVEL %d \n", level_of_dp);
 	Remapper<BitmapsetOuter, BitmapsetInner> remapper(remap_list);
 	GpuqoPlannerInfo<BitmapsetInner> *new_info = remapper.remapPlannerInfo(info);
 	
@@ -386,7 +405,8 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	// 	}
 	// }
 
-	// printf("Starting EdgePriorityQueue while loop\n");
+	printf("Starting EdgePriorityQueue while loop\n");
+	std::cout << "SIZE OF EdgePriorityQueue = " << EdgePriorityQueue.size() << std::endl;
 	while(!EdgePriorityQueue.empty()){
 		GraphEdge<BitmapsetInner>* edge = EdgePriorityQueue.top();
 		EdgePriorityQueue.pop();
@@ -422,31 +442,31 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 		delete edge_pointers_list[i];
 	}
 	
-	// printf("\n\t\tPRINTING ALL DISJOINT SETS");
-	// printSets(new_info, ds);
+	printf("\n\t\tPRINTING ALL DISJOINT SETS");
+	printSets(new_info, ds);
 	
 	// TODO: Sum of all union edge costs without optimization?
-	// double total_unoptimized_union_cost = 0.0f;
+	double total_unoptimized_union_cost = 0.0f;
 	std::vector<BitmapsetInner> subgraphs;
 	BitmapsetInner seen = BitmapsetInner(0);
-	// printf("\n f(x): gpuqo_run_dpdp_union_rec => getting csgs ----- CHECK 2 ----- \n");
+	printf("\n f(x): gpuqo_run_dpdp_union_rec => getting csgs ----- CHECK 2 ----- \n");
 	for(int i=0; i<new_info->n_rels; i++)
 	{
 		BitmapsetInner node_id = new_info->base_rels[i].id;
 		BitmapsetInner csg = ds.getCsg(node_id);
 		if (!csg.isSubset(seen)){
-			// total_unoptimized_union_cost += ds.getCost(node_id);
-			// std::cout << "Disjoint Set = " << csg << "\t Cost = " << ds.getCost(node_id) << std::endl;
+			total_unoptimized_union_cost += ds.getCost(node_id);
+			std::cout << "Disjoint Set = " << csg << "\t Cost = " << ds.getCost(node_id) << std::endl;
 			subgraphs.push_back(csg);
 		}
 		seen |= csg;
 	}
-	// std::cout << "Assertion: subgraphs.size() = " <<  subgraphs.size() << "  total_disjoint_sets= " << total_disjoint_sets << std::endl;
+	std::cout << "Assertion: subgraphs.size() = " <<  subgraphs.size() << "  total_disjoint_sets= " << total_disjoint_sets << std::endl;
 	Assert(subgraphs.size() == total_disjoint_sets);
 	
 	
-	// std::cout << "Sum of NOT OPTIMIZED Disjoint Set Cost: " << total_unoptimized_union_cost << std::endl;
-	// std::cout << "Sum of CUT EDGES Cost: " << sum_of_all_edge_costs - total_unoptimized_union_cost << std::endl;
+	std::cout << "Sum of NOT OPTIMIZED Disjoint Set Cost: " << total_unoptimized_union_cost << std::endl;
+	std::cout << "Sum of CUT EDGES Cost: " << sum_of_all_edge_costs - total_unoptimized_union_cost << std::endl;
 	// printf("\n");
 	// double sum_subgraph_costs = 0;
 	// for(int i=0; i < subgraphs.size(); i++){
@@ -455,17 +475,17 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 	// std::cout << "Maximal NOT OPTIMIZED Subtree Cost: " << maximal_QT->cost.total << std::endl;
 
 
-	// printf("\n f(x): gpuqo_run_dpdp_union_rec => after subgraphs ----- CHECK 3 ----- \n");
+	printf("\n f(x): gpuqo_run_dpdp_union_rec => after subgraphs ----- CHECK 3 ----- \n");
 
-	// double total_optimized_cost = 0;
+	double total_optimized_cost = 0;
 	list<remapper_transf_el_t<BitmapsetInner> > next_remap_list;
 	for (int i=0; i < subgraphs.size(); i++){
 		list<remapper_transf_el_t<BitmapsetInner> > reopt_remap_list;
 		int j = 0;
 		BitmapsetInner reopTables = subgraphs[i];
 		//TODO: IF reopTables > 1 only then run union_dp (MPDP)
-		// std::cout << "For Disjoint Set = " << reopTables << " ";
-		// std::cout << "SIZE = " << reopTables.size() << " ";
+		std::cout << "For Disjoint Set = " << reopTables << " ";
+		std::cout << "SIZE = " << reopTables.size() << " ";
 		while (!reopTables.empty()) {
 			remapper_transf_el_t<BitmapsetInner> list_el;
 			list_el.from_relid = reopTables.lowest();
@@ -486,8 +506,8 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 			reopt_qt = gpuqo_run_dpdp_union_dp<BitmapsetInner, BitmapsetDynamic>(
 									gpuqo_algo, new_info, reopt_remap_list);
 		}
-		// total_optimized_cost +=  reopt_qt->cost.total;
-		// std::cout << "\t Cost after Optimization = " << reopt_qt->cost.total << std::endl;
+		total_optimized_cost +=  reopt_qt->cost.total;
+		std::cout << "\t Cost after Optimization = " << reopt_qt->cost.total << std::endl;
 		remapper_transf_el_t<BitmapsetInner> list_el;
 		list_el.from_relid = reopt_qt->id;
 		list_el.to_idx = i;
@@ -495,12 +515,12 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 		next_remap_list.push_back(list_el);
 	}
 
-	// std::cout << "Sum of OPTIMIZED Disjoint Set Cost: " << total_optimized_cost << std::endl;
-	// std::cout << "Total REDUCTED Disjoint Set Cost: " << total_unoptimized_union_cost - total_optimized_cost << std::endl;
+	std::cout << "Sum of OPTIMIZED Disjoint Set Cost: " << total_optimized_cost << std::endl;
+	std::cout << "Total REDUCTED Disjoint Set Cost: " << total_unoptimized_union_cost - total_optimized_cost << std::endl;
 
 
 
-	// printf("\n f(x): gpuqo_run_dpdp_union_rec => recursing ----- CHECK 4 ----- LEVEL %d \n", level_of_dp);
+	printf("\n f(x): gpuqo_run_dpdp_union_rec => recursing ----- CHECK 4 ----- LEVEL %d \n", level_of_dp);
 	QueryTree<BitmapsetInner> *res_qt;
 	if (BitmapsetInner::SIZE == 32 || next_remap_list.size() < 32) {
 		res_qt = gpuqo_run_dpdp_union_rec<BitmapsetInner, Bitmapset32>(
@@ -512,11 +532,11 @@ QueryTree<BitmapsetOuter> *gpuqo_run_dpdp_union_rec(int gpuqo_algo,
 		res_qt = gpuqo_run_dpdp_union_rec<BitmapsetInner, BitmapsetDynamic>(
 			gpuqo_algo, new_info, next_remap_list, n_iters);
 	}
-	// printf("\n f(x): gpuqo_run_dpdp_union_rec => after recursion ----- CHECK 5 ----- LEVEL %d \n", level_of_dp);
+	printf("\n f(x): gpuqo_run_dpdp_union_rec => after recursion ----- CHECK 5 ----- LEVEL %d \n", level_of_dp);
 	QueryTree<BitmapsetOuter> *out_qt = remapper.remapQueryTree(res_qt);
 	freeGpuqoPlannerInfo(new_info);
 	freeQueryTree(res_qt);
-	// printf("\n f(x): gpuqo_run_dpdp_union_rec => returning ----- FINAL CHECK ----- LEVEL %d \n", level_of_dp);
+	printf("\n f(x): gpuqo_run_dpdp_union_rec => returning ----- FINAL CHECK ----- LEVEL %d \n", level_of_dp);
 	return out_qt;
 }
 
@@ -526,8 +546,8 @@ QueryTree<BitmapsetN> *gpuqo_run_dpdp_union(int gpuqo_algo,
 									GpuqoPlannerInfo<BitmapsetN>* info,
 									int n_iters)
 {
-	// printf("\n\tSTART\n\n");
-	// printf("\n f(x): gpu_run_dpdp_union \n");
+	printf("\n\tSTART of UnionDP\n\n");
+	printf("\n f(x): gpu_run_dpdp_union \n");
 	list<remapper_transf_el_t<BitmapsetN> > remap_list;
 
 	for (int i=0; i<info->n_rels; i++){
@@ -541,11 +561,9 @@ QueryTree<BitmapsetN> *gpuqo_run_dpdp_union(int gpuqo_algo,
 	QueryTree<BitmapsetN> *out_qt = gpuqo_run_dpdp_union_rec<BitmapsetN,BitmapsetN>(
 						gpuqo_algo, info, remap_list, 
 						n_iters > 0 ? n_iters : gpuqo_idp_n_iters);
-
-	// printf("\tOUT OF RECURSION\n");
-	// TODO: Get FINAL QT Cost
-	// std::cout << "FINAL UNION_DP Join Tree Cost: " << out_qt->cost.total << std::endl;
-	// printf("\n\tEND\n\n");
+	printf("\tOUT OF RECURSION\n");
+	std::cout << "FINAL UNION_DP Join Tree Cost: " << out_qt->cost.total << std::endl;
+	printf("\n\tEND\n\n");
 	level_of_dp = 0;
 	return out_qt;
 }
