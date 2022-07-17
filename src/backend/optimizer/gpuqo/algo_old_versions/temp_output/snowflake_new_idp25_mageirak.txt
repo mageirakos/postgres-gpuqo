@@ -1,0 +1,521 @@
+SET ROLE TO mageirak; SET enable_seqscan TO on; SET enable_indexscan TO on; SET enable_indexonlyscan TO off; SET enable_tidscan TO off; SET enable_mergejoin TO off; SET enable_parallel_hash TO off; SET enable_bitmapscan TO off; SET enable_gathermerge TO off; SET enable_partitionwise_join TO off; SET enable_material TO off; SET enable_hashjoin TO on; SET enable_nestloop TO on; SET geqo TO off; SET gpuqo_threshold TO 2; SET gpuqo_algorithm TO dpsub; SET gpuqo_n_parallel TO 40960; SET gpuqo_dpsub_filter TO on; SET gpuqo_dpsub_filter_threshold TO 0; SET gpuqo_dpsub_ccc TO on; SET gpuqo_dpsub_csg TO on; SET gpuqo_dpsub_tree TO off; SET gpuqo_dpsub_bicc TO on; SET gpuqo_dpsub_csg_threshold TO 32; SET gpuqo_dpsub_filter_cpu_enum_threshold TO 1024; SET gpuqo_dpsub_filter_keys_overprovisioning TO 128; SET gpuqo_max_memo_size_mb TO 7000; SET gpuqo_min_memo_size_mb TO 1; SET gpuqo_idp_type TO IDP2; SET gpuqo_idp_n_iters TO 25; SET gpuqo_k_cut_edges TO 1
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100aa.sql
+gpuqo_cost	6444637.000000
+gpuqo_time	
+plan_time	316.812
+postgres_cost	6450550.23
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ab.sql
+gpuqo_cost	6122385.000000
+gpuqo_time	
+plan_time	269.212
+postgres_cost	6130914.23
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ac.sql
+gpuqo_cost	6162328.000000
+gpuqo_time	
+plan_time	605.723
+postgres_cost	6164717.93
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ad.sql
+gpuqo_cost	9089003.000000
+gpuqo_time	
+plan_time	294.341
+postgres_cost	9097270.52
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ae.sql
+gpuqo_cost	6792628.000000
+gpuqo_time	
+plan_time	270.925
+postgres_cost	6799287.57
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100af.sql
+gpuqo_cost	8696728.000000
+gpuqo_time	
+plan_time	604.704
+postgres_cost	8739232.46
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ag.sql
+gpuqo_cost	5331239.500000
+gpuqo_time	
+plan_time	249.443
+postgres_cost	5334257.32
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ah.sql
+gpuqo_cost	7703599.000000
+gpuqo_time	
+plan_time	583.677
+postgres_cost	7709781.73
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ai.sql
+gpuqo_cost	6653399.000000
+gpuqo_time	
+plan_time	384.426
+postgres_cost	6656784.75
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100aj.sql
+gpuqo_cost	7406573.000000
+gpuqo_time	
+plan_time	559.134
+postgres_cost	7410202.00
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ak.sql
+gpuqo_cost	3858919.000000
+gpuqo_time	
+plan_time	801.368
+postgres_cost	3867668.44
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100al.sql
+gpuqo_cost	8239745.000000
+gpuqo_time	
+plan_time	305.550
+postgres_cost	8243384.25
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100am.sql
+gpuqo_cost	7731315.000000
+gpuqo_time	
+plan_time	287.837
+postgres_cost	7738886.78
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100an.sql
+gpuqo_cost	6696132.500000
+gpuqo_time	
+plan_time	1021.550
+postgres_cost	6716044.84
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ao.sql
+gpuqo_cost	8766513.000000
+gpuqo_time	
+plan_time	307.539
+postgres_cost	8769113.89
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ap.sql
+gpuqo_cost	8179201.000000
+gpuqo_time	
+plan_time	494.116
+postgres_cost	8185916.27
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100aq.sql
+gpuqo_cost	6172138.000000
+gpuqo_time	
+plan_time	262.139
+postgres_cost	6179089.69
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ar.sql
+gpuqo_cost	8393296.000000
+gpuqo_time	
+plan_time	139.009
+postgres_cost	8393618.29
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100as.sql
+gpuqo_cost	9383997.000000
+gpuqo_time	
+plan_time	437.425
+postgres_cost	9386540.88
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100at.sql
+gpuqo_cost	7354449.000000
+gpuqo_time	
+plan_time	230.316
+postgres_cost	7356832.60
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100au.sql
+gpuqo_cost	5977163.000000
+gpuqo_time	
+plan_time	691.217
+postgres_cost	5982462.85
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100av.sql
+gpuqo_cost	4623959.000000
+gpuqo_time	
+plan_time	840.266
+postgres_cost	4626034.44
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100aw.sql
+gpuqo_cost	6708914.000000
+gpuqo_time	
+plan_time	232.913
+postgres_cost	6714370.56
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ax.sql
+gpuqo_cost	7198004.500000
+gpuqo_time	
+plan_time	230.004
+postgres_cost	7203533.09
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ay.sql
+gpuqo_cost	6402478.000000
+gpuqo_time	
+plan_time	219.608
+postgres_cost	6406635.88
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100az.sql
+gpuqo_cost	8003150.000000
+gpuqo_time	
+plan_time	434.743
+postgres_cost	8006357.38
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ba.sql
+gpuqo_cost	8381238.000000
+gpuqo_time	
+plan_time	908.435
+postgres_cost	8387173.64
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bb.sql
+gpuqo_cost	7154275.500000
+gpuqo_time	
+plan_time	483.795
+postgres_cost	7178477.79
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bc.sql
+gpuqo_cost	6573783.000000
+gpuqo_time	
+plan_time	285.426
+postgres_cost	6576749.46
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bd.sql
+gpuqo_cost	8565054.000000
+gpuqo_time	
+plan_time	452.774
+postgres_cost	8774008.15
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100be.sql
+gpuqo_cost	4277318.000000
+gpuqo_time	
+plan_time	529.807
+postgres_cost	4282873.88
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bf.sql
+gpuqo_cost	7652426.000000
+gpuqo_time	
+plan_time	580.241
+postgres_cost	7740933.33
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bg.sql
+gpuqo_cost	7644941.000000
+gpuqo_time	
+plan_time	280.237
+postgres_cost	7651999.95
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bh.sql
+gpuqo_cost	6908673.000000
+gpuqo_time	
+plan_time	198.777
+postgres_cost	6911081.87
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bi.sql
+gpuqo_cost	7736472.000000
+gpuqo_time	
+plan_time	765.661
+postgres_cost	7741913.58
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bj.sql
+gpuqo_cost	6919804.000000
+gpuqo_time	
+plan_time	989.426
+postgres_cost	6928315.28
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bk.sql
+gpuqo_cost	5025546.500000
+gpuqo_time	
+plan_time	216.856
+postgres_cost	5032230.68
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bl.sql
+gpuqo_cost	8075613.000000
+gpuqo_time	
+plan_time	324.116
+postgres_cost	8139040.17
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bm.sql
+gpuqo_cost	6030143.000000
+gpuqo_time	
+plan_time	926.442
+postgres_cost	6032208.97
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bn.sql
+gpuqo_cost	8838864.000000
+gpuqo_time	
+plan_time	364.667
+postgres_cost	8841549.31
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bo.sql
+gpuqo_cost	6400442.000000
+gpuqo_time	
+plan_time	734.334
+postgres_cost	6408495.50
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bp.sql
+gpuqo_cost	4659631.500000
+gpuqo_time	
+plan_time	457.094
+postgres_cost	4662908.01
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bq.sql
+gpuqo_cost	7549280.500000
+gpuqo_time	
+plan_time	391.023
+postgres_cost	7550386.37
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100br.sql
+gpuqo_cost	8014579.500000
+gpuqo_time	
+plan_time	747.188
+postgres_cost	8018166.68
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bs.sql
+gpuqo_cost	6199727.000000
+gpuqo_time	
+plan_time	765.169
+postgres_cost	6225204.22
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bt.sql
+gpuqo_cost	5413684.500000
+gpuqo_time	
+plan_time	478.507
+postgres_cost	5417017.46
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bu.sql
+gpuqo_cost	8017101.000000
+gpuqo_time	
+plan_time	295.162
+postgres_cost	8066985.50
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bv.sql
+gpuqo_cost	6137637.500000
+gpuqo_time	
+plan_time	562.461
+postgres_cost	6144973.00
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bw.sql
+gpuqo_cost	8022767.000000
+gpuqo_time	
+plan_time	235.488
+postgres_cost	8158761.84
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bx.sql
+gpuqo_cost	4090554.250000
+gpuqo_time	
+plan_time	525.647
+postgres_cost	4092460.46
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100by.sql
+gpuqo_cost	5564630.500000
+gpuqo_time	
+plan_time	709.575
+postgres_cost	5570815.31
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100bz.sql
+gpuqo_cost	7050579.000000
+gpuqo_time	
+plan_time	448.299
+postgres_cost	7179600.03
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ca.sql
+gpuqo_cost	5495727.500000
+gpuqo_time	
+plan_time	749.235
+postgres_cost	5505037.45
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cb.sql
+gpuqo_cost	8693054.000000
+gpuqo_time	
+plan_time	341.553
+postgres_cost	8705234.86
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cc.sql
+gpuqo_cost	7250711.000000
+gpuqo_time	
+plan_time	862.812
+postgres_cost	7257982.68
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cd.sql
+gpuqo_cost	8422211.000000
+gpuqo_time	
+plan_time	778.127
+postgres_cost	8426871.42
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ce.sql
+gpuqo_cost	7544680.000000
+gpuqo_time	
+plan_time	380.972
+postgres_cost	7638473.48
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cf.sql
+gpuqo_cost	4595963.000000
+gpuqo_time	
+plan_time	249.739
+postgres_cost	4598552.47
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cg.sql
+gpuqo_cost	6198010.000000
+gpuqo_time	
+plan_time	693.298
+postgres_cost	6201579.91
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ch.sql
+gpuqo_cost	5232795.000000
+gpuqo_time	
+plan_time	544.076
+postgres_cost	5235742.07
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ci.sql
+gpuqo_cost	7082809.000000
+gpuqo_time	
+plan_time	1169.286
+postgres_cost	7085934.43
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cj.sql
+gpuqo_cost	6999358.000000
+gpuqo_time	
+plan_time	694.126
+postgres_cost	7046744.66
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ck.sql
+gpuqo_cost	6943859.000000
+gpuqo_time	
+plan_time	1587.341
+postgres_cost	6951390.62
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cl.sql
+gpuqo_cost	9212610.000000
+gpuqo_time	
+plan_time	786.893
+postgres_cost	9217278.61
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cm.sql
+gpuqo_cost	6804037.000000
+gpuqo_time	
+plan_time	242.218
+postgres_cost	6805337.76
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cn.sql
+gpuqo_cost	10423224.000000
+gpuqo_time	
+plan_time	670.264
+postgres_cost	10425672.66
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100co.sql
+gpuqo_cost	6898682.000000
+gpuqo_time	
+plan_time	233.110
+postgres_cost	6905791.57
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cp.sql
+gpuqo_cost	5769985.500000
+gpuqo_time	
+plan_time	163.902
+postgres_cost	5779698.57
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cq.sql
+gpuqo_cost	8102334.000000
+gpuqo_time	
+plan_time	646.052
+postgres_cost	8139796.59
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cr.sql
+gpuqo_cost	7818106.500000
+gpuqo_time	
+plan_time	284.946
+postgres_cost	7848165.19
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cs.sql
+gpuqo_cost	6261555.000000
+gpuqo_time	
+plan_time	459.547
+postgres_cost	6266987.75
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ct.sql
+gpuqo_cost	8173952.000000
+gpuqo_time	
+plan_time	816.002
+postgres_cost	8180995.46
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cu.sql
+gpuqo_cost	8926332.000000
+gpuqo_time	
+plan_time	663.287
+postgres_cost	8932197.88
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cv.sql
+gpuqo_cost	8254972.000000
+gpuqo_time	
+plan_time	480.846
+postgres_cost	8257156.06
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cw.sql
+gpuqo_cost	8315888.000000
+gpuqo_time	
+plan_time	463.470
+postgres_cost	8318848.85
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cx.sql
+gpuqo_cost	7044202.000000
+gpuqo_time	
+plan_time	915.380
+postgres_cost	7085713.14
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cy.sql
+gpuqo_cost	8448156.000000
+gpuqo_time	
+plan_time	225.007
+postgres_cost	8453862.23
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100cz.sql
+gpuqo_cost	6673931.000000
+gpuqo_time	
+plan_time	599.862
+postgres_cost	6677520.80
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100da.sql
+gpuqo_cost	7413100.000000
+gpuqo_time	
+plan_time	471.905
+postgres_cost	7414999.42
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100db.sql
+gpuqo_cost	6310634.000000
+gpuqo_time	
+plan_time	683.398
+postgres_cost	6320136.17
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dc.sql
+gpuqo_cost	7310343.000000
+gpuqo_time	
+plan_time	163.083
+postgres_cost	7313824.97
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dd.sql
+gpuqo_cost	5800693.500000
+gpuqo_time	
+plan_time	239.669
+postgres_cost	5807515.09
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100de.sql
+gpuqo_cost	9369167.000000
+gpuqo_time	
+plan_time	225.761
+postgres_cost	9373468.70
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100df.sql
+gpuqo_cost	7966183.000000
+gpuqo_time	
+plan_time	800.339
+postgres_cost	7978205.26
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dg.sql
+gpuqo_cost	7014264.000000
+gpuqo_time	
+plan_time	218.800
+postgres_cost	7017262.42
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dh.sql
+gpuqo_cost	6447411.000000
+gpuqo_time	
+plan_time	332.744
+postgres_cost	6572827.65
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100di.sql
+gpuqo_cost	5341329.000000
+gpuqo_time	
+plan_time	529.590
+postgres_cost	5345619.42
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dj.sql
+gpuqo_cost	8871224.000000
+gpuqo_time	
+plan_time	561.439
+postgres_cost	8879772.29
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dk.sql
+gpuqo_cost	6018436.000000
+gpuqo_time	
+plan_time	349.515
+postgres_cost	6026595.61
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dl.sql
+gpuqo_cost	7930967.000000
+gpuqo_time	
+plan_time	731.686
+postgres_cost	7947837.44
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dm.sql
+gpuqo_cost	7727053.000000
+gpuqo_time	
+plan_time	388.651
+postgres_cost	7747857.15
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dn.sql
+gpuqo_cost	6543311.000000
+gpuqo_time	
+plan_time	314.920
+postgres_cost	6547332.53
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100do.sql
+gpuqo_cost	7529480.000000
+gpuqo_time	
+plan_time	202.378
+postgres_cost	7534978.52
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dp.sql
+gpuqo_cost	7426062.000000
+gpuqo_time	
+plan_time	606.475
+postgres_cost	7432703.10
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dq.sql
+gpuqo_cost	7802412.500000
+gpuqo_time	
+plan_time	291.232
+postgres_cost	7899145.03
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dr.sql
+gpuqo_cost	7220521.000000
+gpuqo_time	
+plan_time	1042.177
+postgres_cost	7299864.38
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100ds.sql
+gpuqo_cost	6860107.000000
+gpuqo_time	
+plan_time	512.523
+postgres_cost	6913416.13
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dt.sql
+gpuqo_cost	8222349.000000
+gpuqo_time	
+plan_time	414.474
+postgres_cost	8256334.81
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100du.sql
+gpuqo_cost	8071671.000000
+gpuqo_time	
+plan_time	435.056
+postgres_cost	8078501.59
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dv.sql
+gpuqo_cost	8157452.000000
+gpuqo_time	
+plan_time	590.179
+postgres_cost	8242454.44
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dw.sql
+gpuqo_cost	7405899.000000
+gpuqo_time	
+plan_time	878.219
+postgres_cost	7410249.63
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dx.sql
+gpuqo_cost	7548445.500000
+gpuqo_time	
+plan_time	573.098
+postgres_cost	7550680.70
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dy.sql
+gpuqo_cost	6416004.000000
+gpuqo_time	
+plan_time	184.150
+postgres_cost	6419076.41
+/scratch2/mageirak/postgres-gpuqo/misc/snowflake_new/queries/0100dz.sql
+gpuqo_cost	8191933.000000
+gpuqo_time	
+plan_time	241.086
+postgres_cost	8213870.50
