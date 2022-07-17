@@ -114,33 +114,3 @@ if __name__ == "__main__":
         with open(f"queries/{200:04d}{labels[i]}.sql", 'w') as f:
             f.write(make_query(N, 200))
             f.write("\n")
-
-
-
-    # # 2 to 10 step 1
-    # for n in tqdm(range(10,200,10)):
-    #     for i in range(104):
-    #         with open(f"queries/{n:04d}{labels[i]}.sql", 'w') as f:
-    #             f.write(make_query(N, n))
-    #             f.write("\n")
-
-    # try:
-    #     os.mkdir("queries_2")
-    # except FileExistsError:
-    #     # directory already exists
-    #     pass
-
-    # # 2 to 10 step 1
-    # for n in tqdm(range(10,200,10)):
-    #     for i in range(104):
-    #         with open(f"queries_2/{n:04d}{labels[i]}.sql", 'w') as f:
-    #             f.write(make_tree_query(N, n))
-    #             f.write("\n")
-
-
-    # # # 10 to 200 step 10
-    # # for n in tqdm(range(10,201,10)):
-    # #     for i in range(104):
-    # #         with open(f"queries/{n:04d}{labels[i]}.sql", 'w') as f:
-    # #             f.write(make_query(N, n))
-    # #             f.write("\n")
