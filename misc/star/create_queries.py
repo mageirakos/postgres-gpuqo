@@ -88,7 +88,7 @@ if __name__ == "__main__":
     # 10 to 100 step of 10
     for n in tqdm(range(1,9)):
         for i in range(104): # 104 because multiple of the 26 letter in alphabet (letters to name the queries)
-            with open(f"queries_with_predicate/{n:04d}{labels[i]}.sql", 'w') as f:
+            with open(f"queries_with_pred/{n:04d}{labels[i]}.sql", 'w') as f:
                 f.write(schema.make_query(n))
                 f.write("\n")
 
