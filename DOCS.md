@@ -1,5 +1,9 @@
 # Datasets
 
+**Download: [Dataset generation scripts and queries](https://drive.google.com/file/d/1_iCxt1H0yIIcBDCMcobiPyyQ-BH0JduP/view?usp=sharing)**
+
+---
+
 ## Musicbrainz
 loc: `misc/musicbrainz`  
 
