@@ -2,6 +2,10 @@
 
 **Download: [Dataset generation scripts and queries](https://drive.google.com/file/d/1_iCxt1H0yIIcBDCMcobiPyyQ-BH0JduP/view?usp=sharing)**
 
+
+**Genaral note** (needed to work with these large datasets):   
+You can change postgres column under `/src/include/access/htup_details.h` where you will find `#define MaxTupleAttributeNumber`
+
 ---
 
 ## Musicbrainz
