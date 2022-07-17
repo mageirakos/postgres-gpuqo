@@ -30,8 +30,6 @@ def make_foreign_keys(n):
     return out
 
 def make_insert_into(n, size=10000):
-    #TODO: change this so that the cardinalities in each table are random
-
     # we need to know cardinality for each table 
     # 1. Decide cardinalities of each table
     card = {} # "table":int(cardinality)
@@ -43,7 +41,7 @@ def make_insert_into(n, size=10000):
     for i in range(1,n+1):
         for j in range(i+1,n+1):
             # card[f"T{i}"] = randint(10_000, 1_000_000) # min_size=10_000, max_size=1_000_000
-            colrng[f"T{i}T{j}"] = randint(2_000, 200_000) # increase range by a factor of 10 here
+            colrng[f"T{i}T{j}"] = randint(2_000, 200_000)
             colrng[f"T{j}T{i}"] = colrng[f"T{i}T{j}"]
             
     # 2. Populate tables and make sure foreign key constraint is kept based on above cardinalities
@@ -86,25 +84,25 @@ def make_query(N, n):
 if __name__ == "__main__":
     labels = [f"{a}{b}" for a in string.ascii_lowercase for b in string.ascii_lowercase]
 
+    # number of relations
     N = 200
-    # N = 50
 
-    # with open("create_tables.sql", 'w') as f:
-    #     f.write(make_create_tables(N))
-    #     f.write('\n')
+    with open("create_tables.sql", 'w') as f:
+        f.write(make_create_tables(N))
+        f.write('\n')
 
-    # with open("add_foreign_keys.sql", 'w') as f:
-    #     f.write(make_foreign_keys(N))
-    #     f.write('\n')
+    with open("add_foreign_keys.sql", 'w') as f:
+        f.write(make_foreign_keys(N))
+        f.write('\n')
 
-    # # print("Make Inserts...")
-    # try:
-    #     os.mkdir("inserts")
-    # except FileExistsError:
-    #     # directory already exists
-    #     pass
+    # print("Make Inserts...")
+    try:
+        os.mkdir("inserts")
+    except FileExistsError:
+        # directory already exists
+        pass
 
-    # make_insert_into(N)
+    make_insert_into(N)
 
     try:
         os.mkdir("queries")
