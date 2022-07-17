@@ -10,7 +10,7 @@ You can get MusicBrainz from : https://musicbrainz.org/doc/MusicBrainz_Database
 The NonPKFK.ipynb shows the MusicBrainz schema we use and query generation.
 
 ## Snowflake  
-loc: `misc/musicbrainz`  
+loc: `misc/snowflake`  
 
 Snowflake Schema (1000 tables - 4 level deep snowflake t_l1_l2_l3_l4):     
 
@@ -46,7 +46,7 @@ Step 5: $ psql -f add_foreign_keys.sql snowflake
 ```
 
 ## Star
-loc: `misc/musicbrainz`  
+loc: `misc/star`  
 
 Star Schema (1600 tables):   
 
@@ -79,7 +79,7 @@ Step 4: $ psql -f add_foreign_keys.sql star
 ```
 
 ## Clique
-loc: `misc/musicbrainz`  
+loc: `misc/clique`  
 
 Clique Schema (200 tables):   
 
