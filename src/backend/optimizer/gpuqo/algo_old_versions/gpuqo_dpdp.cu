@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------
  *
  * gpuqo_dpdp.cu
- *      dp over dp and k-cut implementation
+ *      dp over dp and k-cut implementation (KAHIP)
  *
  * src/backend/optimizer/gpuqo/gpuqo_dpdp.cu
  *
