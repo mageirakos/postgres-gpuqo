@@ -16,7 +16,7 @@
 #include "gpuqo_bit_manipulation.cuh"
 #include "gpuqo_debug.cuh"
 
-#define N_TO_SHOW 32
+#define N_TO_SHOW 64
 
 template<typename T>
 class GpuqoBitmapset{
@@ -121,6 +121,7 @@ public:
         return !intersectionSet(other).empty();
     }
 
+    //TODO: Is this the use case superset.isSubset(possible_subset)?
     __host__ __device__
     inline bool isSubset(const GpuqoBitmapset<T> &other) const{
         return intersectionSet(other) == *this;
@@ -153,6 +154,11 @@ public:
     __host__ __device__
     inline unsigned toUint() const{
         return (unsigned) bits;
+    }
+
+    __host__ __device__
+    inline unsigned long long toUlonglong() const{
+        return (unsigned long long) bits;
     }
 
     __host__ __device__

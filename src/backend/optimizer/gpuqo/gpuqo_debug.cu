@@ -30,9 +30,23 @@ std::ostream & operator<<(std::ostream &os, const ulong2& idxs)
 template <typename Type>
 __host__
 std::ostream & operator<<(std::ostream &os, const GpuqoBitmapset<Type>& bms){
-    os<<"["<<std::bitset<N_TO_SHOW>(bms.toUint())<<"]";
+    os<<"["<<std::bitset<N_TO_SHOW>(bms.toUlonglong())<<"]"; // use to be .toUint()
     return os;
 }
+
+__host__
+std::ostream & operator<<(std::ostream &os, const BitmapsetDynamic& bms){
+    os<<"["<<std::bitset<N_TO_SHOW>(bms.toUlonglong())<<"]";
+    return os;
+}
+
+// uncomment when I want to use this operator
+// std::ostream& operator<<(std::ostream &os, const BitmapsetDynamic& bms)  {
+//         for (int i = bms.bms->nwords; i >= 0; i--)
+//                 os<<std::bitset<64>(bms.bms->words[i]);
+//         os<<std::endl;
+//         return os;
+// }
 
 template
 __host__

@@ -17,6 +17,8 @@
 
 // structure representing join of two relations used by CUDA and CPU code 
 // of GPUQO
+
+// blah
 template<typename BitmapsetN>
 struct JoinRelation{
 	BitmapsetN left_rel_id;
@@ -58,13 +60,19 @@ struct QueryTree{
 	struct QueryTree<BitmapsetN>* right;
 };
 
+// base_rels in GpuqoPlannerInfo
 template<typename BitmapsetN>
 struct BaseRelation{
 	BitmapsetN id;
+	// number of rows after applying filters
 	float rows;
+	// full cardinality of the table
 	float tuples;
+	// bytes per record (width of a join relation is the sum of the widths)
 	int width;
+	// startup+final cost as in Postgres
 	PathCost cost;
+	// wheter it is a temporary table made up by multiple tables
 	bool composite;
 };
 
@@ -90,29 +98,41 @@ struct GpuqoPlannerInfoParams {
 template<typename BitmapsetN>
 struct EqClasses {
 		int n;
+		// bitmapset of the relations in the class
 		BitmapsetN* relids;
 		int n_sels;
+		// selectivities between each pair of relations for this equivalence class (one for each unordered pair)
 		float* sels;
 		int n_fks;
+		// bitmapset for each pair indicating a foreign key is present(1 bitmapset for each member in the class)
 		BitmapsetN* fks; 
 		int n_vars;
+		// statistics about the actual columns (one for each member in the class)
 		VarInfo* vars;
 };
 
 
 template<typename BitmapsetN>
 struct GpuqoPlannerInfo{
+	// used by cuda loader ignore it
 	unsigned int size;
-
+	// number of relations (tables) in the query
 	int n_rels;
+	// iters used by idp1 to stop earlier
 	int n_iters;
 
+	// stuff given to the gpu, don't worry about it
 	GpuqoPlannerInfoParams params;
 	
+	// base relation has got an id, each id is a bitmapset (line 63)
 	BaseRelation<BitmapsetN> base_rels[BitmapsetN::SIZE];
+	// adjacency matrix of the query graph
 	BitmapsetN edge_table[BitmapsetN::SIZE];
+	// subtrees[i] contains all the nodes in the subtree of the tree rooted in table 0
+	// (it is used only if some flags are set and only for trees).
 	BitmapsetN subtrees[BitmapsetN::SIZE];
-
+	// Used to compute selectivity (group of equal atttributs from the A.b = B.a constraints in the WHERE)
+	// in above case the EqClass qould be {A.b, B.a}
 	EqClasses<BitmapsetN> eq_classes;
 };
 

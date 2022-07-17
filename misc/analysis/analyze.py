@@ -362,6 +362,7 @@ if __name__ == "__main__":
     }
 
     ratio_baseline = None
+    metric=args.metric
     if args.ratio:
         baseline = folder2series(args.result_folders[args.baseline], args.name_depth)
         new_series = {}
@@ -376,7 +377,7 @@ if __name__ == "__main__":
                         queries[query][f"{metric}_time_avg"], 
                         series[baseline][query][f"{metric}_time_avg"]
                     ) if query in series[baseline] else np.nan
-                    for metric in ['plan', 'exec', 'total', 'gpuqo']
+                    # for metric in ['plan', 'exec', 'total', 'gpuqo']
                 }
                 new_series[new_label][query]['tables'] =queries[query]['tables']
 
@@ -386,43 +387,43 @@ if __name__ == "__main__":
     if args.verbose:
         print(series)
 
-    if args.type == 'scatter':
-        scatter_plot(
-            series, 
-            metric=args.metric, 
-            ratio_baseline=ratio_baseline,
-            max_shift=args.shift,
-            minor_ticks=args.ticks
-        )
-    elif args.type == 'bar':
-        bar_plot(
-            series, 
-            metric=args.metric, 
-            ratio_baseline=ratio_baseline,
-            minor_ticks=args.ticks
-        )
-    elif args.type == 'line':
-        line_plot(
-            series, 
-            metric=args.metric, 
-            ratio_baseline=ratio_baseline,
-            max_shift=args.shift,
-            minor_ticks=args.ticks
-        )
-    elif args.type == 'scatter_line':
-        scatter_line_plot(
-            series, 
-            metric=args.metric, 
-            ratio_baseline=ratio_baseline,
-            max_shift=args.shift,
-            minor_ticks=args.ticks
-        )
+    # if args.type == 'scatter':
+    #     scatter_plot(
+    #         series, 
+    #         metric=args.metric, 
+    #         ratio_baseline=ratio_baseline,
+    #         max_shift=args.shift,
+    #         minor_ticks=args.ticks
+    #     )
+    # elif args.type == 'bar':
+    #     bar_plot(
+    #         series, 
+    #         metric=args.metric, 
+    #         ratio_baseline=ratio_baseline,
+    #         minor_ticks=args.ticks
+    #     )
+    # elif args.type == 'line':
+    #     line_plot(
+    #         series, 
+    #         metric=args.metric, 
+    #         ratio_baseline=ratio_baseline,
+    #         max_shift=args.shift,
+    #         minor_ticks=args.ticks
+    #     )
+    # elif args.type == 'scatter_line':
+    #     scatter_line_plot(
+    #         series, 
+    #         metric=args.metric, 
+    #         ratio_baseline=ratio_baseline,
+    #         max_shift=args.shift,
+    #         minor_ticks=args.ticks
+    #     )
     
     if args.csv:
         export_csv(args.csv, series, args.metric, args.ratio, ratio_baseline)
 
-    if args.save:
-        plt.savefig(args.save)
-    else:
-        plt.show()
+    # if args.save:
+    #     plt.savefig(args.save)
+    # else:
+    #     plt.show()
     

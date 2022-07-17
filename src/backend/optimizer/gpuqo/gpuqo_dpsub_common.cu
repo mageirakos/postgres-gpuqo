@@ -178,6 +178,7 @@ template<typename BitmapsetN>
 QueryTree<BitmapsetN>*
 gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
 {
+    // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 1 ------" << std::endl;
     DECLARE_TIMING(gpuqo_dpsub);
     DECLARE_NV_TIMING(init);
     DECLARE_NV_TIMING(execute);
@@ -191,6 +192,7 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
     size_t req_memo_size = 1ULL<<(info->n_rels);
 
     size_t memo_cap = std::min(req_memo_size*2, min_memo_cap);
+    // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 2 ------" << std::endl;
 
     dpsub_iter_param_t<BitmapsetN> params;
     params.info = info;
@@ -200,11 +202,13 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
     thrust::host_vector<JoinRelation<BitmapsetN>> ini_memo_vals(info->n_rels+1);
     thrust::device_vector<BitmapsetN> ini_memo_keys_gpu(info->n_rels+1);
     thrust::device_vector<JoinRelation<BitmapsetN>> ini_memo_vals_gpu(info->n_rels+1);
+    // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 3 ------" << std::endl;
 
     QueryTree<BitmapsetN>* out = NULL;
     params.out_relid = BitmapsetN(0);
 
     for(int i=0; i<info->n_rels; i++){
+        // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 4 ------" << std::endl;
         JoinRelation<BitmapsetN> t;
         t.left_rel_id = BitmapsetN(0); 
         t.left_rel_id = BitmapsetN(0); 
@@ -231,18 +235,21 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
     // transfer base relations to GPU
     ini_memo_keys_gpu = ini_memo_keys;
     ini_memo_vals_gpu = ini_memo_vals;
+    // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 5 ------" << std::endl;
 
     params.memo->insert(
         thrust::raw_pointer_cast(ini_memo_keys_gpu.data()), 
         thrust::raw_pointer_cast(ini_memo_vals_gpu.data()),
         info->n_rels+1
     );
+    // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 6 ------" << std::endl;
 
     int binoms_size = (info->n_rels+1)*(info->n_rels+1);
     params.binoms = thrust::host_vector<uint_t<BitmapsetN> >(binoms_size);
     precompute_binoms<uint_t<BitmapsetN> >(params.binoms, info->n_rels);
     params.gpu_binoms = params.binoms;
 
+    // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 7 ------" << std::endl;
     params.scratchpad_size = (
         (
             gpuqo_scratchpad_size_mb * MB
@@ -252,6 +259,7 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
         )
     );  
 
+    // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 8 ------" << std::endl;
     if (params.scratchpad_size < gpuqo_n_parallel)
         params.scratchpad_size = gpuqo_n_parallel;
 
@@ -263,6 +271,7 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
     params.gpu_reduced_keys = uninit_device_vector<BitmapsetN>(params.scratchpad_size);
     params.gpu_reduced_vals = uninit_device_vector<JoinRelation<BitmapsetN>>(params.scratchpad_size);
 
+    // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 9 ------" << std::endl;
 #ifdef GPUQO_PRINT_N_JOINS
     unsigned long long join_counter_h = 0;
     cudaMemcpyToSymbol(join_counter, &join_counter_h, sizeof(join_counter_h));
@@ -284,46 +293,60 @@ gpuqo_dpsub(GpuqoPlannerInfo<BitmapsetN>* info)
 
         // iterate over the size of the resulting joinrel
         for(int i=2; i<=info->n_iters; i++){
+            // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10 ------" << std::endl;
+            // std::cout << "i: " << i << " info->n-iters" << info->n_iters << std::endl;
+
             // give possibility to user to interrupt
             CHECK_FOR_INTERRUPTS();
             
+            // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-1 ------" << std::endl;
             // calculate number of combinations of relations that make up 
             // a joinrel of size i
             params.n_sets = BINOM(params.binoms, info->n_rels, info->n_rels, i);
             params.n_joins_per_set = ((1ULL)<<i);
             params.tot = ((uint64_t)params.n_sets) * params.n_joins_per_set;
+            // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-2 ------" << std::endl;
 
             // used only if profiling is enabled
             uint32_t n_iters __attribute__((unused));
             uint64_t filter_threshold = ((uint64_t)gpuqo_n_parallel) * gpuqo_dpsub_filter_threshold;
             uint64_t csg_threshold = ((uint64_t)gpuqo_n_parallel) * gpuqo_dpsub_csg_threshold;
+            // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-3 ------" << std::endl;
 
             START_TIMING(iteration);
             if ((gpuqo_dpsub_filter_enable && params.tot > filter_threshold) 
                     || (gpuqo_dpsub_csg_enable && params.tot > csg_threshold)){
+                // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-4 ------" << std::endl;
                 LOG_PROFILE("\nStarting filtered iteration %d: %lu combinations\n", i, params.tot);
 
                 n_iters = dpsub_filtered_iteration(i, params);
             } else {
+                // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-5 ------" << std::endl;
                 LOG_PROFILE("\nStarting unfiltered iteration %d: %lu combinations\n", i, params.tot);
 
                 n_iters = dpsub_unfiltered_iteration(i, params);
             }
             STOP_TIMING(iteration);
+            // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-6 ------" << std::endl;
 
             LOG_DEBUG("It took %d iterations\n", n_iters);
             PRINT_CHECKPOINT_TIMING(unrank);
+            // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-unrank ------" << std::endl;
             PRINT_CHECKPOINT_TIMING(filter);
+            // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-filter ------" << std::endl;
             PRINT_CHECKPOINT_TIMING(compute);
+            // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-compute ------" << std::endl;
             PRINT_CHECKPOINT_TIMING(prune);
+            // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-prune ------" << std::endl;
             PRINT_CHECKPOINT_TIMING(scatter);
+            // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 10-scatter ------" << std::endl;
             PRINT_TIMING(iteration);
         } // dpsub loop: for i = 2..n_rels
 
         START_TIMING(build_qt);
             
         BitmapsetN final_relid;
-    
+        // std::cout << "INSIDE gpuqo_dpsub_common.cuh ----- 11 ------" << std::endl;
         if (info->n_rels == info->n_iters){ // normal DP
             final_relid = params.out_relid;
         } else { // IDP

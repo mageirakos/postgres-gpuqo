@@ -8,42 +8,21 @@
  *-------------------------------------------------------------------------
  */
 
-// 1. Find k-1 edges to cut (helper function?)
-//		a) iterate through all the edges of current graph and estimate_cost, estimate_rows
-// 2. Create the k disjoint sets by cutting the edges (disjoins since we are only focusing on the tree case)
-// 3. Optimize the k sets
-//		a) For each optimized query tree, create the compound node
-//		b) size(query graph including all compound nodes) > 25 ? recurse : final recurse? 
-// 				(look how its handled in idp2)
-
-
-
-// !!!! This recursive function is PER LEVEL OF DP, so we recurse after all k-subsets of current level 
-// are optimized, turned into compound nodes and creating the query tree
-
-// mag_rec(): 
-// does remapping from caller like idp?
-// has helper function for (1) (like find_maximal_subtree)
-// Loop over all cuts, for left/right nodes dfs or bfs to create get disjoint set mapping 
-// 		and send it to optimizer? ( double work if not keeping track of seen set)
-// each time we get optimized query tree, keep a list of all the nodes
-// at the end we have yet another double for loop and iterate through them to create all compound nodes
-// join all the compound nodes into a query graph
-
-
 #include "gpuqo.cuh" 
 #include "gpuqo_query_tree.cuh"
 #include "gpuqo_filter.cuh" // grow
 #include "gpuqo_row_estimation.cuh" // estimate
+#include "gpuqo_debug.cuh" // print bms
+#include "gpuqo_bitmapset.cuh"
+#include "gpuqo_bitmapset_dynamic.cuh"
 
 #include <iostream>
 #include <vector>
 #include <string>
-
 #include <algorithm>
 
-// int gpuqo_idp_n_iters;
-// int gpuqo_idp_type;
+static int level_of_dp = 0;
+int gpuqo_k_cut_edges;
 
 template<typename BitmapsetN>
 struct GraphEdge{
@@ -60,14 +39,7 @@ struct SortEdges{
     }
 };
 
-// GLOBAL JUST FOR TESTING
-int level_of_dp = 0;
 
-// Improvement 1 : Use Max Heap and pop top k
-// Improvement 2 : Return pointer to vector not the vector itself
-// Improvement 3 : Improve on the datastructures used (for this I need to see what breaks later)
-// Note 1 : I think I need to run analyze command at some before estimating rows/select but idk where
-// Note 2 : Working with wrong structs until I figure out how custom estimate and JoinRelations work
 template<typename BitmapsetN>
 std::vector<GraphEdge<BitmapsetN>> find_k_cut_edges(GpuqoPlannerInfo<BitmapsetN>* info, int k)
 {
@@ -88,40 +60,32 @@ std::vector<GraphEdge<BitmapsetN>> find_k_cut_edges(GpuqoPlannerInfo<BitmapsetN>
 
         BitmapsetN edges = info->edge_table[base_rel_idx];
 
-		GraphEdge<BitmapsetN> edge_el;
-		edge_el.left = info->base_rels[base_rel_idx].id;
-		float left_rel_rows = info->base_rels[base_rel_idx].rows;
-
 		bfs_idx++;
 		while(!edges.empty()){
 			int next = edges.lowestPos(); 
 			Assert(next > 0);
-
-    		edge_el.right =  info->base_rels[next-1].id; 
-			float right_rel_rows = info->base_rels[next-1].rows;
-
-			edge_el.selectivity = estimate_join_selectivity(edge_el.left, edge_el.right, info);
-			edge_el.rows = edge_el.selectivity * left_rel_rows * right_rel_rows;
-			edge_list.push_back(edge_el);
-			
 			if(!seen.isSet(next)){
 				bfs_queue[bfs_queue_right_idx++] = next - 1;
+
+				GraphEdge<BitmapsetN> edge_el;
+				edge_el.left = info->base_rels[base_rel_idx].id;
+				float left_rel_rows = info->base_rels[base_rel_idx].rows;
+				edge_el.right =  info->base_rels[next-1].id; 
+				float right_rel_rows = info->base_rels[next-1].rows;
+				edge_el.selectivity = estimate_join_selectivity(edge_el.left, edge_el.right, info);
+				edge_el.rows = edge_el.selectivity * left_rel_rows * right_rel_rows;
+
+				edge_list.push_back(edge_el);
 			}
-
 			edges.unset(next);
-
 		}
 		seen |= info->edge_table[base_rel_idx];
 	}
-	
-	
 	std::sort(edge_list.begin(), edge_list.end(), SortEdges<BitmapsetN>()); 
 	std::vector<GraphEdge<BitmapsetN>> resVec(edge_list.begin(), edge_list.begin() + k);
 	delete[] bfs_queue;
-
 	return  resVec;
 }
-
 
 template<typename BitmapsetOuter, typename BitmapsetInner>
 QueryTree<BitmapsetOuter> *gpuqo_run_mag_dp(int gpuqo_algo, 
@@ -129,14 +93,13 @@ QueryTree<BitmapsetOuter> *gpuqo_run_mag_dp(int gpuqo_algo,
 						list<remapper_transf_el_t<BitmapsetOuter> > &remap_list) 
 {
 	printf("\n f(x): gpuqo_run_mag_dp for LEVEL %d\n", level_of_dp);
-	// the segmentation fault is somewhere after here (after we are in the terminal if of recursion)
-	Remapper<BitmapsetOuter, BitmapsetInner> remapper(remap_list);
 
+	Remapper<BitmapsetOuter, BitmapsetInner> remapper(remap_list);
 	GpuqoPlannerInfo<BitmapsetInner> *new_info = remapper.remapPlannerInfo(info);
 	new_info->n_iters = new_info->n_rels;
 
 	LOG_PROFILE("MAG iteration (dp) with %d rels (%d bits)\n", new_info->n_rels, BitmapsetInner::SIZE);
-	printf("MAG iteration (dp) with %d rels (%d bits)\n", new_info->n_rels, BitmapsetInner::SIZE);
+	printf("\nMAG iteration (dp) with %d rels (%d bits)\n", new_info->n_rels, BitmapsetInner::SIZE);
 	QueryTree<BitmapsetInner> *new_qt = gpuqo_run_switch(gpuqo_algo, new_info);
 	QueryTree<BitmapsetOuter> *new_qt_remap = remapper.remapQueryTree(new_qt);
 
@@ -154,20 +117,18 @@ QueryTree<BitmapsetOuter> *gpuqo_run_mag_rec(int gpuqo_algo,
 					int n_iters) 
 {
 	level_of_dp++;
-	std::cout << " LEVEL OF DP: " << level_of_dp << std::endl;
+	std::cout << "\n\t LEVEL OF DP: " << level_of_dp << std::endl;
 	printf("\n f(x): gpuqo_run_mag_rec ----- FIRST CHECK ----- LEVEL %d \n", level_of_dp);
 	Remapper<BitmapsetOuter, BitmapsetInner> remapper(remap_list);
 	GpuqoPlannerInfo<BitmapsetInner> *new_info = remapper.remapPlannerInfo(info);
 	
-	// std::cout << "BEFORE" << "new_info->n_iters: " << new_info->n_iters << "  n_iters: " << n_iters << "  new_info->n_rels: " << new_info->n_rels << std::endl;	
 	new_info->n_iters = min(new_info->n_rels, n_iters);
-	// std::cout << "AFTER" << "new_info->n_iters: " << new_info->n_iters << "  n_iters: " << n_iters << "  new_info->n_rels: " << new_info->n_rels << std::endl;	
-	
 
 	if (new_info->n_rels == new_info->n_iters){ // its going to be equal because of the above min()
-		printf("\n f(x): gpuqo_run_mag_rec => INSIDE termination check at LEVEL OF DP %d \n", level_of_dp);
-		// std::cout << "INSIDE TERMINATION CHECK"<< "new_info->n_iters: " << new_info->n_iters << "  n_iters" << n_iters << "  new_info->n_rels" << new_info->n_rels << std::endl;		
+		printf("\n f(x): gpuqo_run_mag_rec => -----INSIDE TERMINATION CHECK ----- LEVEL %d \n", level_of_dp);
+		std::cout << "new_info->n_iters: " << new_info->n_iters << "  n_iters: " << n_iters << "  new_info->n_rels: " << new_info->n_rels << std::endl;		
 		list<remapper_transf_el_t<BitmapsetInner> > remap_list_2;
+		
 		// should be remap to itself
 		for (int i=0; i<new_info->n_rels; i++){
 			remapper_transf_el_t<BitmapsetInner> list_el;
@@ -177,9 +138,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_mag_rec(int gpuqo_algo,
 			remap_list_2.push_back(list_el);
 		}
 
-		printf("\n f(x): gpuqo_run_mag_rec => INSIDE termination check => after BFS \n");
 		QueryTree<BitmapsetInner> *reopt_qt;
-		// // remap_list from caller is not correct to be given to run_dp
 		if (BitmapsetInner::SIZE == 32 || remap_list_2.size() < 32) {
 			reopt_qt = gpuqo_run_mag_dp<BitmapsetInner, Bitmapset32>(
 									gpuqo_algo, new_info, remap_list_2);
@@ -190,75 +149,86 @@ QueryTree<BitmapsetOuter> *gpuqo_run_mag_rec(int gpuqo_algo,
 			reopt_qt = gpuqo_run_mag_dp<BitmapsetInner, BitmapsetDynamic>(
 									gpuqo_algo, new_info, remap_list_2);
 		}
-		printf("\n f(x): gpuqo_run_mag_rec => INSIDE termination check => after opt \n");
 		QueryTree<BitmapsetOuter> *out_qt = remapper.remapQueryTree(reopt_qt);
 		freeGpuqoPlannerInfo(new_info);
 		freeQueryTree(reopt_qt);
-		printf("\n f(x): gpuqo_run_mag_rec => INSIDE termination check => RETURNING \n");
+		printf("\n f(x): gpuqo_run_mag_rec => returning -----INSIDE TERMINATION CHECK -----\n");
 		return out_qt;
 	}
 
-	// #TODO - This needs to scale dynamically not hardcoded
-	// #TODO - We need to take into account the size of the subsets created
-	int num_edges_to_cut = 2; // k
-	std::vector<GraphEdge<BitmapsetInner>> cutEdges = find_k_cut_edges(new_info, num_edges_to_cut);
-	printf("FOUND %zu cutEdges", cutEdges.size());
-	printf("\n PRINTING EDGES TO CUT\n");
-	for(int i=0; i<=num_edges_to_cut; i++){
-		std::cout << "edge_" << i << " : left= " << cutEdges[i].left.toUint() << "\tright= " << cutEdges[i].right.toUint()<< std::endl; 
-		std::cout << "a.k.a edge: " << cutEdges[i].left.lowestPos()-1 << "-" << cutEdges[i].right.lowestPos()-1 << std::endl;		
-	}
-		
+// START OF K CUT RECURSION TO FIND SUBGRAPHS
+// ------------------------------------------------------------
+	// FIX: This probably needs to change as we expand to normal graphs (other than trees)
+	// in trees, edges are at most 1 less than number of nodes, so when I use a large k we should be careful 
+	// This FIX does not seem to work ????
+	// std::cout << "BEFORE gpuqo_k_cut_edges = " << gpuqo_k_cut_edges << " new_info->n_rels= " << new_info->n_rels << std::endl;
+	if (gpuqo_k_cut_edges >= new_info->n_rels-1){ // -1 because infinite loop since we won't decrease at all
+		gpuqo_k_cut_edges = new_info->n_rels - 20; // -20 so that graph decreases by at least 10 node each time
+	} 
+	// std::cout << "AFTER gpuqo_k_cut_edges = " << gpuqo_k_cut_edges << " new_info->n_rels= " << new_info->n_rels << std::endl;
+
+
+	std::vector<GraphEdge<BitmapsetInner>> cutEdges = find_k_cut_edges(new_info, gpuqo_k_cut_edges);
+	// printf("FOUND %zu cutEdges", cutEdges.size());
+	// printf("\tPRINTING  CUT EDGES\n, where 1st rel(2^1) = 1 (start counting from 1 in rel id)");
+	// for(int i=0; i<gpuqo_k_cut_edges; i++){
+	// 	std::cout << "edge_" << i << " : left= " << cutEdges[i].left.toUlonglong() << "\tright= " << cutEdges[i].right.toUlonglong() \
+	// 	<<  "\t(" << cutEdges[i].left.lowestPos() << "-" << cutEdges[i].right.lowestPos()-1 << ") " << std::endl;		
+	// }
 
 	printf("\n f(x): gpuqo_run_mag_rec => after find_k_cut_edges ----- CHECK 2 ----- \n");
-	// duplicate edge_table
 	BitmapsetInner edge_table_copy[BitmapsetInner::SIZE];
-	printf("\n edge table BEFORE: \n");
-	printf("\n BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
-	for (int i=0; i < BitmapsetInner::SIZE; i++){
-		std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i].toUint() << std::endl;
+	// printf("\n edge table BEFORE: \n");
+	// printf("\n BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
+	// std::cout << "                 3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
+	for (int i=0; i < new_info->n_rels; i++){
+		// std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i].toUlonglong() << std::endl;
+		// std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i] << std::endl;
 		edge_table_copy[i] = new_info->edge_table[i];
 	}
-	// remove edges from copy
-	for (int i=0; i < num_edges_to_cut; i++){  
+
+	for (int i=0; i < gpuqo_k_cut_edges; i++){  
 		GraphEdge<BitmapsetInner> cut_edge = cutEdges[i];
-		std::cout << "removing edge: " << cut_edge.left.lowestPos()-1 << "--" << cut_edge.right.lowestPos()-1 << std::endl;
+		// std::cout << "removing edge: " << cut_edge.left.lowestPos() << "--" << cut_edge.right.lowestPos() << " - 1st rel(2^1) = 1" << std::endl;
 		edge_table_copy[cut_edge.left.lowestPos()-1].unset(cut_edge.right.lowestPos()); 
 		edge_table_copy[cut_edge.right.lowestPos()-1].unset(cut_edge.left.lowestPos()); 
 	}
 	
-	printf("\n edge table AFTER: \n");
-	printf("\n BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
-	for (int i=0; i < BitmapsetInner::SIZE; i++){
-		std::cout << "edge_table["<< i <<"] = "<< edge_table_copy[i].toUint() << std::endl;
-	}
+	// Lopp only for printing edge_table AFTER
+	// printf("\n edge table AFTER: \n");
+	// printf("\n BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
+	// for (int i=0; i < new_info->n_rels; i++){
+	// 	std::cout << "edge_table["<< i <<"] = "<< new_info->edge_table[i] << std::endl;
+	// }
 	
-	// based on the prints the removal of the edges is done correctly 
-	// on test with k=2 edges and with k=10 edges
-
-
-	// 3. Add all base_rel_id to a bitmapset (also done in cpusequential) so we grow without duplicates
+	// printf("\nsubset_baserel_id BitmapsetInner::SIZE = %d\n", BitmapsetInner::SIZE);
 	BitmapsetInner subset_baserel_id = BitmapsetInner(0);
 	for (int i = 0; i < new_info->n_rels; i++){
+		// std::cout << "iter: " << i << " new_info->base_rels[" << i << "].id = " << new_info->base_rels[i].id.toUlonglong() << std::endl;
 		subset_baserel_id |= new_info->base_rels[i].id;
 	}
+	// std::cout << "                  3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
+	// std::cout << "subset_baserel_id " << subset_baserel_id << std::endl;
 
-	// get subgraphs
-	// printf(" PRINTING SUBGRAPHS: \n");
+	
+	// printf("\nPRINTING SUBGRAPHS: \n");
 	std::vector<BitmapsetInner> subgraphs;
-	while(subset_baserel_id.toUint()!=0){
+	// std::cout << " 3210987654321098765432109876543210987654321098765432109876543210" << std::endl; // index up to 64
+	while(subset_baserel_id!=0){
 		BitmapsetInner csg = grow(subset_baserel_id.lowest(), subset_baserel_id, edge_table_copy);
-		// std::cout << "before: " << subset_baserel_id.toUint() << " from csg: " << csg.toUint() << std::endl; 		
+		// std::cout << "before: " << subset_baserel_id << " from csg: " << csg << std::endl; 		
+		// std::cout << "before : " << subset_baserel_id.toUlonglong() << " from csg: " << csg.toUlonglong() << std::endl; 
+// HERE CHECK IF csg.size() > upper threshold and keep it on the side to cut again ??? (have a while loop on this block)
 		subset_baserel_id = subset_baserel_id.differenceSet(csg);
-		// std::cout << "after: " << subset_baserel_id.toUint() << " from csg: " << csg.toUint() << std::endl; 
+		// std::cout << "after : " << subset_baserel_id.toUlonglong() << " from csg: " << csg.toUlonglong() << std::endl; 
+		// std::cout << "after bms: " << subset_baserel_id << " from csg: " << csg<< std::endl; 		
 		subgraphs.push_back(csg);
-		std::cout << "csg_" << subgraphs.size() << " : " << csg.toUint() << " at LEVEL " << level_of_dp <<std::endl; 
+		// std::cout << "csg_" << subgraphs.size() << " : " << csg.toUlonglong() <<std::endl; 
+		std::cout << subset_baserel_id << std::endl;
 	}
+// ------------------------------------------------------------
+// END OF K CUT RECURSION TO FIND SUBGRAPHS
 
-
-// UP TO HERE SUBGRAPHS ARE CORRECTLY CREATED, EDGES ARE CORRECTLY CUT ( I STILL NEED TO CHECK THE RANKING OF (RS) WHEN CURRING EDGES AND EVERYTHING BELOW THIS LINE)
-
-	// we are now left with a vector of the subgraphs which we want to optimize
 
 	printf("\n f(x): gpuqo_run_mag_rec => after subgraphs ----- CHECK 3 ----- \n");
 	// dp over subgraphs	
@@ -276,8 +246,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_mag_rec(int gpuqo_algo,
 			reopt_remap_list.push_back(list_el);
 			reopTables -= list_el.from_relid;
 		}
-		printf("\n f(x): gpuqo_run_mag_rec => opt for loop ----- CHECK 3.1 ----- \n");
-		
+	
 		// optimize
 		QueryTree<BitmapsetInner> *reopt_qt;
 		if (BitmapsetInner::SIZE == 32 || reopt_remap_list.size() < 32) {
@@ -290,7 +259,6 @@ QueryTree<BitmapsetOuter> *gpuqo_run_mag_rec(int gpuqo_algo,
 			reopt_qt = gpuqo_run_mag_dp<BitmapsetInner, BitmapsetDynamic>(
 									gpuqo_algo, new_info, reopt_remap_list);
 		}
-		printf("\n f(x): gpuqo_run_mag_rec => opt for loop ----- CHECK 3.2 ----- \n");
 		
 		// composite node
 		remapper_transf_el_t<BitmapsetInner> list_el;
@@ -298,11 +266,10 @@ QueryTree<BitmapsetOuter> *gpuqo_run_mag_rec(int gpuqo_algo,
 		list_el.to_idx = i;
 		list_el.qt = reopt_qt;
 		next_remap_list.push_back(list_el);
-		printf("\n f(x): gpuqo_run_mag_rec => opt for loop ----- CHECK 3.3 ----- \n");
 	}
 
 
-	printf("\n f(x): gpuqo_run_mag_rec => calling recursion ----- CHECK 4 ----- LEVEL %d \n", level_of_dp);
+	printf("\n f(x): gpuqo_run_mag_rec => recursing ----- CHECK 4 ----- LEVEL %d \n", level_of_dp);
 	// recursion
 	QueryTree<BitmapsetInner> *res_qt;
 	if (BitmapsetInner::SIZE == 32 || next_remap_list.size() < 32) {
@@ -315,7 +282,7 @@ QueryTree<BitmapsetOuter> *gpuqo_run_mag_rec(int gpuqo_algo,
 		res_qt = gpuqo_run_mag_rec<BitmapsetInner, BitmapsetDynamic>(
 			gpuqo_algo, new_info, next_remap_list, n_iters);
 	}
-	printf("\n f(x): gpuqo_run_mag_rec => after recursion ----- CHECK 5 ----- \n");
+	printf("\n f(x): gpuqo_run_mag_rec => after recursion ----- CHECK 5 ----- LEVEL %d \n", level_of_dp);
 	QueryTree<BitmapsetOuter> *out_qt = remapper.remapQueryTree(res_qt);
 	freeGpuqoPlannerInfo(new_info);
 	freeQueryTree(res_qt);
@@ -345,6 +312,8 @@ QueryTree<BitmapsetN> *gpuqo_run_mag(int gpuqo_algo,
 						gpuqo_algo, info, remap_list, 
 						n_iters > 0 ? n_iters : gpuqo_idp_n_iters);
 
+	// reset it for additional runs 
+	level_of_dp = 0;
 	return out_qt;
 }
 

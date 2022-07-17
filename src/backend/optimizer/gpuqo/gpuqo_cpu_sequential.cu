@@ -95,7 +95,7 @@ QueryTree<BitmapsetN>* gpuqo_cpu_sequential(GpuqoPlannerInfo<BitmapsetN>* info,
             algorithm->get_n_joins(), algorithm->get_n_checks(),
            (double) algorithm->get_n_checks() / algorithm->get_n_joins());
 #endif 
-
+// full bitmapset and run through it (remove this comment before push)
     BitmapsetN final_joinrel_id = BitmapsetN(0);
 
     if (info->n_rels == info->n_iters){ // normal DP

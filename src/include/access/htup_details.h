@@ -30,7 +30,10 @@
  * so that alterations in HeapTupleHeaderData layout won't change the
  * supported max number of columns.
  */
-#define MaxTupleAttributeNumber 1664	/* 8 * 208 */
+// increase by an order of magnitude to handle 1000relation graphs (added the extra 0 at the end)
+
+// change here () to increase columns
+#define MaxTupleAttributeNumber 166400	/* 8 * 208 */
 
 /*
  * MaxHeapAttributeNumber limits the number of (user) columns in a table.
